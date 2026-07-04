@@ -286,7 +286,19 @@ const AttendanceAdminView = () => {
       const data = await res.json();
       if (data.success) { toast.success("Record deleted."); fetchAll(); }
       else toast.error(data.error || "Failed to delete.");
-    } catch { toast.error("Network error."); }
+    } catch (err) { toast.error("Error deleting."); }
+  };
+
+  const handleDeleteAll = async (logIds) => {
+    if (!logIds || logIds.length === 0) return;
+    if (!window.confirm(`Delete ${logIds.length} records?`)) return;
+    try {
+      for (const logId of logIds) {
+        await fetch(`/api/attendance/${logId}`, { method: 'DELETE' });
+      }
+      toast.success("Records deleted.");
+      fetchAll();
+    } catch (err) { toast.error("Error deleting multiple records."); }
   };
 
   const TABS = [
@@ -371,7 +383,7 @@ const AttendanceAdminView = () => {
           {/* ══════════════ SCANNER TAB ══════════════ */}
           {activeTab === 'scanner' && (
             <motion.div key="scanner" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.25 }}>
-              <div className="bg-canvas p-2.5 rounded-[2rem] border border-border/50 shadow-xl mx-auto max-w-lg">
+              <div className="bg-canvas p-2.5 rounded-[2rem] border border-border/50 shadow-xl mx-auto max-w-2xl">
                 <div className="bg-white rounded-[1.75rem] p-8 min-h-[400px] flex flex-col">
                   <div className="flex items-center justify-between mb-6">
                     <h3 className="text-base font-bold text-fg flex items-center gap-2">
@@ -411,14 +423,19 @@ const AttendanceAdminView = () => {
                       </div>
                     ) : (
                       <div className="w-full flex flex-col items-center gap-5">
-                        <div className="w-full rounded-2xl overflow-hidden bg-black border-2 border-black/10 shadow-2xl relative">
-                          <video ref={videoRef} autoPlay playsInline muted className="w-full block" />
+                        <div className="w-full aspect-[4/3] rounded-2xl overflow-hidden bg-black border-2 border-black/10 shadow-2xl relative">
+                          <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover block scale-x-[-1]" />
                           <canvas ref={canvasRef} className="hidden" />
                           <div className="absolute top-0 left-0 w-full h-0.5 bg-primary/60 shadow-[0_0_12px_4px_rgba(59,130,246,0.4)] animate-[scan_2s_ease-in-out_infinite]" />
                         </div>
-                        <p className="text-xs text-muted font-medium text-center">
-                          <span className="font-bold text-fg">{selectedEvent}</span> · <span className="font-bold text-fg">{selectedSession}</span> · <span className="font-bold text-fg">{selectedType}</span>
-                        </p>
+                          <div className="text-center space-y-1">
+                            <p className="text-xs text-muted font-medium">
+                              <span className="font-bold text-fg">{selectedEvent}</span> • <span className="font-bold text-fg">{selectedSession}</span> • <span className="font-bold text-fg">{selectedType}</span>
+                            </p>
+                            <p className="text-sm font-bold text-fg">
+                              Position the QR code within the frame to scan automatically.
+                            </p>
+                          </div>
                         <button onClick={() => setIsScannerActive(false)}
                           className="px-8 py-3 bg-canvas hover:bg-border/50 text-fg text-sm font-bold rounded-full transition-colors">
                           Deactivate
@@ -547,13 +564,11 @@ const AttendanceAdminView = () => {
                               </td>
                               <td className="px-4 py-4 text-center">
                                 <div className="opacity-0 group-hover:opacity-100 transition-opacity flex justify-center">
-                                  {row.logIds.map(id => (
-                                    <button key={id} onClick={() => handleDelete(id)}
-                                      className="p-1.5 text-muted hover:text-accentRedFg hover:bg-accentRed/10 rounded-md transition-colors"
-                                      title="Delete Record">
-                                      <Trash2 className="w-4 h-4" />
-                                    </button>
-                                  ))}
+                                  <button onClick={() => handleDeleteAll(row.logIds)}
+                                    className="p-1.5 text-muted hover:text-accentRedFg hover:bg-accentRed/10 rounded-md transition-colors"
+                                    title="Delete Record">
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
                                 </div>
                               </td>
                             </tr>
@@ -751,39 +766,35 @@ const AttendanceAdminView = () => {
 
                   {statsData.length > 0 && (
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                      <div className="h-80 w-full">
-                        <h4 className="text-sm font-bold text-center mb-4 text-muted">Attendance per Event</h4>
+                      <div className="h-64 w-full">
                         <ResponsiveContainer width="100%" height="100%">
-                          <BarChart data={statsData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
-                            <XAxis dataKey="event" tick={{ fontSize: 12 }} axisLine={false} tickLine={false} />
-                            <YAxis tick={{ fontSize: 12 }} axisLine={false} tickLine={false} />
-                            <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ borderRadius: '12px', border: '1px solid #e5e7eb', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
-                            <Legend />
-                            <Bar dataKey="attendees" fill="#2563eb" radius={[4, 4, 0, 0]} name="Total Attendees" />
+                          <BarChart data={statsData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                            <XAxis dataKey="event" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#6B7280' }} />
+                            <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#6B7280' }} />
+                            <Tooltip cursor={{ fill: '#F3F4F6' }} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+                            <Bar dataKey="attendees" name="Total Attendees" fill="#1A4B6E" radius={[4, 4, 0, 0]} />
                           </BarChart>
                         </ResponsiveContainer>
                       </div>
-
-                      <div className="h-80 w-full">
-                        <h4 className="text-sm font-bold text-center mb-4 text-muted">Session Breakdown</h4>
+                      <div className="h-64 w-full flex items-center justify-center">
                         <ResponsiveContainer width="100%" height="100%">
                           <PieChart>
                             <Pie
-                              data={[
-                                { name: 'Morning', value: statsData.reduce((s, e) => s + e.morning, 0) },
-                                { name: 'Afternoon', value: statsData.reduce((s, e) => s + e.afternoon, 0) }
-                              ]}
-                              cx="50%" cy="50%"
+                              data={statsData}
+                              dataKey="attendees"
+                              nameKey="event"
+                              cx="50%"
+                              cy="50%"
                               innerRadius={60}
-                              outerRadius={100}
+                              outerRadius={80}
                               paddingAngle={5}
-                              dataKey="value"
                             >
-                              <Cell fill="#3b82f6" />
-                              <Cell fill="#f97316" />
+                              {statsData.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={['#1A4B6E', '#2C3E50', '#7F8C8D', '#BDC3C7', '#E6F0F9'][index % 5]} />
+                              ))}
                             </Pie>
-                            <Tooltip contentStyle={{ borderRadius: '12px', border: '1px solid #e5e7eb', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+                            <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
                             <Legend />
                           </PieChart>
                         </ResponsiveContainer>

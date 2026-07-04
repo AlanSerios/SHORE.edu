@@ -13,12 +13,14 @@ import ScholarshipsView from './components/ScholarshipsView';
 import SettingsView from './components/SettingsView';
 import AttendanceStudentView from './components/AttendanceStudentView';
 import AttendanceAdminView from './components/AttendanceAdminView';
-import { LogOut, Users, Menu, Award, Settings, ClipboardCheck, GraduationCap, Shield, Megaphone, Star, Layers } from 'lucide-react';
+import { LogOut, Users, Menu, Award, Settings, ClipboardCheck, GraduationCap, Shield, Megaphone, Star, Layers, ShoppingBag } from 'lucide-react';
 import ManageClassView from './components/ManageClassView';
 import ManageTeamView from './components/ManageTeamView';
 import AnnouncementsView from './components/AnnouncementsView';
 import RecitationsAdminView from './components/RecitationsAdminView';
-import LeaderboardView from './components/LeaderboardView';
+import ShopView from './components/ShopView';
+import TicketsView from './components/TicketsView';
+import { LifeBuoy } from 'lucide-react';
 
 const REPORT_TYPES = [
   { id: 'pre', label: 'Pre-Test Only' },
@@ -249,12 +251,12 @@ export default function App() {
         formData.append('student_name', selectedStudent);
         formData.append('report_type', reportType);
         
-        response = await fetch('https://shore-backend.onrender.com/api/generate-pdf', {
+        response = await fetch('/api/generate-pdf', {
           method: 'POST',
           body: formData
         });
       } else {
-        response = await fetch('https://shore-backend.onrender.com/api/generate-pdf', {
+        response = await fetch('/api/generate-pdf', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -463,6 +465,7 @@ export default function App() {
             { id: 'dashboard',    icon: LayoutDashboard, label: 'Dashboard',     show: true },
             { id: 'announcements',icon: Megaphone,       label: 'Announcements', show: true, badge: unreadAnnouncements },
             { id: 'calendar',     icon: Calendar,        label: 'Calendar',      show: true },
+            { id: 'tickets',      icon: LifeBuoy,        label: 'Support Tickets',show: true },
           ].filter(i => i.show).map((item) => (
             <div 
               key={item.id}
@@ -550,7 +553,7 @@ export default function App() {
                  >
                    {[
                       { id: 'attendance',   icon: ClipboardCheck,  label: 'Attendance',    show: true },
-                      { id: 'leaderboard',  icon: Star,            label: 'Leaderboard',   show: true },
+                      { id: 'shop',         icon: ShoppingBag,     label: 'Rewards Shop',  show: true },
                       { id: 'recitations',  icon: Target,          label: 'Recitations',   show: userRole === 'admin' },
                       { id: 'scholarships', icon: Award,           label: 'Scholarships',  show: true },
                       { id: 'reports',      icon: FileText,        label: 'Reports',       show: userRole === 'admin' },
@@ -901,8 +904,8 @@ export default function App() {
                             <YAxis tick={{ fill: '#6B7280', fontSize: 11 }} axisLine={false} tickLine={false} />
                             <Tooltip content={<CustomTooltip />} cursor={{ fill: '#F4F3ED' }} />
                             <Legend iconType="circle" wrapperStyle={{ fontSize: '12px', color: '#111827', paddingTop: '10px' }} />
-                            <Bar dataKey="pre" name="Pre-Test" fill="#D1D5DB" radius={[4, 4, 0, 0]} maxBarSize={40} />
-                            <Bar dataKey="post" name="Post-Test" fill="#123524" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                            <Bar dataKey="pre" name="Pre-Test" fill="#94A3B8" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                            <Bar dataKey="post" name="Post-Test" fill="#2563EB" radius={[4, 4, 0, 0]} maxBarSize={40} />
                           </BarChart>
                         </ResponsiveContainer>
                       ) : (
@@ -913,8 +916,8 @@ export default function App() {
                             <YAxis tick={{ fill: '#6B7280', fontSize: 11 }} axisLine={false} tickLine={false} />
                             <Tooltip content={<CustomTooltip />} cursor={{ fill: '#F4F3ED' }} />
                             <Legend iconType="circle" wrapperStyle={{ fontSize: '12px', color: '#111827', paddingTop: '10px' }} />
-                            <Bar dataKey="cohort" name="Cohort Average" fill="#D1D5DB" radius={[4, 4, 0, 0]} maxBarSize={40} />
-                            <Bar dataKey="student" name={selectedStudent} fill="#123524" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                            <Bar dataKey="cohort" name="Cohort Average" fill="#94A3B8" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                            <Bar dataKey="student" name={selectedStudent} fill="#2563EB" radius={[4, 4, 0, 0]} maxBarSize={40} />
                           </BarChart>
                         </ResponsiveContainer>
                       )}
@@ -929,7 +932,7 @@ export default function App() {
                         <RadarChart cx="50%" cy="50%" outerRadius="70%" data={stats.radarData}>
                           <PolarGrid stroke="#E5E7EB" />
                           <PolarAngleAxis dataKey="subject" tick={{ fill: '#6B7280', fontSize: 11, fontWeight: 500 }} />
-                          <Radar name={selectedStudent} dataKey="score" stroke="#123524" strokeWidth={2} fill="#123524" fillOpacity={0.15} />
+                          <Radar name={selectedStudent} dataKey="score" stroke="#2563EB" strokeWidth={2} fill="#2563EB" fillOpacity={0.15} />
                           <Tooltip content={<CustomTooltip />} />
                         </RadarChart>
                       </ResponsiveContainer>
@@ -1058,12 +1061,14 @@ export default function App() {
           userRole === 'admin' ? <AttendanceAdminView /> : <AttendanceStudentView userEmail={userEmail} userName={userName} />
         ) : currentView === 'announcements' ? (
           <AnnouncementsView userEmail={userEmail} userName={userName} userRole={userRole} profilePicture={profilePicture} onRead={fetchUnreadCounts} />
-        ) : currentView === 'leaderboard' ? (
-          <LeaderboardView />
+        ) : currentView === 'shop' || currentView === 'leaderboard' ? (
+          <ShopView userEmail={userEmail} userRole={userRole} />
         ) : currentView === 'recitations' ? (
           <RecitationsAdminView />
         ) : currentView === 'scholarships' ? (
           <ScholarshipsView />
+        ) : currentView === 'tickets' ? (
+          <TicketsView userEmail={userEmail} userName={userName} userRole={userRole} />
         ) : (
           <ReportsView parsedData={parsedData} students={students} />
         )}
@@ -1106,7 +1111,7 @@ export default function App() {
                     <div className="grid grid-cols-3 gap-3 mb-6">
                        {[
                           { id: 'attendance',   icon: ClipboardCheck,  label: 'Attendance',    show: true },
-                          { id: 'leaderboard',  icon: Star,            label: 'Leaderboard',   show: true },
+                          { id: 'shop',         icon: ShoppingBag,     label: 'Rewards Shop',  show: true },
                           { id: 'recitations',  icon: Target,          label: 'Recitations',   show: userRole === 'admin' },
                           { id: 'scholarships', icon: Award,           label: 'Scholarships',  show: true },
                           { id: 'reports',      icon: FileText,        label: 'Reports',       show: userRole === 'admin' },

@@ -66,7 +66,7 @@ def compute_benchmarks(data, test='post'):
     benchmarks = {}
     for subj in ALL_SUBJ:
         test_data = data.get(test, {})
-        scores = [test_data[s].get(subj, 0) for s in test_data.keys()]
+        scores = [test_data[s].get('subjects', test_data[s]).get(subj, 0) for s in test_data.keys()]
         benchmarks[subj] = sum(scores) / len(scores) if scores else 0
     return benchmarks
 
@@ -130,11 +130,14 @@ def generate_pdf_bytes(excel_bytes, student_name, report_type='both'):
 def generate_pdf_from_data(data, student_name, report_type='both'):
     """Generate the report card PDF from parsed data and return it as a byte stream."""
     
-    pre = data['pre'].get(student_name, {})
-    post = data['post'].get(student_name, {})
+    pre_raw = data['pre'].get(student_name, {})
+    post_raw = data['post'].get(student_name, {})
     
-    pre_total = pre.get('total', 0)
-    post_total = post.get('total', 0)
+    pre = pre_raw.get('subjects', pre_raw)
+    post = post_raw.get('subjects', post_raw)
+    
+    pre_total = pre_raw.get('total', 0)
+    post_total = post_raw.get('total', 0)
     improvement = post_total - pre_total
     
     pdf_buffer = io.BytesIO()

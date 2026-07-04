@@ -35,6 +35,9 @@ ATTENDANCE_FILE = 'attendance'
 ANNOUNCEMENTS_FILE = 'announcements'
 RECITATIONS_FILE = 'recitations'
 TRACKER_DATA_FILE = 'tracker_data'
+TICKETS_FILE = 'tickets'
+INVENTORY_FILE = 'inventory'
+PURCHASES_FILE = 'purchases'
 
 def load_json(collection_name):
     try:
@@ -485,6 +488,118 @@ def delete_recitation(rec_id):
     new_recs = [r for r in recitations if r.get('id') != rec_id]
     save_json(RECITATIONS_FILE, new_recs)
     return {"success": True}
+
+@app.route('/api/tickets', methods=['GET'])
+def get_tickets():
+    return {"tickets": load_json(TICKETS_FILE)}
+
+@app.route('/api/tickets', methods=['POST'])
+def add_ticket():
+    try:
+        tickets = load_json(TICKETS_FILE)
+        new_ticket = request.json
+        import uuid
+        import datetime
+        new_ticket['id'] = str(uuid.uuid4())
+        new_ticket['timestamp'] = datetime.datetime.now().isoformat()
+        new_ticket['status'] = 'open'
+        new_ticket['reply'] = ''
+        tickets.append(new_ticket)
+        save_json(TICKETS_FILE, tickets)
+        return {"success": True, "ticket": new_ticket}
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {"error": str(e)}, 500
+
+@app.route('/api/tickets/<ticket_id>', methods=['PUT'])
+def resolve_ticket(ticket_id):
+    tickets = load_json(TICKETS_FILE)
+    data = request.json
+    for t in tickets:
+        if t.get('id') == ticket_id:
+            t['status'] = 'resolved'
+            t['reply'] = data.get('reply', '')
+            break
+    save_json(TICKETS_FILE, tickets)
+    return {"success": True}
+
+@app.route('/api/tickets/<ticket_id>', methods=['DELETE'])
+def delete_ticket(ticket_id):
+    tickets = load_json(TICKETS_FILE)
+    new_tickets = [t for t in tickets if t.get('id') != ticket_id]
+    save_json(TICKETS_FILE, new_tickets)
+    return {"success": True}
+
+@app.route('/api/inventory', methods=['GET'])
+def get_inventory():
+    inventory = load_json(INVENTORY_FILE)
+    if not inventory:
+        # Seed initial inventory if empty
+        inventory = [
+            {"id": 1, "name": "Yellow Pad Paper", "price": 200, "stock": 50, "iconType": "StickyNote", "color": "bg-yellow-100 text-yellow-600", "imageUrl": "/paper.jpg"},
+            {"id": 2, "name": "₱20 Mobile Load", "price": 200, "stock": 50, "iconType": "Smartphone", "color": "bg-indigo-100 text-indigo-600", "imageUrl": "/load20.png"},
+            {"id": 3, "name": "Drinks", "price": 150, "stock": 50, "iconType": "CupSoda", "color": "bg-cyan-100 text-cyan-600", "imageUrl": "/drinks.png"},
+            {"id": 4, "name": "Pen", "price": 100, "stock": 50, "iconType": "PenTool", "color": "bg-blue-100 text-blue-600", "imageUrl": "/pen.png"},
+            {"id": 5, "name": "Assorted Snacks", "price": 200, "stock": 50, "iconType": "Cookie", "color": "bg-orange-100 text-orange-600", "imageUrl": "/snacks.png"},
+            {"id": 6, "name": "₱10 Cash", "price": 100, "stock": 50, "iconType": "Banknote", "color": "bg-emerald-100 text-emerald-600", "imageUrl": "/10_pesos.png"}
+        ]
+        save_json(INVENTORY_FILE, inventory)
+    return {"inventory": inventory}
+
+@app.route('/api/inventory', methods=['POST'])
+def add_update_inventory():
+    try:
+        new_inventory = request.json
+        save_json(INVENTORY_FILE, new_inventory)
+        return {"success": True, "inventory": new_inventory}
+    except Exception as e:
+        return {"error": str(e)}, 500
+
+@app.route('/api/purchases', methods=['GET'])
+def get_purchases():
+    return {"purchases": load_json(PURCHASES_FILE)}
+
+@app.route('/api/inventory/purchase', methods=['POST'])
+def purchase_item():
+    try:
+        data = request.json
+        user_email = data.get('userEmail')
+        item_id = data.get('itemId')
+        
+        inventory = load_json(INVENTORY_FILE)
+        purchases = load_json(PURCHASES_FILE)
+        
+        # Find item
+        item = next((i for i in inventory if i.get('id') == item_id), None)
+        if not item:
+            return {"error": "Item not found"}, 404
+            
+        if item.get('stock', 0) <= 0:
+            return {"error": "Out of stock"}, 400
+            
+        # Deduct stock
+        item['stock'] -= 1
+        save_json(INVENTORY_FILE, inventory)
+        
+        # Log purchase
+        import datetime
+        import uuid
+        new_purchase = {
+            "id": str(uuid.uuid4()),
+            "studentEmail": user_email,
+            "itemId": item_id,
+            "price": item.get('price'),
+            "timestamp": datetime.datetime.now().isoformat()
+        }
+        purchases.append(new_purchase)
+        save_json(PURCHASES_FILE, purchases)
+        
+        return {"success": True, "purchase": new_purchase}
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {"error": str(e)}, 500
 
 @app.route('/api/generate-pdf', methods=['POST'])
 def handle_generate_pdf():
