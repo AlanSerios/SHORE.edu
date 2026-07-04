@@ -249,12 +249,12 @@ export default function App() {
         formData.append('student_name', selectedStudent);
         formData.append('report_type', reportType);
         
-        response = await fetch('/api/generate-pdf', {
+        response = await fetch('https://shore-backend.onrender.com/api/generate-pdf', {
           method: 'POST',
           body: formData
         });
       } else {
-        response = await fetch('/api/generate-pdf', {
+        response = await fetch('https://shore-backend.onrender.com/api/generate-pdf', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

@@ -1,12 +1,14 @@
 import os
 import io
 from flask import Flask, request, send_file
+from flask_cors import CORS
 from pdf_generator import generate_pdf_bytes
 
 import json
 
 # Serve from frontend/dist
 app = Flask(__name__, static_folder='frontend/dist', static_url_path='')
+CORS(app)
 
 import firebase_admin
 from firebase_admin import credentials, db
