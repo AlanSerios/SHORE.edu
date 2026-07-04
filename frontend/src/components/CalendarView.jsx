@@ -141,9 +141,9 @@ export default function CalendarView({ userRole = 'admin' }) {
   const renderHeader = () => {
     return (
       <div className="flex flex-col mb-6 gap-4">
-        <div className="flex justify-between items-center">
-          <div className="flex items-center gap-4">
-            <div className="flex bg-card border border-border rounded-lg overflow-hidden shadow-sm">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-0">
+          <div className="flex items-center gap-4 w-full sm:w-auto">
+            <div className="flex bg-card border border-border rounded-lg overflow-hidden shadow-sm shrink-0">
               <button onClick={prevMonth} className="px-3 py-2 text-muted hover:bg-canvas transition-colors border-r border-border">
                 <ChevronLeft className="w-5 h-5" />
               </button>
@@ -161,7 +161,7 @@ export default function CalendarView({ userRole = 'admin' }) {
           {userRole === 'admin' && (
             <button 
               onClick={() => handleOpenModal(new Date())}
-              className="bg-primary hover:bg-primaryHover text-white px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 transition-all shadow-sm"
+              className="bg-primary hover:bg-primaryHover text-white px-4 py-2 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 transition-all shadow-sm w-full sm:w-auto"
             >
               <Plus className="w-4 h-4" /> New Event
             </button>
@@ -183,19 +183,20 @@ export default function CalendarView({ userRole = 'admin' }) {
   };
 
   const renderDays = () => {
-    const dateFormat = "EEEE";
     const days = [];
     let startDate = startOfWeek(currentDate);
 
     for (let i = 0; i < 7; i++) {
+      const currentDay = addDays(startDate, i);
       days.push(
         <div className="text-center font-semibold text-xs text-muted uppercase tracking-wider py-3" key={i}>
-          {format(addDays(startDate, i), dateFormat)}
+          <span className="hidden md:inline">{format(currentDay, "EEEE")}</span>
+          <span className="md:hidden">{format(currentDay, "EEE")}</span>
         </div>
       );
     }
 
-    return <div className="grid grid-cols-7 border-b border-border">{days}</div>;
+    return <div className="grid grid-cols-7 border-b border-border w-full">{days}</div>;
   };
 
   const renderCells = () => {
@@ -291,7 +292,7 @@ export default function CalendarView({ userRole = 'admin' }) {
               setShowDetailsModal(true); 
             }}
             className={cn(
-              "group flex items-center justify-between text-[11.5px] font-semibold py-1 px-2 mx-1 cursor-pointer pointer-events-auto transition-transform hover:brightness-110 active:scale-[0.99]",
+              "group flex items-center justify-start md:justify-between text-[9px] sm:text-[11.5px] font-semibold py-1 px-1.5 mx-1 cursor-pointer pointer-events-auto transition-transform hover:brightness-110 active:scale-[0.99] overflow-hidden",
               typeStyle.color,
               roundedLeft ? "rounded-l-md ml-1" : "rounded-l-none ml-0 border-l border-white/20",
               roundedRight ? "rounded-r-md mr-1" : "rounded-r-none mr-0 border-r border-white/20"
@@ -308,14 +309,14 @@ export default function CalendarView({ userRole = 'admin' }) {
       });
 
       rows.push(
-        <div className="relative min-h-[120px] border-b border-border group/row" key={weekStartStr}>
+        <div className="relative min-h-[100px] sm:min-h-[120px] border-b border-border group/row" key={weekStartStr}>
           {/* Background Grid */}
           <div className="absolute inset-0 grid grid-cols-7">
             {bgCells}
           </div>
 
           {/* Events Grid Layer */}
-          <div className="relative z-10 grid grid-cols-7 gap-y-1 grid-flow-row-dense pt-10 pb-2 pointer-events-none">
+          <div className="relative z-10 grid grid-cols-7 gap-y-1 grid-flow-row-dense pt-8 md:pt-10 pb-1 md:pb-2 pointer-events-none">
             {eventElements}
           </div>
         </div>
@@ -327,13 +328,17 @@ export default function CalendarView({ userRole = 'admin' }) {
   };
 
   return (
-    <div className="flex flex-col h-full w-full bg-canvas p-8 overflow-hidden">
+    <div className="flex flex-col h-full w-full bg-canvas p-4 md:p-8 overflow-hidden">
       {renderHeader()}
       
-      <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden flex-1 flex flex-col">
-        {renderDays()}
-        <div className="flex-1 overflow-y-auto no-scrollbar">
-          {renderCells()}
+      <div className="bg-card border border-border rounded-2xl shadow-sm flex-1 flex flex-col overflow-hidden min-h-0">
+        <div className="flex-1 flex flex-col min-h-0">
+          <div className="w-full flex-1 flex flex-col min-h-0">
+            {renderDays()}
+            <div className="flex-1 overflow-y-auto no-scrollbar min-h-0 touch-pan-y">
+              {renderCells()}
+            </div>
+          </div>
         </div>
       </div>
 

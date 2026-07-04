@@ -95,7 +95,7 @@ const ManageClassView = () => {
         </div>
 
         {/* SUMMARY CARDS */}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="bg-white rounded-2xl border border-border/60 p-5 shadow-sm">
             <p className="text-3xl font-black text-primary">{roster.length}</p>
             <p className="text-xs text-muted mt-1 font-medium">Names on Roster</p>
@@ -137,7 +137,7 @@ const ManageClassView = () => {
               {/* Add student */}
               <div className="bg-white rounded-2xl border border-border/60 p-5 shadow-sm">
                 <p className="text-xs font-bold text-muted uppercase tracking-wider mb-3">Add Student to Roster</p>
-                <div className="flex gap-3">
+                <div className="flex flex-col sm:flex-row gap-3">
                   <input
                     value={newName}
                     onChange={e => setNewName(e.target.value)}

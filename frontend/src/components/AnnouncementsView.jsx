@@ -44,17 +44,17 @@ const AnnouncementItem = ({ post, userRole, userEmail, userName, profilePicture,
   return (
     <div ref={postRef} className="bg-white rounded-3xl border border-border/60 shadow-sm overflow-hidden flex flex-col">
       {/* Post Content */}
-      <div className="p-6 sm:p-8">
+      <div className="p-4 sm:p-8">
         <div className="flex justify-between items-start mb-4">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-full overflow-hidden bg-primary/10 text-primary flex items-center justify-center font-bold text-xl shrink-0 border border-border/50">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full overflow-hidden bg-primary/10 text-primary flex items-center justify-center font-bold text-lg sm:text-xl shrink-0 border border-border/50">
               {renderAvatar(post.authorEmail, post.author)}
             </div>
             <div>
-              <h2 className="text-2xl font-bold text-fg mb-1">{post.title}</h2>
-              <div className="flex items-center gap-2 text-xs text-muted font-medium">
+              <h2 className="text-xl sm:text-2xl font-bold text-fg mb-1">{post.title}</h2>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-0.5 sm:gap-2 text-xs text-muted font-medium">
                 <span className="text-primary">{post.author}</span>
-                <span>•</span>
+                <span className="hidden sm:inline">•</span>
                 <span>{new Date(post.timestamp).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
               </div>
             </div>
@@ -337,7 +337,7 @@ export default function AnnouncementsView({ userEmail, userRole, userName, profi
       <div className="max-w-4xl mx-auto px-4 sm:px-6 pt-12 space-y-8">
         
         {/* Header */}
-        <div className="flex justify-between items-end">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
           <div>
             <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white border border-border/50 text-[10px] font-bold tracking-[0.2em] uppercase text-primary mb-5 shadow-sm">
               <Megaphone className="w-3 h-3" />
@@ -350,7 +350,7 @@ export default function AnnouncementsView({ userEmail, userRole, userName, profi
           {userRole === 'admin' && !isComposing && (
             <button 
               onClick={() => setIsComposing(true)}
-              className="px-6 py-2.5 bg-primary text-white text-sm font-bold rounded-xl hover:bg-primary/90 shadow-lg shadow-primary/20 transition-all flex items-center gap-2"
+              className="w-full sm:w-auto justify-center px-6 py-2.5 bg-primary text-white text-sm font-bold rounded-xl hover:bg-primary/90 shadow-lg shadow-primary/20 transition-all flex items-center gap-2"
             >
               <Megaphone className="w-4 h-4" />
               Post Update

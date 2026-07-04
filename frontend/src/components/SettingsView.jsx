@@ -3,6 +3,8 @@ import { Camera, Save, Plus, Trash2, CheckCircle2, QrCode, X } from 'lucide-reac
 import { QRCodeSVG } from 'qrcode.react';
 import { toast } from 'sonner';
 import Cropper from 'react-easy-crop';
+import { motion, AnimatePresence } from 'framer-motion';
+import anime from 'animejs';
 import getCroppedImg from '../utils/cropImage';
 
 export default function SettingsView({ userEmail, userRole, onUpdateUser }) {
@@ -11,12 +13,27 @@ export default function SettingsView({ userEmail, userRole, onUpdateUser }) {
   const [newScholarship, setNewScholarship] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const fileInputRef = useRef(null);
+  
+  const [showQRPopout, setShowQRPopout] = useState(false);
+  const qrModalRef = useRef(null);
 
   const [imageSrc, setImageSrc] = useState(null);
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
   const [isCropping, setIsCropping] = useState(false);
+
+  useEffect(() => {
+    if (showQRPopout && qrModalRef.current) {
+      anime({
+        targets: qrModalRef.current,
+        scale: [0.5, 1],
+        opacity: [0, 1],
+        duration: 400,
+        easing: 'easeOutElastic(1, .8)'
+      });
+    }
+  }, [showQRPopout]);
 
   useEffect(() => {
     fetchUserData();
@@ -262,7 +279,11 @@ export default function SettingsView({ userEmail, userRole, onUpdateUser }) {
             <h2 className="text-lg font-bold text-fg mb-1">Attendance ID</h2>
             <p className="text-sm text-muted mb-6">Scan this code at events</p>
             
-            <div className="bg-white p-4 rounded-xl shadow-sm border border-border/30 group-hover:scale-105 transition-transform duration-300">
+            <div 
+              className="bg-white p-4 rounded-xl shadow-sm border border-border/30 group-hover:scale-105 transition-transform duration-300 cursor-pointer"
+              onClick={() => setShowQRPopout(true)}
+              title="Click to enlarge"
+            >
               <QRCodeSVG 
                 value={userEmail} 
                 size={120} 
@@ -271,6 +292,7 @@ export default function SettingsView({ userEmail, userRole, onUpdateUser }) {
                 level="H"
                 includeMargin={false}
               />
+              <p className="text-[10px] text-center font-bold text-muted uppercase mt-3">Click to enlarge</p>
             </div>
             
             <div className="mt-6">
@@ -294,13 +316,13 @@ export default function SettingsView({ userEmail, userRole, onUpdateUser }) {
                 onChange={e => setNewScholarship(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleAddScholarship()}
                 placeholder="e.g. DOST-SEI Merit Scholarship"
-                className="flex-1 px-4 py-2.5 rounded-xl border border-border bg-canvas focus:outline-none focus:border-primary transition-colors"
+                className="flex-1 min-w-0 px-4 py-2.5 rounded-xl border border-border bg-canvas focus:outline-none focus:border-primary transition-colors"
               />
               <button 
                 onClick={handleAddScholarship}
                 className="bg-primary hover:bg-primaryHover text-white px-5 py-2.5 rounded-xl font-medium flex items-center gap-2 transition-colors shadow-sm shrink-0"
               >
-                <Plus className="w-5 h-5" /> Add
+                <Plus className="w-5 h-5" /> <span className="hidden sm:inline">Add</span>
               </button>
             </div>
 
@@ -314,15 +336,15 @@ export default function SettingsView({ userEmail, userRole, onUpdateUser }) {
                 <ul className="space-y-3">
                   {appliedScholarships.map((scholarship, idx) => (
                     <li key={idx} className="bg-card border border-border p-4 rounded-xl flex items-center justify-between group shadow-sm">
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
                         <div className="w-8 h-8 rounded-full bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0">
                           <CheckCircle2 className="w-4 h-4" />
                         </div>
-                        <span className="font-medium text-fg">{scholarship}</span>
+                        <span className="font-medium text-fg truncate">{scholarship}</span>
                       </div>
                       <button 
                         onClick={() => handleRemoveScholarship(idx)}
-                        className="text-muted hover:text-accentRedFg p-2 rounded-lg hover:bg-accentRed/10 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+                        className="text-muted hover:text-accentRedFg p-2 rounded-lg hover:bg-accentRed/10 transition-colors opacity-100 md:opacity-0 md:group-hover:opacity-100 focus:opacity-100"
                         title="Remove from tracker"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -335,6 +357,49 @@ export default function SettingsView({ userEmail, userRole, onUpdateUser }) {
           </div>
         </div>
       </div>
+
+      {/* QR Code Popout Modal */}
+      <AnimatePresence>
+        {showQRPopout && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-fg/60 backdrop-blur-sm p-4">
+            <div 
+              className="absolute inset-0"
+              onClick={() => setShowQRPopout(false)}
+            />
+            <div 
+              ref={qrModalRef}
+              className="relative bg-white rounded-3xl p-8 shadow-2xl flex flex-col items-center max-w-sm w-full"
+            >
+              <button 
+                onClick={() => setShowQRPopout(false)}
+                className="absolute top-4 right-4 p-2 bg-canvas text-muted hover:text-fg rounded-full transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              
+              <div className="bg-canvas p-4 rounded-2xl mb-6 shadow-inner border border-border/50">
+                <QRCodeSVG 
+                  value={userEmail} 
+                  size={250} 
+                  bgColor="transparent"
+                  fgColor="#000000"
+                  level="H"
+                  includeMargin={false}
+                />
+              </div>
+              
+              <h2 className="text-2xl font-black text-fg text-center mb-1 tracking-tight">
+                {userEmail.split('@')[0]}
+              </h2>
+              <div className="flex items-center gap-1.5 justify-center">
+                <span className="text-xs font-bold text-primary uppercase tracking-[0.15em] bg-primary/10 px-3 py-1 rounded-full">
+                  {userRole === 'admin' ? 'Volunteer/Admin' : 'SHORE 5.0 Student'}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

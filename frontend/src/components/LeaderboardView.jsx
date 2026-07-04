@@ -99,20 +99,20 @@ export default function LeaderboardView() {
                 <div className="flex items-center gap-4">
                   {getRankBadge(idx)}
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-primary/10 overflow-hidden flex items-center justify-center text-primary font-bold">
+                    <div className="w-10 h-10 rounded-full bg-primary/10 overflow-hidden flex items-center justify-center text-primary font-bold shrink-0">
                       {student.profilePicture ? (
                         <img src={student.profilePicture} alt="Profile" className="w-full h-full object-cover" />
                       ) : (
                         student.name.charAt(0).toUpperCase()
                       )}
                     </div>
-                    <div>
-                      <p className="font-bold text-fg">{student.name}</p>
-                      <p className="text-[10px] text-muted font-medium uppercase tracking-wider">{label}</p>
+                    <div className="min-w-0">
+                      <p className="font-bold text-fg truncate">{student.name}</p>
+                      <p className="text-[10px] text-muted font-medium uppercase tracking-wider truncate">{label}</p>
                     </div>
                   </div>
                 </div>
-                <div className="text-xl font-black text-fg">{student.score}</div>
+                <div className="text-xl font-black text-fg pl-2">{student.score}</div>
               </div>
             ))}
           </div>

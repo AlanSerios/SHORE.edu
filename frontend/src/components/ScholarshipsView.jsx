@@ -118,7 +118,7 @@ export default function ScholarshipsView({ userRole }) {
 
   return (
     <div className="p-8 h-full flex flex-col overflow-y-auto">
-      <div className="flex justify-between items-center mb-8">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
         <div>
           <h1 className="text-3xl font-bold text-fg tracking-tight">Available Scholarships</h1>
           <p className="text-muted mt-1">Discover and apply for financial aid opportunities in Mindanao and beyond.</p>
@@ -126,7 +126,7 @@ export default function ScholarshipsView({ userRole }) {
         {userRole === 'admin' && (
           <button 
             onClick={() => openModal()}
-            className="bg-primary hover:bg-primaryHover text-white px-5 py-2.5 rounded-xl font-medium flex items-center gap-2 transition-colors shadow-sm"
+            className="w-full sm:w-auto justify-center bg-primary hover:bg-primaryHover text-white px-5 py-2.5 rounded-xl font-medium flex items-center gap-2 transition-colors shadow-sm"
           >
             <Plus className="w-5 h-5" /> Add Scholarship
           </button>

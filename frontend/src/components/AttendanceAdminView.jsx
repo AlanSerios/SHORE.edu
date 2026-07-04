@@ -504,60 +504,101 @@ const AttendanceAdminView = () => {
                     <p className="text-sm text-muted mt-1">Try adjusting your filters or search term.</p>
                   </div>
                 ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
-                      <thead>
-                        <tr className="bg-canvas/50">
-                          <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider">Name / Email</th>
-                          <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider">Role</th>
-                          <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider text-center">Morning In</th>
-                          <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider text-center">Morning Out</th>
-                          <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider text-center">Afternoon In</th>
-                          <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider text-center">Afternoon Out</th>
-                          <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider text-center">Status</th>
-                          <th className="px-4 py-4 w-12"></th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-border bg-white">
-                        {filteredTrackerData.map(row => (
-                          <tr key={row.email} className="hover:bg-canvas/30 transition-colors group">
-                            <td className="px-6 py-4">
-                              <div className="text-sm font-semibold text-fg">{row.name}</div>
-                              <div className="text-xs text-muted mt-0.5">{row.email}</div>
-                            </td>
-                            <td className="px-6 py-4">
-                              <RoleBadge role={row.role} />
-                            </td>
-                            <td className="px-6 py-4 text-center text-sm font-medium text-fg">
-                              {fmtTime(row.morning_in)}
-                            </td>
-                            <td className="px-6 py-4 text-center text-sm font-medium text-fg">
-                              {fmtTime(row.morning_out)}
-                            </td>
-                            <td className="px-6 py-4 text-center text-sm font-medium text-fg">
-                              {fmtTime(row.afternoon_in)}
-                            </td>
-                            <td className="px-6 py-4 text-center text-sm font-medium text-fg">
-                              {fmtTime(row.afternoon_out)}
-                            </td>
-                            <td className="px-6 py-4 text-center">
-                              <StatusBadge status={row.status} />
-                            </td>
-                            <td className="px-4 py-4 text-center">
-                              <div className="opacity-0 group-hover:opacity-100 transition-opacity flex justify-center">
-                                {row.logIds.map(id => (
-                                  <button key={id} onClick={() => handleDelete(id)}
-                                    className="p-1.5 text-muted hover:text-accentRedFg hover:bg-accentRed/10 rounded-md transition-colors"
-                                    title="Delete Record">
-                                    <Trash2 className="w-4 h-4" />
-                                  </button>
-                                ))}
-                              </div>
-                            </td>
+                  <div className="w-full">
+                    {/* Desktop Table View */}
+                    <div className="hidden md:block overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="bg-canvas/50">
+                            <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider">Name / Email</th>
+                            <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider">Role</th>
+                            <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider text-center">Morning In</th>
+                            <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider text-center">Morning Out</th>
+                            <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider text-center">Afternoon In</th>
+                            <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider text-center">Afternoon Out</th>
+                            <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider text-center">Status</th>
+                            <th className="px-4 py-4 w-12"></th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody className="divide-y divide-border bg-white">
+                          {filteredTrackerData.map(row => (
+                            <tr key={row.email} className="hover:bg-canvas/30 transition-colors group">
+                              <td className="px-6 py-4">
+                                <div className="text-sm font-semibold text-fg">{row.name}</div>
+                                <div className="text-xs text-muted mt-0.5">{row.email}</div>
+                              </td>
+                              <td className="px-6 py-4">
+                                <RoleBadge role={row.role} />
+                              </td>
+                              <td className="px-6 py-4 text-center text-sm font-medium text-fg">
+                                {fmtTime(row.morning_in)}
+                              </td>
+                              <td className="px-6 py-4 text-center text-sm font-medium text-fg">
+                                {fmtTime(row.morning_out)}
+                              </td>
+                              <td className="px-6 py-4 text-center text-sm font-medium text-fg">
+                                {fmtTime(row.afternoon_in)}
+                              </td>
+                              <td className="px-6 py-4 text-center text-sm font-medium text-fg">
+                                {fmtTime(row.afternoon_out)}
+                              </td>
+                              <td className="px-6 py-4 text-center">
+                                <StatusBadge status={row.status} />
+                              </td>
+                              <td className="px-4 py-4 text-center">
+                                <div className="opacity-0 group-hover:opacity-100 transition-opacity flex justify-center">
+                                  {row.logIds.map(id => (
+                                    <button key={id} onClick={() => handleDelete(id)}
+                                      className="p-1.5 text-muted hover:text-accentRedFg hover:bg-accentRed/10 rounded-md transition-colors"
+                                      title="Delete Record">
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  ))}
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    {/* Mobile Card View */}
+                    <div className="block md:hidden divide-y divide-border bg-white">
+                      {filteredTrackerData.map(row => (
+                        <div key={row.email} className="p-4 flex flex-col gap-3">
+                          <div className="flex items-start justify-between">
+                            <div>
+                              <div className="text-sm font-bold text-fg">{row.name}</div>
+                              <div className="text-xs text-muted">{row.email}</div>
+                            </div>
+                            <RoleBadge role={row.role} />
+                          </div>
+                          
+                          <div className="grid grid-cols-2 gap-2 bg-canvas/30 p-2.5 rounded-lg">
+                            <div className="text-center">
+                              <p className="text-[10px] uppercase font-bold text-muted mb-0.5">Morning</p>
+                              <p className="text-xs font-semibold text-fg">{fmtTime(row.morning_in)} - {fmtTime(row.morning_out)}</p>
+                            </div>
+                            <div className="text-center">
+                              <p className="text-[10px] uppercase font-bold text-muted mb-0.5">Afternoon</p>
+                              <p className="text-xs font-semibold text-fg">{fmtTime(row.afternoon_in)} - {fmtTime(row.afternoon_out)}</p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between mt-1">
+                            <StatusBadge status={row.status} />
+                            <div className="flex gap-2">
+                              {row.logIds.map(id => (
+                                <button key={id} onClick={() => handleDelete(id)}
+                                  className="p-1.5 bg-accentRed/10 text-accentRedFg hover:bg-accentRed/20 rounded-md transition-colors"
+                                  title="Delete Record">
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
@@ -586,50 +627,95 @@ const AttendanceAdminView = () => {
                     <p className="text-fg font-semibold">No general data available.</p>
                   </div>
                 ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
-                      <thead>
-                        <tr className="bg-canvas/50">
-                          <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider">Name / Email</th>
-                          <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider">Role</th>
-                          <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider text-center">Attended</th>
-                          <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider text-center">Absent</th>
-                          <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider text-center">Total Events</th>
-                          <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider min-w-[180px]">Attendance Rate</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-border bg-white">
-                        {generalData.map(row => (
-                          <tr key={row.email} className="hover:bg-canvas/30 transition-colors">
-                            <td className="px-6 py-4">
-                              <div className="text-sm font-semibold text-fg">{row.name}</div>
-                              <div className="text-xs text-muted mt-0.5">{row.email}</div>
-                            </td>
-                            <td className="px-6 py-4">
-                              <RoleBadge role={row.role} />
-                            </td>
-                            <td className="px-6 py-4 text-center">
-                              <span className="font-semibold text-fg">{row.attended}</span>
-                            </td>
-                            <td className="px-6 py-4 text-center">
-                              <span className={cn("font-semibold", row.absent > 0 ? "text-accentRedFg" : "text-muted")}>{row.absent}</span>
-                            </td>
-                            <td className="px-6 py-4 text-center font-medium text-muted">{row.total}</td>
-                            <td className="px-6 py-4">
-                              <div className="flex items-center gap-3">
-                                <div className="flex-1 h-2 bg-canvas rounded-full overflow-hidden">
-                                  <div
-                                    className={cn("h-full rounded-full transition-all", row.rate >= 80 ? "bg-accentGreen" : row.rate >= 50 ? "bg-orange-400" : "bg-accentRed")}
-                                    style={{ width: `${row.rate}%` }}
-                                  />
-                                </div>
-                                <span className="font-bold text-xs text-fg w-9 text-right">{row.rate}%</span>
-                              </div>
-                            </td>
+                  <div className="w-full">
+                    {/* Desktop Table View */}
+                    <div className="hidden md:block overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="bg-canvas/50">
+                            <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider">Name / Email</th>
+                            <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider">Role</th>
+                            <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider text-center">Attended</th>
+                            <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider text-center">Absent</th>
+                            <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider text-center">Total Events</th>
+                            <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider min-w-[180px]">Attendance Rate</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody className="divide-y divide-border bg-white">
+                          {generalData.map(row => (
+                            <tr key={row.email} className="hover:bg-canvas/30 transition-colors">
+                              <td className="px-6 py-4">
+                                <div className="text-sm font-semibold text-fg">{row.name}</div>
+                                <div className="text-xs text-muted mt-0.5">{row.email}</div>
+                              </td>
+                              <td className="px-6 py-4">
+                                <RoleBadge role={row.role} />
+                              </td>
+                              <td className="px-6 py-4 text-center">
+                                <span className="font-semibold text-fg">{row.attended}</span>
+                              </td>
+                              <td className="px-6 py-4 text-center">
+                                <span className={cn("font-semibold", row.absent > 0 ? "text-accentRedFg" : "text-muted")}>{row.absent}</span>
+                              </td>
+                              <td className="px-6 py-4 text-center font-medium text-muted">{row.total}</td>
+                              <td className="px-6 py-4">
+                                <div className="flex items-center gap-3">
+                                  <div className="flex-1 h-2 bg-canvas rounded-full overflow-hidden">
+                                    <div
+                                      className={cn("h-full rounded-full transition-all", row.rate >= 80 ? "bg-accentGreen" : row.rate >= 50 ? "bg-orange-400" : "bg-accentRed")}
+                                      style={{ width: `${row.rate}%` }}
+                                    />
+                                  </div>
+                                  <span className="font-bold text-xs text-fg w-9 text-right">{row.rate}%</span>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    {/* Mobile Card View */}
+                    <div className="block md:hidden divide-y divide-border bg-white">
+                      {generalData.map(row => (
+                        <div key={row.email} className="p-4 flex flex-col gap-3">
+                          <div className="flex items-start justify-between">
+                            <div>
+                              <div className="text-sm font-bold text-fg">{row.name}</div>
+                              <div className="text-xs text-muted">{row.email}</div>
+                            </div>
+                            <RoleBadge role={row.role} />
+                          </div>
+                          
+                          <div className="grid grid-cols-3 gap-2 bg-canvas/30 p-2.5 rounded-lg text-center">
+                            <div>
+                              <p className="text-[10px] uppercase font-bold text-muted mb-0.5">Attended</p>
+                              <p className="text-sm font-bold text-fg">{row.attended}</p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] uppercase font-bold text-muted mb-0.5">Absent</p>
+                              <p className={cn("text-sm font-bold", row.absent > 0 ? "text-accentRedFg" : "text-muted")}>{row.absent}</p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] uppercase font-bold text-muted mb-0.5">Total</p>
+                              <p className="text-sm font-bold text-muted">{row.total}</p>
+                            </div>
+                          </div>
+
+                          <div className="mt-1">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-[10px] font-bold uppercase text-muted">Attendance Rate</span>
+                              <span className="text-xs font-bold text-fg">{row.rate}%</span>
+                            </div>
+                            <div className="w-full h-2 bg-canvas rounded-full overflow-hidden">
+                              <div
+                                className={cn("h-full rounded-full transition-all", row.rate >= 80 ? "bg-accentGreen" : row.rate >= 50 ? "bg-orange-400" : "bg-accentRed")}
+                                style={{ width: `${row.rate}%` }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
@@ -711,38 +797,74 @@ const AttendanceAdminView = () => {
                     <p className="text-fg font-semibold">No event statistics available.</p>
                   </div>
                 ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
-                      <thead>
-                        <tr className="bg-canvas/50">
-                          <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider">Event Name</th>
-                          <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider text-center">Attendees</th>
-                          <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider text-center">Morning</th>
-                          <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider text-center">Afternoon</th>
-                          <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider text-center">Full Day</th>
-                          <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider text-center">Trend</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-border bg-white">
-                        {statsData.map(row => (
-                          <tr key={row.event} className="hover:bg-canvas/30 transition-colors">
-                            <td className="px-6 py-4 font-bold text-fg text-sm">{row.event}</td>
-                            <td className="px-6 py-4 text-center font-bold text-fg">{row.attendees}</td>
-                            <td className="px-6 py-4 text-center text-muted font-medium">{row.morning}</td>
-                            <td className="px-6 py-4 text-center text-muted font-medium">{row.afternoon}</td>
-                            <td className="px-6 py-4 text-center">
-                              <span className="font-bold text-fg">{row.fullDay}</span>
-                            </td>
-                            <td className="px-6 py-4 text-center">
-                              {row.trend === null   ? <span className="text-muted text-xs font-bold px-2 py-1 rounded bg-canvas">INIT</span>
-                              : row.trend === 'up'  ? <span className="text-accentGreenFg font-bold text-xs px-2 py-1 rounded bg-accentGreen flex items-center gap-1 justify-center w-fit mx-auto"><TrendingUp className="w-3 h-3"/> UP</span>
-                              : row.trend === 'down'? <span className="text-accentRedFg font-bold text-xs px-2 py-1 rounded bg-accentRed flex items-center gap-1 justify-center w-fit mx-auto"><TrendingDown className="w-3 h-3"/> DOWN</span>
-                              :                       <span className="text-muted text-xs font-bold px-2 py-1 rounded bg-canvas flex items-center gap-1 justify-center w-fit mx-auto"><Minus className="w-3 h-3"/> STABLE</span>}
-                            </td>
+                  <div className="w-full">
+                    {/* Desktop Table View */}
+                    <div className="hidden md:block overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="bg-canvas/50">
+                            <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider">Event Name</th>
+                            <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider text-center">Attendees</th>
+                            <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider text-center">Morning</th>
+                            <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider text-center">Afternoon</th>
+                            <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider text-center">Full Day</th>
+                            <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider text-center">Trend</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody className="divide-y divide-border bg-white">
+                          {statsData.map(row => (
+                            <tr key={row.event} className="hover:bg-canvas/30 transition-colors">
+                              <td className="px-6 py-4 font-bold text-fg text-sm">{row.event}</td>
+                              <td className="px-6 py-4 text-center font-bold text-fg">{row.attendees}</td>
+                              <td className="px-6 py-4 text-center text-muted font-medium">{row.morning}</td>
+                              <td className="px-6 py-4 text-center text-muted font-medium">{row.afternoon}</td>
+                              <td className="px-6 py-4 text-center">
+                                <span className="font-bold text-fg">{row.fullDay}</span>
+                              </td>
+                              <td className="px-6 py-4 text-center">
+                                {row.trend === null   ? <span className="text-muted text-xs font-bold px-2 py-1 rounded bg-canvas">INIT</span>
+                                : row.trend === 'up'  ? <span className="text-accentGreenFg font-bold text-xs px-2 py-1 rounded bg-accentGreen flex items-center gap-1 justify-center w-fit mx-auto"><TrendingUp className="w-3 h-3"/> UP</span>
+                                : row.trend === 'down'? <span className="text-accentRedFg font-bold text-xs px-2 py-1 rounded bg-accentRed flex items-center gap-1 justify-center w-fit mx-auto"><TrendingDown className="w-3 h-3"/> DOWN</span>
+                                :                       <span className="text-muted text-xs font-bold px-2 py-1 rounded bg-canvas flex items-center gap-1 justify-center w-fit mx-auto"><Minus className="w-3 h-3"/> STABLE</span>}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    {/* Mobile Card View */}
+                    <div className="block md:hidden divide-y divide-border bg-white">
+                      {statsData.map(row => (
+                        <div key={row.event} className="p-4 flex flex-col gap-3">
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-fg text-sm">{row.event}</span>
+                            {row.trend === null   ? <span className="text-muted text-[10px] font-bold px-2 py-0.5 rounded bg-canvas uppercase">Init</span>
+                            : row.trend === 'up'  ? <span className="text-accentGreenFg font-bold text-[10px] px-2 py-0.5 rounded bg-accentGreen flex items-center gap-1 uppercase"><TrendingUp className="w-3 h-3"/> Up</span>
+                            : row.trend === 'down'? <span className="text-accentRedFg font-bold text-[10px] px-2 py-0.5 rounded bg-accentRed flex items-center gap-1 uppercase"><TrendingDown className="w-3 h-3"/> Down</span>
+                            :                       <span className="text-muted text-[10px] font-bold px-2 py-0.5 rounded bg-canvas flex items-center gap-1 uppercase"><Minus className="w-3 h-3"/> Stable</span>}
+                          </div>
+                          
+                          <div className="grid grid-cols-4 gap-2 bg-canvas/30 p-2.5 rounded-lg text-center">
+                            <div>
+                              <p className="text-[10px] uppercase font-bold text-muted mb-0.5">Total</p>
+                              <p className="text-sm font-bold text-primary">{row.attendees}</p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] uppercase font-bold text-muted mb-0.5">Morn</p>
+                              <p className="text-sm font-semibold text-muted">{row.morning}</p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] uppercase font-bold text-muted mb-0.5">Aftn</p>
+                              <p className="text-sm font-semibold text-muted">{row.afternoon}</p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] uppercase font-bold text-muted mb-0.5">Full</p>
+                              <p className="text-sm font-semibold text-fg">{row.fullDay}</p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>

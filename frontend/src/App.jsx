@@ -308,7 +308,7 @@ export default function App() {
       <motion.aside 
         animate={{ width: sidebarOpen ? 256 : 80 }}
         transition={{ duration: 0.3, ease: "easeInOut" }}
-        className="bg-sidebar border-r border-border flex flex-col shrink-0 z-20 overflow-visible"
+        className="hidden md:flex bg-sidebar border-r border-border flex-col shrink-0 z-20 overflow-visible"
       >
         <div className="h-20 flex items-center pl-4 pr-4 shrink-0 overflow-hidden">
           <button 
@@ -580,78 +580,85 @@ export default function App() {
       </motion.aside>
 
       {/* MAIN CONTENT */}
-      <main className="flex-1 flex flex-col overflow-hidden relative">
+      <main className="flex-1 flex flex-col overflow-hidden relative pb-16 md:pb-0">
         
         {currentView === 'dashboard' ? (
           <>
             {/* TOP HEADER */}
-            <header className="h-20 bg-card border-b border-border flex items-center justify-between px-10 shrink-0 z-10">
-          <div>
-            <p className="text-sm text-muted">Welcome back,</p>
-            <h2 className="text-xl font-bold text-fg tracking-tight">{userRole === 'admin' ? 'Admin' : userEmail.split('@')[0]}</h2>
-          </div>
+            <header className="h-16 md:h-20 bg-card border-b border-border flex items-center justify-between px-4 md:px-10 shrink-0 z-10">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-lg border border-primary/20 shadow-sm overflow-hidden">
+                  {profilePicture ? (
+                    <img src={profilePicture} alt="Profile" className="w-full h-full object-cover" />
+                  ) : (
+                    userRole === 'admin' ? 'A' : userEmail.charAt(0).toUpperCase()
+                  )}
+                </div>
+                <div>
+                  <p className="text-[11px] font-medium text-muted uppercase tracking-wider mb-0.5">Welcome back,</p>
+                  <h2 className="text-base md:text-xl font-bold text-fg tracking-tight leading-none">{userRole === 'admin' ? 'Admin' : userEmail.split('@')[0]}</h2>
+                </div>
+              </div>
 
-          <div className="flex items-center gap-4">
-            {students.length > 0 && (
-              <>
-                {userRole === 'admin' ? (
-                  <div className="relative">
-                    <select 
-                      value={selectedStudent} 
-                      onChange={(e) => setSelectedStudent(e.target.value)}
-                      className="appearance-none bg-canvas border border-border hover:border-borderHover rounded-lg pl-4 pr-10 py-2.5 text-sm font-medium text-fg focus:outline-none focus:border-primary transition-colors cursor-pointer min-w-[200px]"
-                    >
-                      <option value="" disabled>Select Student</option>
-                      {students.map(name => <option key={name} value={name}>{name}</option>)}
-                    </select>
-                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted pointer-events-none" />
-                  </div>
-                ) : (
-                  <div className="bg-canvas border border-border rounded-lg px-4 py-2.5 text-sm font-bold text-primary min-w-[200px] text-center shadow-sm">
-                    {userName || selectedStudent}
-                  </div>
+              <div className="flex items-center gap-2">
+                {userRole === 'admin' && (
+                  <button onClick={handleLogout} className="w-10 h-10 rounded-full bg-canvas border border-border flex items-center justify-center text-muted hover:text-accentRedFg hover:bg-accentRed/10 transition-colors shadow-sm" title="Sign Out">
+                    <LogOut className="w-4 h-4" />
+                  </button>
                 )}
+              </div>
+            </header>
 
-                {/* Report Type */}
-                <div className="flex bg-canvas border border-border rounded-lg p-1">
-                  {REPORT_TYPES.map(type => (
-                    <button
-                      key={type.id}
-                      onClick={() => setReportType(type.id)}
-                      className={cn(
-                        "px-4 py-1.5 text-sm font-medium rounded-md transition-all",
-                        reportType === type.id ? "bg-card shadow-sm text-primary" : "text-muted hover:text-fg"
-                      )}
-                    >
-                      {type.label}
-                    </button>
-                  ))}
+            {/* DASHBOARD ACTION BAR (Controls) */}
+            {students.length > 0 && (
+              <div className="bg-card/50 border-b border-border px-4 md:px-10 py-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shrink-0 z-10">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
+                  {userRole === 'admin' ? (
+                    <div className="relative w-full sm:w-auto sm:min-w-[200px]">
+                      <select 
+                        value={selectedStudent} 
+                        onChange={(e) => setSelectedStudent(e.target.value)}
+                        className="appearance-none w-full bg-white border border-border hover:border-borderHover rounded-xl pl-4 pr-10 py-2.5 sm:py-2 text-sm font-medium text-fg focus:outline-none focus:border-primary transition-colors cursor-pointer shadow-sm"
+                      >
+                        <option value="" disabled>Select Student</option>
+                        {students.map(name => <option key={name} value={name}>{name}</option>)}
+                      </select>
+                      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted pointer-events-none" />
+                    </div>
+                  ) : (
+                    <div className="bg-white border border-border rounded-xl px-4 py-2.5 sm:py-2 text-sm font-bold text-primary w-full sm:w-auto sm:min-w-[200px] text-center shadow-sm">
+                      {userName || selectedStudent}
+                    </div>
+                  )}
+
+                  {/* Report Type */}
+                  <div className="flex bg-white border border-border rounded-xl p-1 shadow-sm w-full sm:w-auto">
+                    {REPORT_TYPES.map(type => (
+                      <button
+                        key={type.id}
+                        onClick={() => setReportType(type.id)}
+                        className={cn(
+                          "flex-1 px-2 sm:px-3 py-2 sm:py-1.5 text-xs font-bold rounded-lg transition-all whitespace-nowrap",
+                          reportType === type.id ? "bg-primary text-white shadow-sm" : "text-muted hover:text-fg"
+                        )}
+                      >
+                        {type.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
-                <div className="w-px h-8 bg-border mx-2"></div>
-              </>
-            )}
-
-            {/* Download Button */}
-            <button
-              onClick={handleGenerate}
-              disabled={!selectedStudent || isGenerating}
-              className="bg-primary hover:bg-primaryHover disabled:opacity-50 text-white px-5 py-2.5 rounded-lg text-sm font-semibold flex items-center gap-2 transition-all shadow-sm"
-            >
-              {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-              Export PDF
-            </button>
-            
-            {userRole === 'admin' && (
-              <>
-                <div className="w-px h-8 bg-border mx-2"></div>
-                <button onClick={handleLogout} className="flex items-center gap-2 text-muted hover:text-accentRedFg transition-colors font-medium text-sm bg-canvas border border-border px-4 py-2 rounded-lg shadow-sm">
-                  <LogOut className="w-4 h-4" /> Sign Out
+                {/* Download Button */}
+                <button
+                  onClick={handleGenerate}
+                  disabled={!selectedStudent || isGenerating}
+                  className="w-full sm:w-auto bg-white border border-border hover:bg-canvas disabled:opacity-50 text-fg px-4 py-2 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all shadow-sm shrink-0"
+                >
+                  {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4 text-primary" />}
+                  Export PDF
                 </button>
-              </>
+              </div>
             )}
-          </div>
-        </header>
 
         {/* SCROLLABLE DASHBOARD CONTENT */}
         <div className="flex-1 overflow-y-auto p-10">
@@ -675,59 +682,68 @@ export default function App() {
               <motion.div variants={containerVariants} initial="hidden" animate="show" className="space-y-8">
                 
                 {/* TOP METRICS ROW */}
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+                <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 md:gap-6">
                   {/* Card 1: Active Style */}
-                  <motion.div variants={itemVariants} className="bg-primary text-white rounded-2xl p-6 shadow-md relative overflow-hidden">
+                  <motion.div variants={itemVariants} className="col-span-2 xl:col-span-1 bg-primary text-white rounded-3xl p-5 md:p-6 shadow-md relative overflow-hidden flex flex-row items-center justify-between xl:flex-col xl:items-start">
                     <div className="relative z-10">
                       <p className="text-white/80 font-medium text-sm mb-1">Total Score</p>
-                      <h3 className="text-5xl font-bold tracking-tight">{stats.total}</h3>
+                      <h3 className="text-4xl md:text-5xl font-bold tracking-tight">{stats.total}</h3>
                       {stats.growth !== null && (
-                        <div className="mt-4 inline-flex items-center gap-1.5 px-3 py-1 bg-white/20 rounded-full text-xs font-semibold">
-                          <TrendingUp className="w-3.5 h-3.5" />
-                          {stats.growth > 0 ? '+' : ''}{stats.growth} since Pre-Test
+                        <div className="mt-2 md:mt-4 inline-flex items-center gap-1.5 px-3 py-1 bg-white/20 rounded-full text-xs font-semibold">
+                          <TrendingUp className="w-3.5 h-3.5 shrink-0" />
+                          <span>{stats.growth > 0 ? '+' : ''}{stats.growth} since Pre-Test</span>
                         </div>
                       )}
+                    </div>
+                    {/* Mobile visual circle */}
+                    <div className="relative z-10 w-16 h-16 bg-white/10 rounded-full flex items-center justify-center border-4 border-white/20 xl:hidden shrink-0 ml-4">
+                        <TrendingUp className="w-6 h-6 text-white" />
                     </div>
                     {/* Decorative bg element */}
                     <div className="absolute -right-8 -bottom-8 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
                   </motion.div>
 
                   {/* Card 2: Cohort Rank */}
-                  <motion.div variants={itemVariants} className="bg-card border border-border rounded-2xl p-6 shadow-sm">
-                    <div className="flex items-center justify-between mb-4">
-                      <p className="text-fg font-semibold text-sm">Cohort Rank</p>
-                      <div className="w-8 h-8 rounded-full bg-accentBlue/50 flex items-center justify-center">
-                        <Trophy className="w-4 h-4 text-primary" />
+                  <motion.div variants={itemVariants} className="col-span-1 bg-card border border-border rounded-3xl p-4 md:p-6 shadow-sm flex flex-col justify-between">
+                    <div className="flex items-center justify-between mb-3 md:mb-4">
+                      <p className="text-fg font-semibold text-xs md:text-sm truncate mr-2">Cohort Rank</p>
+                      <div className="w-7 h-7 md:w-8 md:h-8 rounded-full bg-accentBlue/50 flex items-center justify-center shrink-0">
+                        <Trophy className="w-3 h-3 md:w-4 md:h-4 text-primary" />
                       </div>
                     </div>
-                    <div className="flex items-baseline gap-2">
-                      <h3 className="text-4xl font-bold text-fg tracking-tight">#{stats.rank}</h3>
-                      <span className="text-muted font-medium">/ {stats.totalStudents}</span>
+                    <div className="flex items-baseline gap-1 md:gap-2">
+                      <h3 className="text-2xl md:text-4xl font-bold text-fg tracking-tight">#{stats.rank}</h3>
+                      <span className="text-muted font-medium text-xs md:text-base">/ {stats.totalStudents}</span>
                     </div>
                   </motion.div>
 
                   {/* Card 3: Strongest Subject */}
-                  <motion.div variants={itemVariants} className="bg-card border border-border rounded-2xl p-6 shadow-sm">
-                    <div className="flex items-center justify-between mb-4">
-                      <p className="text-fg font-semibold text-sm">Top Performer</p>
-                      <div className="w-8 h-8 rounded-full bg-accentGreen flex items-center justify-center">
-                        <Target className="w-4 h-4 text-accentGreenFg" />
+                  <motion.div variants={itemVariants} className="col-span-1 bg-card border border-border rounded-3xl p-4 md:p-6 shadow-sm flex flex-col justify-between">
+                    <div className="flex items-center justify-between mb-3 md:mb-4">
+                      <p className="text-fg font-semibold text-xs md:text-sm truncate mr-2">Top Performer</p>
+                      <div className="w-7 h-7 md:w-8 md:h-8 rounded-full bg-accentGreen flex items-center justify-center shrink-0">
+                        <Target className="w-3 h-3 md:w-4 md:h-4 text-accentGreenFg" />
                       </div>
                     </div>
-                    <h3 className="text-2xl font-bold text-fg truncate mb-1">{stats.strongest.name}</h3>
-                    <p className="text-muted font-medium text-sm">{stats.strongest.score} pts</p>
+                    <div>
+                      <h3 className="text-lg md:text-2xl font-bold text-fg truncate mb-0.5 md:mb-1">{stats.strongest.name}</h3>
+                      <p className="text-muted font-medium text-xs md:text-sm">{stats.strongest.score} pts</p>
+                    </div>
                   </motion.div>
 
                   {/* Card 4: Primary Weakness */}
-                  <motion.div variants={itemVariants} className="bg-card border border-border rounded-2xl p-6 shadow-sm">
-                    <div className="flex items-center justify-between mb-4">
-                      <p className="text-fg font-semibold text-sm">Priority Focus</p>
-                      <div className="w-8 h-8 rounded-full bg-accentRed flex items-center justify-center">
-                        <AlertTriangle className="w-4 h-4 text-accentRedFg" />
+                  <motion.div variants={itemVariants} className="col-span-2 xl:col-span-1 bg-card border border-border rounded-3xl p-4 md:p-6 shadow-sm flex items-center xl:items-start xl:flex-col justify-between">
+                    <div className="flex xl:w-full items-center justify-between xl:mb-4 gap-3 xl:gap-0">
+                      <div className="w-12 h-12 xl:w-8 xl:h-8 rounded-full bg-accentRed flex items-center justify-center shrink-0">
+                        <AlertTriangle className="w-5 h-5 xl:w-4 xl:h-4 text-accentRedFg" />
                       </div>
+                      <p className="text-fg font-semibold text-sm hidden xl:block">Priority Focus</p>
                     </div>
-                    <h3 className="text-2xl font-bold text-fg truncate mb-1">{stats.weaknesses[0]?.name || 'N/A'}</h3>
-                    <p className="text-muted font-medium text-sm">{stats.weaknesses[0]?.score || 0} pts</p>
+                    <div className="flex-1 ml-4 xl:ml-0 text-left">
+                      <p className="text-fg font-semibold text-xs mb-1 block xl:hidden text-muted">Priority Focus</p>
+                      <h3 className="text-xl md:text-2xl font-bold text-fg truncate mb-0.5 md:mb-1">{stats.weaknesses[0]?.name || 'N/A'}</h3>
+                      <p className="text-muted font-medium text-xs md:text-sm">{stats.weaknesses[0]?.score || 0} pts</p>
+                    </div>
                   </motion.div>
                 </div>
 
@@ -792,48 +808,90 @@ export default function App() {
                     <h3 className="text-base font-bold text-fg">Subject Performance Breakdown</h3>
                     <span className="text-xs font-medium text-muted">Sorted by Score</span>
                   </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
-                      <thead>
-                        <tr className="bg-canvas/50">
-                          <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider">Subject</th>
-                          <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider">Student Score</th>
-                          <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider">Cohort Avg</th>
-                          <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider">Gap</th>
-                          <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider text-right">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-border bg-white">
-                        {stats.subjectRankings.map((subj, idx) => (
-                          <tr key={subj.name} className="hover:bg-canvas/30 transition-colors">
-                            <td className="px-6 py-4">
-                              <div className="flex items-center gap-3">
-                                <span className="text-xs font-bold text-muted w-4">{idx + 1}</span>
-                                <span className="font-semibold text-fg">{subj.name}</span>
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 font-bold text-fg">{subj.score}</td>
-                            <td className="px-6 py-4 font-medium text-muted">{subj.cohortAvg}</td>
-                            <td className="px-6 py-4">
-                              <span className={cn("font-bold", subj.diff >= 0 ? "text-accentGreenFg" : "text-accentRedFg")}>
-                                {subj.diff >= 0 ? `+${subj.diff}` : subj.diff}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 text-right">
-                              {subj.diff >= 0 ? (
-                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-accentGreen text-accentGreenFg">
-                                  <TrendingUp className="w-3 h-3" /> Above Avg
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-accentRed text-accentRedFg">
-                                  <AlertTriangle className="w-3 h-3" /> Needs Work
-                                </span>
-                              )}
-                            </td>
+                  <div className="w-full">
+                    {/* Desktop Table View */}
+                    <div className="hidden md:block overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="bg-canvas/50">
+                            <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider">Subject</th>
+                            <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider">Student Score</th>
+                            <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider">Cohort Avg</th>
+                            <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider">Gap</th>
+                            <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider text-right">Status</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody className="divide-y divide-border bg-white">
+                          {stats.subjectRankings.map((subj, idx) => (
+                            <tr key={subj.name} className="hover:bg-canvas/30 transition-colors">
+                              <td className="px-6 py-4">
+                                <div className="flex items-center gap-3">
+                                  <span className="text-xs font-bold text-muted w-4">{idx + 1}</span>
+                                  <span className="font-semibold text-fg">{subj.name}</span>
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 font-bold text-fg">{subj.score}</td>
+                              <td className="px-6 py-4 font-medium text-muted">{subj.cohortAvg}</td>
+                              <td className="px-6 py-4">
+                                <span className={cn("font-bold", subj.diff >= 0 ? "text-accentGreenFg" : "text-accentRedFg")}>
+                                  {subj.diff >= 0 ? `+${subj.diff}` : subj.diff}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 text-right">
+                                {subj.diff >= 0 ? (
+                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-accentGreen text-accentGreenFg">
+                                    <TrendingUp className="w-3 h-3" /> Above Avg
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-accentRed text-accentRedFg">
+                                    <AlertTriangle className="w-3 h-3" /> Needs Work
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Mobile Card View */}
+                    <div className="block md:hidden divide-y divide-border bg-white">
+                      {stats.subjectRankings.map((subj, idx) => (
+                        <div key={subj.name} className="p-4 flex flex-col gap-3">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <span className="w-6 h-6 rounded-full bg-canvas flex items-center justify-center text-xs font-bold text-muted">{idx + 1}</span>
+                              <span className="font-bold text-fg text-sm">{subj.name}</span>
+                            </div>
+                            {subj.diff >= 0 ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-accentGreen text-accentGreenFg uppercase tracking-wider">
+                                <TrendingUp className="w-3 h-3" /> Above
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-accentRed text-accentRedFg uppercase tracking-wider">
+                                <AlertTriangle className="w-3 h-3" /> Below
+                              </span>
+                            )}
+                          </div>
+                          <div className="grid grid-cols-3 gap-2 bg-canvas/30 rounded-lg p-2.5 text-center">
+                            <div>
+                              <p className="text-[10px] text-muted font-semibold uppercase mb-0.5">Score</p>
+                              <p className="font-bold text-fg text-sm">{subj.score}</p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] text-muted font-semibold uppercase mb-0.5">Avg</p>
+                              <p className="font-medium text-muted text-sm">{subj.cohortAvg}</p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] text-muted font-semibold uppercase mb-0.5">Gap</p>
+                              <p className={cn("font-bold text-sm", subj.diff >= 0 ? "text-accentGreenFg" : "text-accentRedFg")}>
+                                {subj.diff >= 0 ? `+${subj.diff}` : subj.diff}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </motion.div>
 
@@ -871,10 +929,87 @@ export default function App() {
           <RecitationsAdminView />
         ) : currentView === 'scholarships' ? (
           <ScholarshipsView />
+        ) : currentView === 'menu' ? (
+          <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-6 md:hidden pb-24">
+             <div className="flex items-center gap-4 bg-card border border-border p-4 rounded-2xl shadow-sm">
+                <div className="w-14 h-14 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xl font-bold shrink-0">
+                   {profilePicture ? <img src={profilePicture} className="w-full h-full object-cover rounded-full" /> : (userRole === 'admin' ? 'A' : userEmail.charAt(0).toUpperCase())}
+                </div>
+                <div className="flex-1 min-w-0">
+                   <h2 className="text-lg font-bold text-fg truncate">{userRole === 'admin' ? 'Admin' : userEmail.split('@')[0]}</h2>
+                   <p className="text-sm text-muted capitalize truncate">{userRole} Account</p>
+                </div>
+                <button onClick={handleLogout} className="p-3 text-accentRedFg bg-accentRed/10 hover:bg-accentRed/20 rounded-xl transition-colors shrink-0">
+                   <LogOut className="w-5 h-5" />
+                </button>
+             </div>
+             
+             <div>
+                <h3 className="text-xs font-bold text-muted uppercase tracking-wider mb-3 px-1">Classroom Tools</h3>
+                <div className="grid grid-cols-2 gap-3">
+                   {[
+                      { id: 'attendance',   icon: ClipboardCheck,  label: 'Attendance',    show: true },
+                      { id: 'leaderboard',  icon: Star,            label: 'Leaderboard',   show: true },
+                      { id: 'recitations',  icon: Target,          label: 'Recitations',   show: userRole === 'admin' },
+                      { id: 'scholarships', icon: Award,           label: 'Scholarships',  show: true },
+                      { id: 'reports',      icon: FileText,        label: 'Reports',       show: userRole === 'admin' },
+                      { id: 'manageclass',  icon: GraduationCap,   label: 'Manage Class',  show: userRole === 'admin' },
+                      { id: 'manageteam',   icon: Shield,          label: 'Manage Team',   show: userRole === 'admin' },
+                      { id: 'accounts',     icon: Users,           label: 'Accounts',      show: userRole === 'admin' },
+                      { id: 'settings',     icon: Settings,        label: 'Settings',      show: true },
+                   ].filter(i => i.show).map((item) => (
+                      <button
+                        key={item.id}
+                        onClick={() => setCurrentView(item.id)}
+                        className="bg-card border border-border rounded-2xl p-4 flex flex-col items-center justify-center gap-2 shadow-sm text-fg active:scale-95 transition-transform"
+                      >
+                         <div className="w-10 h-10 rounded-full bg-canvas flex items-center justify-center text-muted mb-1">
+                            <item.icon className="w-5 h-5" />
+                         </div>
+                         <span className="text-xs font-semibold">{item.label}</span>
+                      </button>
+                   ))}
+                </div>
+             </div>
+          </div>
         ) : (
           <ReportsView parsedData={parsedData} students={students} />
         )}
       </main>
+
+      {/* MOBILE BOTTOM NAV */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-card border-t border-border z-50 flex items-center justify-around px-2 shadow-[0_-4px_20px_-10px_rgba(0,0,0,0.1)] pb-safe">
+        {[
+          { id: 'dashboard', icon: LayoutDashboard },
+          { id: 'announcements', icon: Megaphone },
+          { id: 'calendar', icon: Calendar },
+          { id: 'menu', icon: Menu }
+        ].map((item) => (
+          <button
+            key={item.id}
+            onClick={() => setCurrentView(item.id)}
+            className="flex flex-col items-center justify-center p-2 rounded-xl flex-1 relative overflow-hidden group"
+          >
+            {currentView === item.id && (
+              <motion.div 
+                layoutId="mobile-nav-pill"
+                className="absolute inset-0 bg-primary/10 rounded-xl"
+                transition={{ type: "spring", stiffness: 300, damping: 30 }}
+              />
+            )}
+            <item.icon className={cn(
+              "w-5 h-5 mb-1 transition-colors relative z-10",
+              currentView === item.id ? "text-primary" : "text-muted group-hover:text-fg"
+            )} />
+            <span className={cn(
+              "text-[10px] font-medium leading-none relative z-10 transition-colors",
+              currentView === item.id ? "text-primary font-bold" : "text-muted group-hover:text-fg"
+            )}>
+              {item.id.charAt(0).toUpperCase() + item.id.slice(1)}
+            </span>
+          </button>
+        ))}
+      </div>
 
     </motion.div>
       )}

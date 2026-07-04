@@ -97,7 +97,7 @@ export default function RecitationsAdminView() {
       <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-12 space-y-8">
         
         {/* Header */}
-        <div className="flex justify-between items-end">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
           <div>
             <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white border border-border/50 text-[10px] font-bold tracking-[0.2em] uppercase text-primary mb-5 shadow-sm">
               <Award className="w-3 h-3" />
@@ -109,7 +109,7 @@ export default function RecitationsAdminView() {
           
           <button 
             onClick={() => setIsAdding(!isAdding)}
-            className="px-6 py-2.5 bg-primary text-white text-sm font-bold rounded-xl hover:bg-primary/90 shadow-lg shadow-primary/20 transition-all flex items-center gap-2"
+            className="w-full sm:w-auto justify-center px-6 py-2.5 bg-primary text-white text-sm font-bold rounded-xl hover:bg-primary/90 shadow-lg shadow-primary/20 transition-all flex items-center gap-2"
           >
             <Plus className={cn("w-4 h-4 transition-transform", isAdding && "rotate-45")} />
             {isAdding ? "Cancel" : "Record Score"}
@@ -203,54 +203,95 @@ export default function RecitationsAdminView() {
             </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm whitespace-nowrap">
-              <thead className="bg-canvas/50 text-xs text-muted uppercase tracking-wider font-bold">
-                <tr>
-                  <th className="px-6 py-4">Date</th>
-                  <th className="px-6 py-4">Student</th>
-                  <th className="px-6 py-4">Score</th>
-                  <th className="px-6 py-4">Notes</th>
-                  <th className="px-6 py-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/40">
-                {filteredRecitations.length === 0 ? (
+          <div className="w-full">
+            {/* Desktop Table View */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-left text-sm whitespace-nowrap">
+                <thead className="bg-canvas/50 text-xs text-muted uppercase tracking-wider font-bold">
                   <tr>
-                    <td colSpan="5" className="px-6 py-12 text-center text-muted">
-                      No records found.
-                    </td>
+                    <th className="px-6 py-4">Date</th>
+                    <th className="px-6 py-4">Student</th>
+                    <th className="px-6 py-4">Score</th>
+                    <th className="px-6 py-4">Notes</th>
+                    <th className="px-6 py-4 text-right">Actions</th>
                   </tr>
-                ) : (
-                  filteredRecitations.map((rec) => (
-                    <tr key={rec.id} className="hover:bg-canvas/30 transition-colors">
-                      <td className="px-6 py-4 text-muted-foreground">
-                        {new Date(rec.timestamp).toLocaleDateString()}
-                      </td>
-                      <td className="px-6 py-4 font-bold text-fg">
-                        {getStudentName(rec.studentEmail || rec.studentName)}
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-md bg-green-100 text-green-700 font-bold text-xs">
-                          {rec.score}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-muted-foreground truncate max-w-xs">
-                        {rec.notes || '-'}
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <button 
-                          onClick={() => handleDelete(rec.id)}
-                          className="p-2 text-muted hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                </thead>
+                <tbody className="divide-y divide-border/40">
+                  {filteredRecitations.length === 0 ? (
+                    <tr>
+                      <td colSpan="5" className="px-6 py-12 text-center text-muted">
+                        No records found.
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                  ) : (
+                    filteredRecitations.map((rec) => (
+                      <tr key={rec.id} className="hover:bg-canvas/30 transition-colors">
+                        <td className="px-6 py-4 text-muted-foreground">
+                          {new Date(rec.timestamp).toLocaleDateString()}
+                        </td>
+                        <td className="px-6 py-4 font-bold text-fg">
+                          {getStudentName(rec.studentEmail || rec.studentName)}
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-md bg-green-100 text-green-700 font-bold text-xs">
+                            {rec.score}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-muted-foreground truncate max-w-xs">
+                          {rec.notes || '-'}
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <button 
+                            onClick={() => handleDelete(rec.id)}
+                            className="p-2 text-muted hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Card View */}
+            <div className="block md:hidden">
+              {filteredRecitations.length === 0 ? (
+                <div className="p-12 text-center text-muted text-sm">
+                  No records found.
+                </div>
+              ) : (
+                <div className="divide-y divide-border/40">
+                  {filteredRecitations.map((rec) => (
+                    <div key={rec.id} className="p-4 flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-4 min-w-0">
+                        <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                          <span className="text-primary font-bold text-sm">
+                            {rec.score}
+                          </span>
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-bold text-fg text-sm truncate">
+                            {getStudentName(rec.studentEmail || rec.studentName)}
+                          </p>
+                          <p className="text-xs text-muted truncate">
+                            {new Date(rec.timestamp).toLocaleDateString()}
+                            {rec.notes && ` • ${rec.notes}`}
+                          </p>
+                        </div>
+                      </div>
+                      <button 
+                        onClick={() => handleDelete(rec.id)}
+                        className="p-2 text-muted hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors shrink-0"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>

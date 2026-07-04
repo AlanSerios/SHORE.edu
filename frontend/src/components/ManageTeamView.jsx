@@ -137,16 +137,16 @@ const ManageTeamView = () => {
               {/* Add Volunteer */}
               <div className="bg-white rounded-2xl border border-border/60 p-5 shadow-sm">
                 <p className="text-xs font-bold text-muted uppercase tracking-wider mb-3">Add Volunteer to Roster</p>
-                <div className="flex gap-3">
+                <div className="flex flex-col sm:flex-row gap-3">
                   <input
                     value={newName}
                     onChange={e => setNewName(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && handleAdd()}
                     placeholder="Full name (must match exactly at registration)"
-                    className="flex-1 px-4 py-2.5 rounded-xl border border-border focus:outline-none focus:border-primary text-sm transition-colors bg-canvas/30"
+                    className="flex-1 min-w-0 px-4 py-2.5 rounded-xl border border-border focus:outline-none focus:border-primary text-sm transition-colors bg-canvas/30"
                   />
                   <button onClick={handleAdd}
-                    className="px-5 py-2.5 bg-primary text-white text-sm font-bold rounded-xl hover:bg-primary/90 transition-colors flex items-center gap-2 shrink-0">
+                    className="w-full sm:w-auto justify-center px-5 py-2.5 bg-primary text-white text-sm font-bold rounded-xl hover:bg-primary/90 transition-colors flex items-center gap-2 shrink-0">
                     <Plus className="w-4 h-4" /> Add
                   </button>
                 </div>

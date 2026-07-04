@@ -134,7 +134,7 @@ export default function ReportsView({ parsedData, students }) {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto p-10 bg-canvas">
+    <div className="flex-1 overflow-y-auto p-4 sm:p-10 pb-24 md:pb-10 bg-canvas">
       <motion.div variants={containerVariants} initial="hidden" animate="show" className="max-w-7xl mx-auto space-y-8 min-h-full">
         
         {/* HEADER */}
