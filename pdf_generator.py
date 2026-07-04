@@ -124,6 +124,10 @@ def make_chart(subjects, student_scores, benchmark_scores, title, chart_width=5.
 def generate_pdf_bytes(excel_bytes, student_name, report_type='both'):
     """Generate the report card PDF and return it as a byte stream."""
     data = read_tracker_bytes(excel_bytes)
+    return generate_pdf_from_data(data, student_name, report_type)
+
+def generate_pdf_from_data(data, student_name, report_type='both'):
+    """Generate the report card PDF from parsed data and return it as a byte stream."""
     
     pre = data['pre'].get(student_name, {})
     post = data['post'].get(student_name, {})

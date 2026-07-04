@@ -410,17 +410,32 @@ def delete_recitation(rec_id):
 def handle_generate_pdf():
     try:
         student_name = request.form.get('student_name')
+        if not student_name:
+            student_name = request.json.get('student_name') if request.is_json else None
+        
         report_type = request.form.get('report_type', 'both')
-        
-        if 'excel_file' not in request.files:
-            return {"error": "No Excel file uploaded"}, 400
+        if not request.form and request.is_json:
+            report_type = request.json.get('report_type', 'both')
             
-        excel_file = request.files['excel_file']
-        excel_bytes = excel_file.read()
+        data = load_dict(TRACKER_DATA_FILE)
+        if isinstance(data, str):
+            try:
+                data = json.loads(data)
+            except:
+                data = {}
+                
+        if not data or 'pre' not in data:
+            return {"error": "No tracker data available in database."}, 404
         
-        pdf_bytes = generate_pdf_bytes(excel_bytes, student_name, report_type)
+        # We don't check data['students'] because it's not saved in tracker_data.
+        # Just check if student is in pre or post
+        if student_name not in data.get('pre', {}) and student_name not in data.get('post', {}):
+            return {"error": f"Student '{student_name}' not found in data."}, 404
+            
+        from pdf_generator import generate_pdf_from_data
+        pdf_bytes = generate_pdf_from_data(data, student_name, report_type)
         
-        buffer = io.BytesIO(pdf_bytes)
+        buffer = io.BytesIO(pdf_bytes.getvalue())
         
         safe_name = student_name.replace(" ", "_")
         prefix = "Progress"

@@ -184,21 +184,33 @@ export default function App() {
   };
 
   const handleGenerate = async () => {
-    if (!file || !selectedStudent) return;
+    if (!selectedStudent) return;
     
     setIsGenerating(true);
     setStatus({ type: 'info', msg: 'Generating PDF...' });
     
     try {
-      const formData = new FormData();
-      formData.append('excel_file', file);
-      formData.append('student_name', selectedStudent);
-      formData.append('report_type', reportType);
-      
-      const response = await fetch('/generate-pdf', {
-        method: 'POST',
-        body: formData
-      });
+      let response;
+      if (file) {
+        const formData = new FormData();
+        formData.append('excel_file', file);
+        formData.append('student_name', selectedStudent);
+        formData.append('report_type', reportType);
+        
+        response = await fetch('/generate-pdf', {
+          method: 'POST',
+          body: formData
+        });
+      } else {
+        response = await fetch('/generate-pdf', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            student_name: selectedStudent,
+            report_type: reportType
+          })
+        });
+      }
       
       if (!response.ok) throw new Error(`Server error ${response.status}`);
       
