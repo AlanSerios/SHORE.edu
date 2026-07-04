@@ -172,8 +172,8 @@ export default function ShopView({ userEmail, userRole }) {
       {/* Admin Edit Modal */}
       {isEditing && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-3xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95">
-            <div className="px-6 py-4 border-b border-border/50 flex justify-between items-center bg-slate-50">
+          <div className="bg-white rounded-3xl w-full max-w-4xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95">
+            <div className="px-6 py-4 border-b border-border/50 flex justify-between items-center bg-slate-50 shrink-0">
               <h2 className="text-xl font-bold text-fg flex items-center gap-2">
                 <Edit className="w-5 h-5 text-primary" /> Manage Inventory
               </h2>
@@ -210,7 +210,7 @@ export default function ShopView({ userEmail, userRole }) {
               </button>
             </div>
             
-            <div className="p-4 border-t border-border/50 bg-slate-50 flex justify-end gap-3">
+            <div className="p-4 border-t border-border/50 bg-slate-50 flex justify-end gap-3 shrink-0">
               <button onClick={() => setIsEditing(false)} className="px-5 py-2.5 rounded-lg font-bold text-sm text-muted hover:text-fg hover:bg-slate-200 transition-colors">Cancel</button>
               <button onClick={saveInventory} className="px-5 py-2.5 rounded-lg font-bold text-sm bg-primary text-white hover:bg-primary/90 transition-colors flex items-center gap-2 shadow-sm"><Save className="w-4 h-4" /> Save Changes</button>
             </div>
