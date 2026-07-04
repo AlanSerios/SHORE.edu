@@ -237,7 +237,7 @@ export default function SettingsView({ userEmail, userRole, onUpdateUser }) {
                   {profilePicture ? (
                     <img src={profilePicture} alt="Profile" className="w-full h-full object-cover" />
                   ) : (
-                    userRole === 'admin' ? 'A' : userEmail.charAt(0).toUpperCase()
+                    userRole === 'admin' ? 'A' : (userEmail ? userEmail.charAt(0).toUpperCase() : '')
                   )}
                 </div>
                 
@@ -258,7 +258,7 @@ export default function SettingsView({ userEmail, userRole, onUpdateUser }) {
               </div>
 
               <div className="text-center w-full">
-                <h3 className="font-bold text-fg text-lg">{userRole === 'admin' ? 'Admin User' : userEmail.split('@')[0]}</h3>
+                <h3 className="font-bold text-fg text-lg">{userRole === 'admin' ? 'Admin User' : (userEmail ? userEmail.split('@')[0] : '')}</h3>
                 <p className="text-muted text-sm mb-4">{userEmail}</p>
                 <div className="bg-canvas text-xs font-semibold px-3 py-1.5 rounded-md text-primary uppercase tracking-wider inline-block">
                   {userRole} Account

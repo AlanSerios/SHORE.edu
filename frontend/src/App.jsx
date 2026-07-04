@@ -591,12 +591,12 @@ export default function App() {
                   {profilePicture ? (
                     <img src={profilePicture} alt="Profile" className="w-full h-full object-cover" />
                   ) : (
-                    userRole === 'admin' ? 'A' : userEmail.charAt(0).toUpperCase()
+                    userRole === 'admin' ? 'A' : (userEmail ? userEmail.charAt(0).toUpperCase() : '')
                   )}
                 </div>
                 <div>
                   <p className="text-[11px] font-medium text-muted uppercase tracking-wider mb-0.5">Welcome back,</p>
-                  <h2 className="text-base md:text-xl font-bold text-fg tracking-tight leading-none">{userRole === 'admin' ? 'Admin' : userEmail.split('@')[0]}</h2>
+                  <h2 className="text-base md:text-xl font-bold text-fg tracking-tight leading-none">{userRole === 'admin' ? 'Admin' : (userEmail ? userEmail.split('@')[0] : '')}</h2>
                 </div>
               </div>
 

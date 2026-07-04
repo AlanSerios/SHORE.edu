@@ -126,7 +126,7 @@ const AttendanceStudentView = ({ userEmail }) => {
                   <p className="text-[10px] text-center font-bold text-muted uppercase mt-3">Click to enlarge</p>
                 </div>
                 
-                <h2 className="text-2xl font-black text-fg text-center mb-1">{userEmail.split('@')[0]}</h2>
+                <h2 className="text-2xl font-black text-fg text-center mb-1">{userEmail ? userEmail.split('@')[0] : ''}</h2>
                 <div className="flex items-center gap-1.5 justify-center mb-8">
                   <span className="text-[10px] font-bold text-muted uppercase tracking-[0.15em]">Scholar Account</span>
                 </div>
