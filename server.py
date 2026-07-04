@@ -8,26 +8,55 @@ import json
 # Serve from frontend/dist
 app = Flask(__name__, static_folder='frontend/dist', static_url_path='')
 
-EVENTS_FILE = '.data/events.json'
-USERS_FILE = '.data/users.json'
-STUDENTS_FILE = '.data/students.json'
-VOLUNTEERS_FILE = '.data/volunteers.json'
-ATTENDANCE_FILE = '.data/attendance.json'
-ANNOUNCEMENTS_FILE = '.data/announcements.json'
-RECITATIONS_FILE = '.data/recitations.json'
+import firebase_admin
+from firebase_admin import credentials, db
 
-def load_json(filepath):
-    if not os.path.exists(filepath):
-        return []
+# Initialize Firebase
+firebase_creds_json = os.environ.get('FIREBASE_CREDENTIALS')
+if firebase_creds_json:
+    cred_dict = json.loads(firebase_creds_json)
+    cred = credentials.Certificate(cred_dict)
+else:
+    cred = credentials.Certificate('firebase_key.json')
+
+# Prevent re-initialization if Flask reloads
+if not firebase_admin._apps:
+    firebase_admin.initialize_app(cred, {
+        'databaseURL': 'https://shore-edu-db-default-rtdb.asia-southeast1.firebasedatabase.app/'
+    })
+
+EVENTS_FILE = 'events'
+USERS_FILE = 'users'
+STUDENTS_FILE = 'students'
+VOLUNTEERS_FILE = 'volunteers'
+ATTENDANCE_FILE = 'attendance'
+ANNOUNCEMENTS_FILE = 'announcements'
+RECITATIONS_FILE = 'recitations'
+
+def load_json(collection_name):
     try:
-        with open(filepath, 'r') as f:
-            return json.load(f)
-    except:
+        ref = db.reference(collection_name)
+        data = ref.get()
+        if data is None:
+            return []
+        if isinstance(data, dict):
+            # Firebase sometimes converts lists to dicts if keys aren't sequential 0,1,2...
+            # But the app expects a list.
+            return [v for k, v in data.items() if v is not None]
+        # Filter out None values that might appear in lists
+        if isinstance(data, list):
+            return [v for v in data if v is not None]
+        return data
+    except Exception as e:
+        print("Firebase Load Error:", e)
         return []
 
-def save_json(filepath, data):
-    with open(filepath, 'w') as f:
-        json.dump(data, f)
+def save_json(collection_name, data):
+    try:
+        ref = db.reference(collection_name)
+        ref.set(data)
+    except Exception as e:
+        print("Firebase Save Error:", e)
 
 def load_events():
     return load_json(EVENTS_FILE)
@@ -173,7 +202,7 @@ def update_event(event_id):
             return {"success": True, "event": events[i]}
     return {"error": "Event not found"}, 404
 
-SCHOLARSHIPS_FILE = '.data/scholarships.json'
+SCHOLARSHIPS_FILE = 'scholarships'
 
 def load_scholarships():
     return load_json(SCHOLARSHIPS_FILE)

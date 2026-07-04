@@ -14,3 +14,5 @@ Thumbs.db
 # Database and Trackers
 /*.xlsx
 /*.csv
+firebase_key.json
+.data/
