@@ -12,13 +12,13 @@ const firebaseConfig = {
   appId: "YOUR_APP_ID"
 };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
+let app;
 export let messaging;
 try {
+  app = initializeApp(firebaseConfig);
   messaging = getMessaging(app);
 } catch (e) {
-  console.error("Firebase messaging failed to initialize", e);
+  console.error("Firebase failed to initialize", e);
 }
 
 export const requestFirebaseNotificationPermission = async () => {
