@@ -364,9 +364,24 @@ def add_comment(announcement_id):
             if 'comments' not in a:
                 a['comments'] = []
             a['comments'].append(comment)
+            a['read_by'] = [comment.get('authorEmail', '')] if comment.get('authorEmail') else []
             save_json(ANNOUNCEMENTS_FILE, announcements)
             return {"success": True, "comment": comment}
     return {"error": "Announcement not found"}, 404
+
+@app.route('/api/unread_counts', methods=['POST'])
+def unread_counts():
+    email = request.json.get('email')
+    if not email:
+        return {"announcements": 0}
+        
+    announcements = load_json(ANNOUNCEMENTS_FILE)
+    unread_announcements = 0
+    for a in announcements:
+        if email not in a.get('read_by', []):
+            unread_announcements += 1
+            
+    return {"announcements": unread_announcements}
 
 @app.route('/api/announcements/<announcement_id>/read', methods=['POST'])
 def mark_read(announcement_id):

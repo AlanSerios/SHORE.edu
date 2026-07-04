@@ -50,6 +50,30 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [classToolsOpen, setClassToolsOpen] = useState(false);
+  const [unreadAnnouncements, setUnreadAnnouncements] = useState(0);
+
+  const fetchUnreadCounts = async () => {
+    if (!isAuthenticated || !userEmail) return;
+    try {
+      const res = await fetch('/api/unread_counts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: userEmail })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setUnreadAnnouncements(data.announcements || 0);
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  React.useEffect(() => {
+    fetchUnreadCounts();
+    const interval = setInterval(fetchUnreadCounts, 30000);
+    return () => clearInterval(interval);
+  }, [isAuthenticated, userEmail]);
 
   React.useEffect(() => {
     const handleHashChange = () => {
@@ -409,7 +433,7 @@ export default function App() {
         <div className="flex-1 px-4 py-4 space-y-2 overflow-x-hidden overflow-y-auto custom-scrollbar">
           {[
             { id: 'dashboard',    icon: LayoutDashboard, label: 'Dashboard',     show: true },
-            { id: 'announcements',icon: Megaphone,       label: 'Announcements', show: true },
+            { id: 'announcements',icon: Megaphone,       label: 'Announcements', show: true, badge: unreadAnnouncements },
             { id: 'calendar',     icon: Calendar,        label: 'Calendar',      show: true },
           ].filter(i => i.show).map((item) => (
             <div 
@@ -447,6 +471,11 @@ export default function App() {
                     </motion.span>
                   )}
                 </AnimatePresence>
+                {item.badge > 0 && (
+                  <div className={cn("ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full", currentView === item.id ? "bg-white text-primary" : "bg-accentRed text-white")}>
+                    {item.badge}
+                  </div>
+                )}
               </div>
             </div>
           ))}
@@ -681,7 +710,7 @@ export default function App() {
             {students.length > 0 && (
               <div className="bg-card/50 border-b border-border px-4 md:px-10 py-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shrink-0 z-10">
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
-                  {userRole === 'admin' ? (
+                  {userRole === 'admin' || userRole === 'volunteer' ? (
                     <div className="relative w-full sm:w-auto sm:min-w-[200px]">
                       <select 
                         value={selectedStudent} 
@@ -739,7 +768,13 @@ export default function App() {
                 </div>
                 <h2 className="text-2xl font-bold text-fg mb-3">No Data Active</h2>
                 <p className="text-muted text-sm leading-relaxed">
-                  Upload an Excel tracker using the button in the bottom left, then select a student from the top menu to view analytics.
+                  {userRole === 'admin' ? (
+                    "Upload an Excel tracker using the button in the bottom left, then select a student from the top menu to view analytics."
+                  ) : userRole === 'volunteer' ? (
+                    "Select a student from the top menu to view analytics."
+                  ) : (
+                    "Please wait for the admin to upload the performance data or select your name if available."
+                  )}
                 </p>
               </div>
             ) : !stats ? (
@@ -990,7 +1025,7 @@ export default function App() {
         ) : currentView === 'attendance' ? (
           userRole === 'admin' ? <AttendanceAdminView /> : <AttendanceStudentView userEmail={userEmail} userName={userName} />
         ) : currentView === 'announcements' ? (
-          <AnnouncementsView userEmail={userEmail} userName={userName} userRole={userRole} profilePicture={profilePicture} />
+          <AnnouncementsView userEmail={userEmail} userName={userName} userRole={userRole} profilePicture={profilePicture} onRead={fetchUnreadCounts} />
         ) : currentView === 'leaderboard' ? (
           <LeaderboardView />
         ) : currentView === 'recitations' ? (
@@ -1049,16 +1084,26 @@ export default function App() {
       <div className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-card border-t border-border z-50 flex items-center justify-around px-2 shadow-[0_-4px_20px_-10px_rgba(0,0,0,0.1)] pb-safe">
         {[
           { id: 'dashboard', icon: LayoutDashboard },
-          { id: 'announcements', icon: Megaphone },
+          { id: 'announcements', icon: Megaphone, badge: unreadAnnouncements },
           { id: 'calendar', icon: Calendar },
           { id: 'menu', icon: Menu }
         ].map((item) => (
           <button
             key={item.id}
-            onClick={() => setCurrentView(item.id)}
-            className="flex flex-col items-center justify-center p-2 rounded-xl flex-1 relative overflow-hidden group"
+            onClick={() => {
+              if (item.id === 'menu') {
+                setIsProfileMenuOpen(!isProfileMenuOpen);
+              } else {
+                setCurrentView(item.id);
+                setIsProfileMenuOpen(false);
+              }
+            }}
+            className={cn(
+              "flex flex-col items-center justify-center p-2 rounded-xl flex-1 relative overflow-hidden group",
+              currentView === item.id && item.id !== 'menu' ? "text-primary" : "text-muted"
+            )}
           >
-            {currentView === item.id && (
+            {currentView === item.id && item.id !== 'menu' && (
               <motion.div 
                 layoutId="mobile-nav-pill"
                 className="absolute inset-0 bg-primary/10 rounded-xl"
