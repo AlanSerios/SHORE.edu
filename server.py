@@ -8,13 +8,13 @@ import json
 # Serve from frontend/dist
 app = Flask(__name__, static_folder='frontend/dist', static_url_path='')
 
-EVENTS_FILE = 'events.json'
-USERS_FILE = 'users.json'
-STUDENTS_FILE = 'students.json'
-VOLUNTEERS_FILE = 'volunteers.json'
-ATTENDANCE_FILE = 'attendance.json'
-ANNOUNCEMENTS_FILE = 'announcements.json'
-RECITATIONS_FILE = 'recitations.json'
+EVENTS_FILE = '.data/events.json'
+USERS_FILE = '.data/users.json'
+STUDENTS_FILE = '.data/students.json'
+VOLUNTEERS_FILE = '.data/volunteers.json'
+ATTENDANCE_FILE = '.data/attendance.json'
+ANNOUNCEMENTS_FILE = '.data/announcements.json'
+RECITATIONS_FILE = '.data/recitations.json'
 
 def load_json(filepath):
     if not os.path.exists(filepath):
@@ -173,7 +173,7 @@ def update_event(event_id):
             return {"success": True, "event": events[i]}
     return {"error": "Event not found"}, 404
 
-SCHOLARSHIPS_FILE = 'scholarships.json'
+SCHOLARSHIPS_FILE = '.data/scholarships.json'
 
 def load_scholarships():
     return load_json(SCHOLARSHIPS_FILE)
