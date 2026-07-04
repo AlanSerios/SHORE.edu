@@ -284,7 +284,13 @@ def delete_attendance(log_id):
 
 @app.route('/api/announcements', methods=['GET'])
 def get_announcements():
-    return {"announcements": load_json(ANNOUNCEMENTS_FILE)}
+    announcements = load_json(ANNOUNCEMENTS_FILE)
+    for a in announcements:
+        if 'comments' not in a:
+            a['comments'] = []
+        if 'read_by' not in a:
+            a['read_by'] = []
+    return {"announcements": announcements}
 
 @app.route('/api/announcements', methods=['POST'])
 def add_announcement():
@@ -319,6 +325,8 @@ def add_comment(announcement_id):
     comment['timestamp'] = datetime.datetime.now().isoformat()
     for a in announcements:
         if a['id'] == announcement_id:
+            if 'comments' not in a:
+                a['comments'] = []
             a['comments'].append(comment)
             save_json(ANNOUNCEMENTS_FILE, announcements)
             return {"success": True, "comment": comment}
