@@ -225,12 +225,13 @@ export default function CalendarView({ userRole = 'admin' }) {
         bgCells.push(
           <div
             className={cn(
-              "border-r border-border transition-colors hover:bg-canvas/50 cursor-pointer p-2",
+              "border-r border-border transition-colors hover:bg-canvas/50 p-2",
               !isCurrentMonth && "bg-canvas/40 opacity-60",
-              isToday && "bg-accentGreen/5"
+              isToday && "bg-accentGreen/5",
+              userRole === 'admin' ? "cursor-pointer" : "cursor-default"
             )}
             key={cloneDay.toISOString()}
-            onClick={() => handleOpenModal(cloneDay)}
+            onClick={() => { if (userRole === 'admin') handleOpenModal(cloneDay); }}
           >
             <span className={cn(
                 "w-7 h-7 flex items-center justify-center text-sm font-semibold rounded-full",

@@ -383,6 +383,23 @@ def unread_counts():
             
     return {"announcements": unread_announcements}
 
+@app.route('/api/announcements/mark_all_read', methods=['POST'])
+def mark_all_read():
+    email = request.json.get('email')
+    if not email:
+        return {"error": "Missing email"}, 400
+    announcements = load_json(ANNOUNCEMENTS_FILE)
+    changed = False
+    for a in announcements:
+        if 'read_by' not in a:
+            a['read_by'] = []
+        if email not in a['read_by']:
+            a['read_by'].append(email)
+            changed = True
+    if changed:
+        save_json(ANNOUNCEMENTS_FILE, announcements)
+    return {"success": True}
+
 @app.route('/api/announcements/<announcement_id>/read', methods=['POST'])
 def mark_read(announcement_id):
     announcements = load_json(ANNOUNCEMENTS_FILE)
@@ -421,7 +438,7 @@ def delete_recitation(rec_id):
     save_json(RECITATIONS_FILE, new_recs)
     return {"success": True}
 
-@app.route('/generate-pdf', methods=['POST'])
+@app.route('/api/generate-pdf', methods=['POST'])
 def handle_generate_pdf():
     try:
         student_name = request.form.get('student_name')

@@ -76,6 +76,17 @@ export default function App() {
   }, [isAuthenticated, userEmail]);
 
   React.useEffect(() => {
+    if (currentView === 'announcements' && unreadAnnouncements > 0) {
+      setUnreadAnnouncements(0);
+      fetch('/api/announcements/mark_all_read', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: userEmail })
+      }).catch(console.error);
+    }
+  }, [currentView, unreadAnnouncements, userEmail]);
+
+  React.useEffect(() => {
     const handleHashChange = () => {
       const hash = window.location.hash.replace('#', '') || 'dashboard';
       _setCurrentView(hash);
@@ -221,12 +232,12 @@ export default function App() {
         formData.append('student_name', selectedStudent);
         formData.append('report_type', reportType);
         
-        response = await fetch('/generate-pdf', {
+        response = await fetch('/api/generate-pdf', {
           method: 'POST',
           body: formData
         });
       } else {
-        response = await fetch('/generate-pdf', {
+        response = await fetch('/api/generate-pdf', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
