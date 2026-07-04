@@ -50,6 +50,7 @@ export default function App() {
   const [profilePicture, setProfilePicture] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isMenuSheetOpen, setIsMenuSheetOpen] = useState(false);
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [classToolsOpen, setClassToolsOpen] = useState(false);
   const [unreadAnnouncements, setUnreadAnnouncements] = useState(0);
 
