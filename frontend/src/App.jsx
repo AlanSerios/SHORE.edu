@@ -35,7 +35,11 @@ export default function App() {
   const [reportType, setReportType] = useState('both');
   const [isGenerating, setIsGenerating] = useState(false);
   const [status, setStatus] = useState(null);
-  const [currentView, setCurrentView] = useState('dashboard');
+  const [currentView, _setCurrentView] = useState('dashboard');
+  const setCurrentView = (view) => {
+    _setCurrentView(view);
+    window.location.hash = view;
+  };
   
   // Auth state
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -46,6 +50,52 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [classToolsOpen, setClassToolsOpen] = useState(false);
+
+  React.useEffect(() => {
+    const handleHashChange = () => {
+      const hash = window.location.hash.replace('#', '') || 'dashboard';
+      _setCurrentView(hash);
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    handleHashChange();
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
+  React.useEffect(() => {
+    const storedUser = localStorage.getItem('shore_user');
+    if (storedUser) {
+      try {
+        const user = JSON.parse(storedUser);
+        setIsAuthenticated(true);
+        setUserEmail(user.email);
+        setUserRole(user.role);
+        setUserName(user.name);
+        setProfilePicture(user.profilePicture || null);
+        if (user.role === 'student' && user.name) {
+          setSelectedStudent(user.name);
+        }
+      } catch (e) {
+        console.error('Failed to parse user from local storage', e);
+      }
+    }
+  }, []);
+
+  React.useEffect(() => {
+    if (isAuthenticated) {
+      fetch('/api/tracker_data')
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.pre && data.post) {
+            setParsedData(data);
+            const preStudents = Object.keys(data.pre);
+            const postStudents = Object.keys(data.post);
+            const all = Array.from(new Set([...preStudents, ...postStudents])).sort();
+            setStudents(all);
+          }
+        })
+        .catch(err => console.error("Failed to load tracker data", err));
+    }
+  }, [isAuthenticated]);
 
   const fileInputRef = useRef(null);
 
@@ -115,6 +165,12 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ students: sortedStudents })
       }).catch(err => console.error("Failed to sync students to backend", err));
+      
+      fetch('/api/tracker_data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newParsedData)
+      }).catch(err => console.error("Failed to sync tracker data", err));
       
       if (sortedStudents.length > 0) {
         setStatus({ type: 'success', msg: `Loaded ${sortedStudents.length} records.` });

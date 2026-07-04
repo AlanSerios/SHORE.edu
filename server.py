@@ -32,6 +32,7 @@ VOLUNTEERS_FILE = 'volunteers'
 ATTENDANCE_FILE = 'attendance'
 ANNOUNCEMENTS_FILE = 'announcements'
 RECITATIONS_FILE = 'recitations'
+TRACKER_DATA_FILE = 'tracker_data'
 
 def load_json(collection_name):
     try:
@@ -50,6 +51,17 @@ def load_json(collection_name):
     except Exception as e:
         print("Firebase Load Error:", e)
         return []
+
+def load_dict(collection_name):
+    try:
+        ref = db.reference(collection_name)
+        data = ref.get()
+        if data is None:
+            return {}
+        return data
+    except Exception as e:
+        print("Firebase Load Error:", e)
+        return {}
 
 def save_json(collection_name, data):
     try:
@@ -166,6 +178,19 @@ def update_allowed_volunteers():
     if new_volunteers is None:
         new_volunteers = request.json.get('Volunteers', [])
     save_json(VOLUNTEERS_FILE, new_volunteers)
+    return {"success": True}
+
+@app.route('/api/tracker_data', methods=['GET'])
+def get_tracker_data():
+    data = load_dict(TRACKER_DATA_FILE)
+    if not data:
+        data = {'pre': {}, 'post': {}}
+    return data
+
+@app.route('/api/tracker_data', methods=['POST'])
+def update_tracker_data():
+    new_data = request.json
+    save_json(TRACKER_DATA_FILE, new_data)
     return {"success": True}
 
 @app.route('/')
