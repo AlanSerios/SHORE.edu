@@ -1,5 +1,6 @@
 import React, { useState, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { requestFirebaseNotificationPermission } from './firebase';
 import { Upload, CheckCircle2, ChevronDown, Download, AlertCircle, Loader2, ArrowLeft, Target, Trophy, TrendingUp, AlertTriangle, LayoutDashboard, Calendar, FileText } from 'lucide-react';
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 import * as XLSX from 'xlsx';
@@ -48,9 +49,24 @@ export default function App() {
   const [userName, setUserName] = useState('');
   const [profilePicture, setProfilePicture] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const [isMenuSheetOpen, setIsMenuSheetOpen] = useState(false);
   const [classToolsOpen, setClassToolsOpen] = useState(false);
   const [unreadAnnouncements, setUnreadAnnouncements] = useState(0);
+
+  React.useEffect(() => {
+    if (isAuthenticated && userEmail) {
+      // Try to request notification permission and register device
+      requestFirebaseNotificationPermission().then(token => {
+        if (token) {
+          fetch('/api/register-device', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: userEmail, token })
+          }).catch(console.error);
+        }
+      });
+    }
+  }, [isAuthenticated, userEmail]);
 
   const fetchUnreadCounts = async () => {
     if (!isAuthenticated || !userEmail) return;
@@ -691,15 +707,15 @@ export default function App() {
         </div>
       </motion.aside>
 
-      {/* MAIN CONTENT */}
+{/* MAIN CONTENT */}
       <main className="flex-1 flex flex-col overflow-hidden relative pb-16 md:pb-0">
         
         {currentView === 'dashboard' ? (
           <>
             {/* TOP HEADER */}
-            <header className="h-16 md:h-20 bg-card border-b border-border flex items-center justify-between px-4 md:px-10 shrink-0 z-10">
+            <header className="pt-6 pb-4 px-4 md:px-10 shrink-0 z-10 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-lg border border-primary/20 shadow-sm overflow-hidden">
+                <div className="w-11 h-11 rounded-full bg-white text-primary flex items-center justify-center font-bold text-lg shadow-[inset_0_1px_0_rgba(255,255,255,0.1),0_2px_10px_rgba(0,0,0,0.05)] border border-border overflow-hidden">
                   {profilePicture ? (
                     <img src={profilePicture} alt="Profile" className="w-full h-full object-cover" />
                   ) : (
@@ -707,14 +723,14 @@ export default function App() {
                   )}
                 </div>
                 <div>
-                  <p className="text-[11px] font-medium text-muted uppercase tracking-wider mb-0.5">Welcome back,</p>
-                  <h2 className="text-base md:text-xl font-bold text-fg tracking-tight leading-none">{userRole === 'admin' ? 'Admin' : (userEmail ? userEmail.split('@')[0] : '')}</h2>
+                  <p className="text-[10px] font-bold text-muted uppercase tracking-widest mb-0.5">Welcome back,</p>
+                  <h2 className="text-lg md:text-xl font-bold text-fg tracking-tight leading-none">{userRole === 'admin' ? 'Admin' : (userEmail ? userEmail.split('@')[0] : '')}</h2>
                 </div>
               </div>
 
               <div className="flex items-center gap-2">
                 {userRole === 'admin' && (
-                  <button onClick={handleLogout} className="w-10 h-10 rounded-full bg-canvas border border-border flex items-center justify-center text-muted hover:text-accentRedFg hover:bg-accentRed/10 transition-colors shadow-sm" title="Sign Out">
+                  <button onClick={handleLogout} className="w-10 h-10 rounded-full bg-white border border-slate-200/50 flex items-center justify-center text-muted hover:text-accentRedFg hover:bg-accentRed/5 transition-colors shadow-[0_4px_14px_-6px_rgba(0,0,0,0.08)]" title="Sign Out">
                     <LogOut className="w-4 h-4" />
                   </button>
                 )}
@@ -1047,90 +1063,105 @@ export default function App() {
           <RecitationsAdminView />
         ) : currentView === 'scholarships' ? (
           <ScholarshipsView />
-        ) : currentView === 'menu' ? (
-          <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-6 md:hidden pb-24">
-             <div className="flex items-center gap-4 bg-card border border-border p-4 rounded-2xl shadow-sm">
-                <div className="w-14 h-14 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xl font-bold shrink-0">
-                   {profilePicture ? <img src={profilePicture} className="w-full h-full object-cover rounded-full" /> : (userRole === 'admin' ? 'A' : userEmail.charAt(0).toUpperCase())}
-                </div>
-                <div className="flex-1 min-w-0">
-                   <h2 className="text-lg font-bold text-fg truncate">{userRole === 'admin' ? 'Admin' : userEmail.split('@')[0]}</h2>
-                   <p className="text-sm text-muted capitalize truncate">{userRole} Account</p>
-                </div>
-                <button onClick={handleLogout} className="p-3 text-accentRedFg bg-accentRed/10 hover:bg-accentRed/20 rounded-xl transition-colors shrink-0">
-                   <LogOut className="w-5 h-5" />
-                </button>
-             </div>
-             
-             <div>
-                <h3 className="text-xs font-bold text-muted uppercase tracking-wider mb-3 px-1">Classroom Tools</h3>
-                <div className="grid grid-cols-2 gap-3">
-                   {[
-                      { id: 'attendance',   icon: ClipboardCheck,  label: 'Attendance',    show: true },
-                      { id: 'leaderboard',  icon: Star,            label: 'Leaderboard',   show: true },
-                      { id: 'recitations',  icon: Target,          label: 'Recitations',   show: userRole === 'admin' },
-                      { id: 'scholarships', icon: Award,           label: 'Scholarships',  show: true },
-                      { id: 'reports',      icon: FileText,        label: 'Reports',       show: userRole === 'admin' },
-                      { id: 'manageclass',  icon: GraduationCap,   label: 'Manage Class',  show: userRole === 'admin' },
-                      { id: 'manageteam',   icon: Shield,          label: 'Manage Team',   show: userRole === 'admin' },
-                      { id: 'accounts',     icon: Users,           label: 'Accounts',      show: userRole === 'admin' },
-                      { id: 'settings',     icon: Settings,        label: 'Settings',      show: true },
-                   ].filter(i => i.show).map((item) => (
-                      <button
-                        key={item.id}
-                        onClick={() => setCurrentView(item.id)}
-                        className="bg-card border border-border rounded-2xl p-4 flex flex-col items-center justify-center gap-2 shadow-sm text-fg active:scale-95 transition-transform"
-                      >
-                         <div className="w-10 h-10 rounded-full bg-canvas flex items-center justify-center text-muted mb-1">
-                            <item.icon className="w-5 h-5" />
-                         </div>
-                         <span className="text-xs font-semibold">{item.label}</span>
-                      </button>
-                   ))}
-                </div>
-             </div>
-          </div>
         ) : (
           <ReportsView parsedData={parsedData} students={students} />
         )}
       </main>
 
-      {/* MOBILE BOTTOM NAV */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 z-50">
-        <AnimatePresence>
-          {isProfileMenuOpen && (
+      {/* MOBILE MENU ACTION SHEET */}
+      <AnimatePresence>
+        {isMenuSheetOpen && (
+          <>
             <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 20 }}
-              className="absolute bottom-full right-4 mb-4 w-48 bg-card border border-border shadow-xl rounded-2xl overflow-hidden flex flex-col z-50"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsMenuSheetOpen(false)}
+              className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[60] md:hidden"
+            />
+            <motion.div
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 25, stiffness: 200 }}
+              className="fixed bottom-0 left-0 right-0 bg-card rounded-t-3xl z-[70] md:hidden flex flex-col max-h-[85vh] shadow-[0_-10px_40px_rgba(0,0,0,0.1)]"
             >
-              <button
-                onClick={() => {
-                  setCurrentView('settings');
-                  setIsProfileMenuOpen(false);
-                }}
-                className="w-full px-4 py-3 text-left text-sm font-medium text-fg hover:bg-canvas flex items-center gap-3"
-              >
-                <Settings className="w-4 h-4 text-muted" />
-                Settings
-              </button>
-              <div className="h-px bg-border w-full" />
-              <button
-                onClick={() => {
-                  handleLogout();
-                  setIsProfileMenuOpen(false);
-                }}
-                className="w-full px-4 py-3 text-left text-sm font-medium text-accentRedFg hover:bg-accentRed/10 flex items-center gap-3"
-              >
-                <LogOut className="w-4 h-4" />
-                Sign Out
-              </button>
+              <div className="flex-1 overflow-y-auto p-6 pb-8">
+                 <div className="flex items-center gap-4 bg-white border border-border p-4 rounded-2xl shadow-sm mb-6">
+                    <div className="w-14 h-14 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xl font-bold shrink-0">
+                       {profilePicture ? <img src={profilePicture} className="w-full h-full object-cover rounded-full" /> : (userRole === 'admin' ? 'A' : userEmail.charAt(0).toUpperCase())}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                       <h2 className="text-lg font-bold text-fg tracking-tight truncate">{userRole === 'admin' ? 'Admin' : userEmail.split('@')[0]}</h2>
+                       <p className="text-sm text-muted capitalize truncate">{userRole} Account</p>
+                    </div>
+                 </div>
+                 
+                 <div>
+                    <h3 className="text-[11px] font-bold text-muted uppercase tracking-widest mb-4 px-2">Classroom Tools</h3>
+                    <div className="grid grid-cols-3 gap-3 mb-6">
+                       {[
+                          { id: 'attendance',   icon: ClipboardCheck,  label: 'Attendance',    show: true },
+                          { id: 'leaderboard',  icon: Star,            label: 'Leaderboard',   show: true },
+                          { id: 'recitations',  icon: Target,          label: 'Recitations',   show: userRole === 'admin' },
+                          { id: 'scholarships', icon: Award,           label: 'Scholarships',  show: true },
+                          { id: 'reports',      icon: FileText,        label: 'Reports',       show: userRole === 'admin' },
+                          { id: 'manageclass',  icon: GraduationCap,   label: 'Class',  show: userRole === 'admin' },
+                          { id: 'manageteam',   icon: Shield,          label: 'Team',   show: userRole === 'admin' },
+                          { id: 'accounts',     icon: Users,           label: 'Accounts',      show: userRole === 'admin' },
+                       ].filter(i => i.show).map((item) => (
+                          <button
+                            key={item.id}
+                            onClick={() => {
+                              setCurrentView(item.id);
+                              setIsMenuSheetOpen(false);
+                            }}
+                            className="bg-canvas border border-border rounded-2xl p-3 flex flex-col items-center justify-center gap-2 shadow-sm text-fg active:scale-[0.98] transition-transform"
+                          >
+                             <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center text-primary shadow-[0_2px_8px_-2px_rgba(0,0,0,0.05)] mb-1">
+                                <item.icon className="w-5 h-5" />
+                             </div>
+                             <span className="text-[10px] font-semibold">{item.label}</span>
+                          </button>
+                       ))}
+                    </div>
+                 </div>
+
+                 <div className="space-y-2">
+                    <button
+                      onClick={() => {
+                        setCurrentView('settings');
+                        setIsMenuSheetOpen(false);
+                      }}
+                      className="w-full bg-canvas border border-border rounded-xl p-4 flex items-center justify-between text-fg active:scale-[0.98] transition-transform"
+                    >
+                      <div className="flex items-center gap-3">
+                        <Settings className="w-5 h-5 text-muted" />
+                        <span className="font-semibold text-sm">Manage Account</span>
+                      </div>
+                    </button>
+                    <button
+                      onClick={() => {
+                        handleLogout();
+                        setIsMenuSheetOpen(false);
+                      }}
+                      className="w-full bg-accentRed/5 border border-accentRed/10 rounded-xl p-4 flex items-center justify-between text-accentRedFg active:scale-[0.98] transition-transform"
+                    >
+                      <div className="flex items-center gap-3">
+                        <LogOut className="w-5 h-5" />
+                        <span className="font-semibold text-sm">Sign Out</span>
+                      </div>
+                    </button>
+                 </div>
+              </div>
             </motion.div>
-          )}
-        </AnimatePresence>
-        
-        <div className="h-16 bg-card border-t border-border flex items-center justify-around px-2 shadow-[0_-4px_20px_-10px_rgba(0,0,0,0.1)] pb-safe relative z-40">
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* MOBILE BOTTOM NAV */}
+      <div className="md:hidden fixed bottom-6 left-4 right-4 z-50">
+        <div className="h-16 bg-white/80 backdrop-blur-xl border border-white/40 rounded-2xl flex items-center justify-around px-2 shadow-[0_8px_30px_rgb(0,0,0,0.12)] relative z-40">
         {[
           { id: 'dashboard', icon: LayoutDashboard },
           { id: 'announcements', icon: Megaphone, badge: unreadAnnouncements },
@@ -1141,34 +1172,36 @@ export default function App() {
             key={item.id}
             onClick={() => {
               if (item.id === 'menu') {
-                setIsProfileMenuOpen(!isProfileMenuOpen);
+                setIsMenuSheetOpen(true);
               } else {
                 setCurrentView(item.id);
-                setIsProfileMenuOpen(false);
+                setIsMenuSheetOpen(false);
               }
             }}
             className={cn(
-              "flex flex-col items-center justify-center p-2 rounded-xl flex-1 relative overflow-hidden group",
-              currentView === item.id && item.id !== 'menu' ? "text-primary" : "text-muted"
+              "flex flex-col items-center justify-center w-14 h-12 rounded-xl transition-all relative z-10",
+              (currentView === item.id && item.id !== 'menu')
+                ? "text-primary scale-110"
+                : "text-muted hover:text-fg hover:bg-black/5",
+              item.id === 'menu' && isMenuSheetOpen ? "text-primary scale-110" : ""
             )}
           >
-            {currentView === item.id && item.id !== 'menu' && (
-              <motion.div 
-                layoutId="mobile-nav-pill"
-                className="absolute inset-0 bg-primary/10 rounded-xl"
-                transition={{ type: "spring", stiffness: 300, damping: 30 }}
+            {/* Active Background Pill */}
+            {((currentView === item.id && item.id !== 'menu') || (item.id === 'menu' && isMenuSheetOpen)) && (
+              <motion.div
+                layoutId="bottomNavBg"
+                className="absolute inset-0 bg-primary/10 rounded-xl z-[-1]"
+                transition={{ type: "spring", stiffness: 400, damping: 30 }}
               />
             )}
-            <item.icon className={cn(
-              "w-5 h-5 mb-1 transition-colors relative z-10",
-              currentView === item.id ? "text-primary" : "text-muted group-hover:text-fg"
-            )} />
-            <span className={cn(
-              "text-[10px] font-medium leading-none relative z-10 transition-colors",
-              currentView === item.id ? "text-primary font-bold" : "text-muted group-hover:text-fg"
-            )}>
-              {item.id.charAt(0).toUpperCase() + item.id.slice(1)}
-            </span>
+            <div className="relative">
+              <item.icon className="w-6 h-6" />
+              {item.badge > 0 && (
+                <span className="absolute -top-1.5 -right-2 bg-accentRed text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center shadow-sm">
+                  {item.badge}
+                </span>
+              )}
+            </div>
           </button>
         ))}
         </div>

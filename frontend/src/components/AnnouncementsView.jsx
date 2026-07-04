@@ -155,7 +155,7 @@ const AnnouncementItem = ({ post, userRole, userEmail, userName, profilePicture,
   );
 };
 
-export default function AnnouncementsView({ userEmail, userRole, userName, profilePicture }) {
+export default function AnnouncementsView({ userEmail, userName, userRole, profilePicture, onRead }) {
   const [announcements, setAnnouncements] = useState([]);
   const [allUsers, setAllUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -165,6 +165,7 @@ export default function AnnouncementsView({ userEmail, userRole, userName, profi
   const [newTitle, setNewTitle] = useState('');
   const [newContent, setNewContent] = useState('');
   const [attachedImages, setAttachedImages] = useState([]);
+  const [audience, setAudience] = useState('All');
   const fileInputRef = useRef(null);
   const textareaRef = useRef(null);
 
@@ -192,10 +193,11 @@ export default function AnnouncementsView({ userEmail, userRole, userName, profi
       const data = await res.json();
       // Sort newest first
       setAnnouncements((data.announcements || []).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)));
+    } catch (e) {
+      console.error('Failed to load announcements', e);
+    } finally {
       setLoading(false);
-    } catch {
-      toast.error('Failed to load announcements');
-      setLoading(false);
+      if (onRead) onRead();
     }
   };
 
@@ -218,7 +220,8 @@ export default function AnnouncementsView({ userEmail, userRole, userName, profi
       content: newContent,
       author: userName,
       authorEmail: userEmail,
-      images: attachedImages
+      images: attachedImages,
+      audience: audience
     };
 
     try {
@@ -368,13 +371,24 @@ export default function AnnouncementsView({ userEmail, userRole, userName, profi
               className="bg-white rounded-3xl border border-border/60 shadow-xl overflow-hidden"
             >
               <div className="p-6 space-y-4">
-                <input 
-                  type="text"
-                  placeholder="Announcement Title..."
-                  value={newTitle}
-                  onChange={(e) => setNewTitle(e.target.value)}
-                  className="w-full text-2xl font-black text-fg placeholder:text-muted/50 border-none outline-none bg-transparent"
-                />
+                <div className="flex flex-col sm:flex-row gap-4">
+                  <input 
+                    type="text"
+                    placeholder="Announcement Title..."
+                    value={newTitle}
+                    onChange={(e) => setNewTitle(e.target.value)}
+                    className="flex-1 text-2xl font-black text-fg placeholder:text-muted/50 border-none outline-none bg-transparent"
+                  />
+                  <select
+                    value={audience}
+                    onChange={(e) => setAudience(e.target.value)}
+                    className="px-4 py-2 bg-canvas border border-border rounded-xl text-sm font-semibold text-fg outline-none focus:border-primary/50"
+                  >
+                    <option value="All">All Users</option>
+                    <option value="students">Students Only</option>
+                    <option value="volunteers">Volunteers Only</option>
+                  </select>
+                </div>
                 
                 {/* Formatting Toolbar */}
                 <div className="flex gap-2 p-2 bg-canvas/50 rounded-lg border border-border/50">
@@ -425,10 +439,18 @@ export default function AnnouncementsView({ userEmail, userRole, userName, profi
 
         {/* Announcements Feed */}
         <div className="space-y-6">
-          {announcements.length === 0 ? (
+          {announcements.filter(post => {
+            if (userRole === 'admin') return true;
+            if (!post.audience || post.audience === 'All') return true;
+            return post.audience === `${userRole}s`;
+          }).length === 0 ? (
             <div className="text-center py-20 text-muted">No announcements yet.</div>
           ) : (
-            announcements.map((post) => (
+            announcements.filter(post => {
+              if (userRole === 'admin') return true;
+              if (!post.audience || post.audience === 'All') return true;
+              return post.audience === `${userRole}s`;
+            }).map((post) => (
               <AnnouncementItem 
                 key={post.id}
                 post={post}

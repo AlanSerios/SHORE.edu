@@ -328,6 +328,21 @@ def get_announcements():
             a['read_by'] = []
     return {"announcements": announcements}
 
+@app.route('/api/register-device', methods=['POST'])
+def register_device():
+    email = request.json.get('email')
+    token = request.json.get('token')
+    if not email or not token:
+        return {"error": "Missing email or token"}, 400
+        
+    users = load_json(USERS_FILE)
+    for u in users:
+        if u.get('email') == email:
+            u['fcm_token'] = token
+            save_json(USERS_FILE, users)
+            return {"success": True}
+    return {"error": "User not found"}, 404
+
 @app.route('/api/announcements', methods=['POST'])
 def add_announcement():
     announcements = load_json(ANNOUNCEMENTS_FILE)
@@ -340,6 +355,30 @@ def add_announcement():
     new_announcement['read_by'] = []
     announcements.append(new_announcement)
     save_json(ANNOUNCEMENTS_FILE, announcements)
+    
+    # Try sending push notification
+    try:
+        from firebase_admin import messaging
+        users = load_json(USERS_FILE)
+        audience = new_announcement.get('audience', 'All')
+        tokens = []
+        for u in users:
+            if u.get('fcm_token'):
+                if audience == 'All' or audience == f"{u.get('role')}s":
+                    tokens.append(u.get('fcm_token'))
+                    
+        if tokens:
+            message = messaging.MulticastMessage(
+                notification=messaging.Notification(
+                    title=new_announcement.get('title', 'New Announcement'),
+                    body=new_announcement.get('content', '')[:100]
+                ),
+                tokens=tokens
+            )
+            messaging.send_each_for_multicast(message)
+    except Exception as e:
+        print("FCM Push Error:", e)
+
     return {"success": True, "announcement": new_announcement}
 
 @app.route('/api/announcements/<announcement_id>', methods=['DELETE'])
@@ -375,11 +414,18 @@ def unread_counts():
     if not email:
         return {"announcements": 0}
         
+    users = load_json(USERS_FILE)
+    user_role = next((u.get('role') for u in users if u.get('email') == email), None)
+        
     announcements = load_json(ANNOUNCEMENTS_FILE)
     unread_announcements = 0
     for a in announcements:
         if email not in a.get('read_by', []):
-            unread_announcements += 1
+            audience = a.get('audience', 'All')
+            if user_role == 'admin':
+                unread_announcements += 1
+            elif audience == 'All' or audience == f"{user_role}s":
+                unread_announcements += 1
             
     return {"announcements": unread_announcements}
 
