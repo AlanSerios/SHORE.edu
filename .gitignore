@@ -1,0 +1,17 @@
+# Python Virtual Environment
+venv/
+__pycache__/
+*.pyc
+
+# Node Modules
+frontend/node_modules/
+frontend/dist/
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# Database and Trackers
+/*.json
+/*.xlsx
+/*.csv

@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SHORE 5.0 Intelligence</title>
+    
+    <!-- Cabinet Grotesk Font (via Fontshare) -->
+    <link href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@800,500,700,400&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Tailwind Config for Font -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Cabinet Grotesk', 'sans-serif'],
+                        report: ['Helvetica', 'Arial', 'sans-serif']
+                    },
+                    colors: {
+                        marine: '#1A4B6E',
+                        'light-marine': '#E6F0F9',
+                        fcfbf6: '#FCFBF6'
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- Custom CSS for Report Print styling -->
+    <link rel="stylesheet" href="styles.css">
+    
+    <!-- SheetJS for Excel parsing -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- Chart.js for charts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+    <!-- GSAP for animations -->
+    <script src="https://cdnjs.cloudflare.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.cloudflare.com/ajax/libs/gsap/3.12.2/ScrollTrigger.min.js"></script>
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+</head>
+<body class="bg-[#0A0A0A] text-white overflow-x-hidden font-sans selection:bg-marine selection:text-white antialiased">
+
+    <!-- Navbar -->
+    <nav class="fixed top-0 w-full p-8 flex justify-between items-center z-50 mix-blend-difference no-print">
+        <div class="text-xl font-bold tracking-tight">SHORE 5.0</div>
+        <div class="flex gap-8 text-sm font-medium tracking-wide">
+            <a href="#" class="hover:text-marine transition-colors duration-300">SYSTEM</a>
+            <a href="#" class="hover:text-marine transition-colors duration-300">DATA</a>
+            <a href="#" class="hover:text-marine transition-colors duration-300">REPORTS</a>
+        </div>
+    </nav>
+
+    <!-- Main Container -->
+    <main class="w-full max-w-full no-print">
+        
+        <!-- ATTENTION: Cinematic Hero -->
+        <section class="min-h-[85vh] flex flex-col justify-center items-center text-center px-4 relative">
+            <!-- Subtle Radial Gradient Background -->
+            <div class="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-marine/20 via-[#0A0A0A] to-[#0A0A0A] -z-10"></div>
+            
+            <div class="max-w-6xl mx-auto gs-reveal">
+                <h1 class="text-[clamp(3.5rem,8vw,8rem)] leading-[0.9] tracking-tighter font-extrabold uppercase">
+                    Compute <span class="inline-block w-16 h-[0.6em] md:w-32 rounded-full align-middle bg-cover bg-center mx-2 md:mx-4" style="background-image: url('https://picsum.photos/seed/math/600/200?grayscale'); filter: contrast(1.2);"></span> Mastery
+                </h1>
+                <p class="mt-8 text-lg md:text-2xl text-gray-400 font-medium tracking-tight max-w-2xl mx-auto">
+                    A deterministic engine for evaluating student progress. Upload the tracker. Generate precision reports.
+                </p>
+            </div>
+        </section>
+
+        <!-- INTEREST: Gapless Bento Grid Controls -->
+        <section class="w-full px-4 md:px-12 lg:px-24 py-24 bg-white text-black relative z-10">
+            <div class="max-w-7xl mx-auto">
+                <div class="grid grid-cols-1 md:grid-cols-3 grid-flow-dense gap-0 border-2 border-black/10 rounded-3xl overflow-hidden gs-reveal-up">
+                    
+                    <!-- Upload Card (Col 2) -->
+                    <div class="col-span-1 md:col-span-2 bg-[#F5F5F5] p-12 border-b-2 md:border-b-0 md:border-r-2 border-black/10 group overflow-hidden relative transition-colors duration-500 hover:bg-[#EDEDED]">
+                        <div class="relative z-10 flex flex-col h-full justify-between">
+                            <div>
+                                <i class="ph ph-file-xls text-4xl mb-4 text-marine"></i>
+                                <h3 class="text-3xl font-bold tracking-tight mb-2">Upload Tracker</h3>
+                                <p class="text-gray-500 font-medium">Inject raw assessment data.</p>
+                            </div>
+                            <div class="mt-8">
+                                <label class="cursor-pointer bg-black text-white px-8 py-4 rounded-full font-bold uppercase tracking-widest text-sm hover:bg-marine transition-colors inline-block transform group-hover:scale-105 duration-700 ease-out">
+                                    Select XLSX File
+                                    <input type="file" id="excel-upload" accept=".xlsx, .xls" class="hidden">
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Student Select Card (Col 1) -->
+                    <div class="col-span-1 bg-white p-12 border-b-2 md:border-b-0 border-black/10 group overflow-hidden relative">
+                        <div class="relative z-10 flex flex-col h-full justify-between">
+                            <div>
+                                <i class="ph ph-user text-4xl mb-4 text-marine"></i>
+                                <h3 class="text-3xl font-bold tracking-tight mb-2">Candidate</h3>
+                                <p class="text-gray-500 font-medium mb-6">Select student profile.</p>
+                            </div>
+                            <select id="student-select" disabled class="w-full p-4 bg-[#F5F5F5] border-none rounded-xl font-bold text-lg outline-none appearance-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
+                                <option value="">Awaiting Data...</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Report Type Card (Col 3, bottom row) -->
+                    <div class="col-span-1 md:col-span-3 bg-marine text-white p-12 group overflow-hidden relative">
+                        <div class="absolute inset-0 bg-[url('https://picsum.photos/seed/data/1920/1080')] opacity-10 bg-cover bg-center mix-blend-overlay group-hover:scale-105 transition-transform duration-1000 ease-out"></div>
+                        <div class="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-end gap-8">
+                            <div>
+                                <h3 class="text-3xl font-bold tracking-tight mb-2">Assessment Axis</h3>
+                                <p class="text-white/70 font-medium">Define the analysis scope.</p>
+                            </div>
+                            <div class="flex flex-col sm:flex-row gap-4 w-full md:w-auto">
+                                <select id="report-type" class="p-4 bg-white/10 backdrop-blur-md text-white border-2 border-white/20 rounded-xl font-bold text-lg outline-none cursor-pointer">
+                                    <option value="both" class="text-black">Progress Synthesis</option>
+                                    <option value="pre" class="text-black">Pre-Test Baseline</option>
+                                    <option value="post" class="text-black">Post-Test Metric</option>
+                                </select>
+                                <button id="generate-btn" disabled class="bg-white text-marine px-10 py-4 rounded-xl font-extrabold uppercase tracking-widest hover:bg-light-marine transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                                    Initialize
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+            
+            <div id="status-msg" class="text-center mt-8 font-bold text-lg text-marine h-8"></div>
+        </section>
+
+        <!-- DESIRE: The Pinned Report Display -->
+        <section id="preview-section" class="w-full py-32 bg-[#EBEBEB] hidden gs-reveal-up">
+            <div class="max-w-7xl mx-auto px-4 md:px-12 flex flex-col items-center">
+                <div class="mb-12 text-center">
+                    <h2 class="text-5xl font-extrabold text-black tracking-tight uppercase">Document Generated</h2>
+                    <p class="text-gray-500 font-medium mt-4">Previewing literal PDF output below.</p>
+                </div>
+                
+                <!-- This wrapper holds the report container perfectly centered -->
+                <div class="w-full flex justify-center overflow-x-auto shadow-2xl">
+                    <!-- The exact report container we will print -->
+                    <div id="report-wrap" class="bg-white"></div>
+                </div>
+
+                <!-- ACTION: Print CTA -->
+                <div class="mt-24 text-center">
+                    <button id="print-btn" class="bg-black text-white text-2xl font-black uppercase tracking-widest px-16 py-8 rounded-full hover:bg-marine hover:scale-105 transition-all duration-500 ease-out shadow-[0_20px_50px_rgba(0,0,0,0.3)]">
+                        Generate & Download PDF
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Minimal Footer -->
+        <footer class="w-full p-12 bg-black flex justify-between items-center border-t border-white/10 text-white/50 text-sm font-medium">
+            <div>SHORE 5.0 SYSTEM</div>
+            <div>STRICT CONFIDENTIALITY</div>
+        </footer>
+
+    </main>
+
+    <!-- THE REPORT DOM (Hidden until generated, cloned into #report-wrap, visible on print) -->
+    <div id="hidden-report-template" class="hidden">
+        <!-- This is the exact layout for the PDF -->
+        <div id="report-container" class="font-report">
+            <!-- Top Marine Bar -->
+            <div class="marine-bar top-bar"></div>
+            
+            <!-- Header -->
+            <div class="header-row">
+                <h1 class="main-title">SHORE SKWELA 5.0</h1>
+                <h2 id="card-type-title" class="sub-title">STUDENT PROGRESS CARD</h2>
+            </div>
+            
+            <!-- Student Info -->
+            <div class="info-section">
+                <div class="label-row">STUDENT NAME</div>
+                <div class="value-row" id="student-name-display">--</div>
+            </div>
+            
+            <!-- Big Metrics -->
+            <div class="metrics-section" id="metrics-container">
+                <!-- Populated by JS -->
+            </div>
+            
+            <!-- Grade Table -->
+            <div class="section-title">SUBJECT BREAKDOWN</div>
+            <table class="grade-table" id="grade-table">
+                <thead>
+                    <tr id="grade-table-head">
+                        <!-- Populated by JS -->
+                    </tr>
+                </thead>
+                <tbody id="grade-table-body">
+                    <!-- Populated by JS -->
+                </tbody>
+            </table>
+            
+            <!-- Mastery Charts -->
+            <div class="section-title chart-break">MASTERY ANALYSIS</div>
+            <p class="feedback-text" id="chart-desc-display"></p>
+            
+            <div class="charts-container">
+                <div class="chart-wrapper"><canvas id="mathChart"></canvas></div>
+                <div class="chart-wrapper"><canvas id="sciChart"></canvas></div>
+                <div class="chart-wrapper small-chart"><canvas id="logicChart"></canvas></div>
+                <div class="chart-wrapper small-chart"><canvas id="engChart"></canvas></div>
+            </div>
+            
+            <!-- Teacher Feedback -->
+            <div class="section-title fb-break">TEACHER'S NOTES</div>
+            <div class="feedback-box">
+                <p class="feedback-text" id="teacher-feedback-display">--</p>
+            </div>
+            
+            <!-- Bottom Marine Bar -->
+            <div class="marine-bar bottom-bar"></div>
+        </div>
+    </div>
+
+    <!-- Core App Logic -->
+    <script src="app.js"></script>
+    
+    <!-- Animation Setup -->
+    <script>
+        gsap.registerPlugin(ScrollTrigger);
+
+        // Hero Reveal
+        gsap.from(".gs-reveal h1", { y: 100, opacity: 0, duration: 1.5, ease: "power4.out" });
+        gsap.from(".gs-reveal p", { y: 50, opacity: 0, duration: 1.5, ease: "power4.out", delay: 0.2 });
+
+        // Bento Grid Reveal
+        gsap.from(".gs-reveal-up", {
+            scrollTrigger: {
+                trigger: ".gs-reveal-up",
+                start: "top 85%",
+            },
+            y: 100,
+            opacity: 0,
+            duration: 1.2,
+            ease: "power3.out"
+        });
+    </script>
+</body>
+</html>

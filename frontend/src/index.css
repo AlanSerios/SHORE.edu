@@ -1,0 +1,41 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@100..900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Geist+Mono:wght@100..900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --color-canvas: #F8FAFC;
+    --color-card: #FFFFFF;
+    --color-sidebar: #FFFFFF;
+    --color-border: #E2E8F0;
+    --color-borderHover: #CBD5E1;
+    --color-fg: #0F172A;
+    --color-muted: #64748B;
+    --color-primary: #2563EB;
+    --color-primaryHover: #1D4ED8;
+    --color-accentBlue: #EFF6FF;
+    --color-accentGreen: #F0FDF4;
+    --color-accentGreenFg: #16A34A;
+    --color-accentRed: #FEF2F2;
+    --color-accentRedFg: #DC2626;
+  }
+
+  body {
+    @apply bg-canvas text-fg antialiased selection:bg-primary selection:text-white;
+  }
+}
+
+/* Hide scrollbar for Chrome, Safari and Opera */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+/* Hide scrollbar for IE, Edge and Firefox */
+.no-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}

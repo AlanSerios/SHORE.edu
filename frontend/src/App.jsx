@@ -1,0 +1,883 @@
+import React, { useState, useRef, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Upload, CheckCircle2, ChevronDown, Download, AlertCircle, Loader2, ArrowLeft, Target, Trophy, TrendingUp, AlertTriangle, LayoutDashboard, Calendar, FileText } from 'lucide-react';
+import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
+import * as XLSX from 'xlsx';
+import { cn } from './utils';
+import CalendarView from './components/CalendarView';
+import ReportsView from './components/ReportsView';
+import AccountsView from './components/AccountsView';
+import LoginPage from './components/LoginPage';
+import ScholarshipsView from './components/ScholarshipsView';
+import SettingsView from './components/SettingsView';
+import AttendanceStudentView from './components/AttendanceStudentView';
+import AttendanceAdminView from './components/AttendanceAdminView';
+import { LogOut, Users, Menu, Award, Settings, ClipboardCheck, GraduationCap, Shield, Megaphone, Star, Layers } from 'lucide-react';
+import ManageClassView from './components/ManageClassView';
+import ManageTeamView from './components/ManageTeamView';
+import AnnouncementsView from './components/AnnouncementsView';
+import RecitationsAdminView from './components/RecitationsAdminView';
+import LeaderboardView from './components/LeaderboardView';
+
+const REPORT_TYPES = [
+  { id: 'pre', label: 'Pre-Test Only' },
+  { id: 'post', label: 'Post-Test Only' },
+  { id: 'both', label: 'Progress Report' }
+];
+
+const ALL_SUBJ = ["Arithmetic", "Algebra", "Geometry", "Calculus", "Trigonometry", "Logic", "Chemistry", "Biology", "Earth Science", "Physics", "English"];
+
+export default function App() {
+  const [file, setFile] = useState(null);
+  const [students, setStudents] = useState([]);
+  const [parsedData, setParsedData] = useState({ pre: {}, post: {} });
+  const [selectedStudent, setSelectedStudent] = useState('');
+  const [reportType, setReportType] = useState('both');
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [status, setStatus] = useState(null);
+  const [currentView, setCurrentView] = useState('dashboard');
+  
+  // Auth state
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [userRole, setUserRole] = useState(null); // 'admin' or 'student'
+  const [userEmail, setUserEmail] = useState('');
+  const [userName, setUserName] = useState('');
+  const [profilePicture, setProfilePicture] = useState(null);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const [classToolsOpen, setClassToolsOpen] = useState(false);
+
+  const fileInputRef = useRef(null);
+
+  const handleLogin = (user) => {
+    setIsAuthenticated(true);
+    setUserEmail(user.email);
+    setUserRole(user.role);
+    setUserName(user.name);
+    setProfilePicture(user.profilePicture || null);
+    setCurrentView('dashboard');
+    if (user.role === 'student' && user.name) {
+      setSelectedStudent(user.name);
+    }
+    localStorage.setItem('shore_user', JSON.stringify(user));
+  };
+
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    setUserRole(null);
+    setUserEmail('');
+    setProfilePicture(null);
+    setCurrentView('dashboard');
+    localStorage.removeItem('shore_user');
+  };
+
+  const handleFileUpload = async (e) => {
+    const uploadedFile = e.target.files[0];
+    if (!uploadedFile) return;
+    
+    setFile(uploadedFile);
+    setStatus(null);
+    setSelectedStudent('');
+    setParsedData({ pre: {}, post: {} });
+    
+    try {
+      const data = await uploadedFile.arrayBuffer();
+      const workbook = XLSX.read(data);
+      const studentNames = new Set();
+      const newParsedData = { pre: {}, post: {} };
+      
+      ['Pre-Test Data', 'Post-Test Data'].forEach(sheetName => {
+        const sheetKey = sheetName.includes('Pre') ? 'pre' : 'post';
+        if (workbook.Sheets[sheetName]) {
+          const sheet = workbook.Sheets[sheetName];
+          const json = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+          for (let i = 1; i < json.length; i++) {
+            const row = json[i];
+            if (row && row[3]) {
+              const name = row[3];
+              studentNames.add(name);
+              const studentData = { total: parseFloat(row[4]) || 0, subjects: {} };
+              ALL_SUBJ.forEach((subj, idx) => {
+                 studentData.subjects[subj] = parseFloat(row[5 + idx]) || 0;
+              });
+              newParsedData[sheetKey][name] = studentData;
+            }
+          }
+        }
+      });
+      
+      const sortedStudents = Array.from(studentNames).sort();
+      setStudents(sortedStudents);
+      setParsedData(newParsedData);
+      
+      fetch('/api/allowed_students', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ students: sortedStudents })
+      }).catch(err => console.error("Failed to sync students to backend", err));
+      
+      if (sortedStudents.length > 0) {
+        setStatus({ type: 'success', msg: `Loaded ${sortedStudents.length} records.` });
+      } else {
+        setStatus({ type: 'error', msg: 'No names found.' });
+      }
+    } catch (err) {
+      console.error(err);
+      setStatus({ type: 'error', msg: 'Failed to parse Excel.' });
+    }
+  };
+
+  const handleGenerate = async () => {
+    if (!file || !selectedStudent) return;
+    
+    setIsGenerating(true);
+    setStatus({ type: 'info', msg: 'Generating PDF...' });
+    
+    try {
+      const formData = new FormData();
+      formData.append('excel_file', file);
+      formData.append('student_name', selectedStudent);
+      formData.append('report_type', reportType);
+      
+      const response = await fetch('/generate-pdf', {
+        method: 'POST',
+        body: formData
+      });
+      
+      if (!response.ok) throw new Error(`Server error ${response.status}`);
+      
+      let filename = `SHORE_${reportType}_${selectedStudent.replace(/\s+/g, '_')}.pdf`;
+      const disposition = response.headers.get('Content-Disposition');
+      if (disposition && disposition.includes('attachment')) {
+        const matches = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(disposition);
+        if (matches != null && matches[1]) filename = matches[1].replace(/['"]/g, '');
+      }
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      setStatus({ type: 'success', msg: 'PDF generated.' });
+    } catch (err) {
+      console.error(err);
+      setStatus({ type: 'error', msg: 'Failed to generate PDF.' });
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const stats = useMemo(() => {
+    if (!selectedStudent) return null;
+    const pre = parsedData.pre[selectedStudent];
+    const post = parsedData.post[selectedStudent];
+    
+    const activeType = reportType === 'pre' ? 'pre' : 'post';
+    const fallbackType = activeType === 'post' && !post ? 'pre' : activeType;
+    const activeData = parsedData[fallbackType];
+    
+    const studentData = activeData?.[selectedStudent];
+    if (!studentData) return null;
+
+    let rank = 1;
+    let totalStudents = 0;
+    const cohortTotals = Object.values(activeData || {}).map(s => s.total);
+    cohortTotals.forEach(t => {
+      totalStudents++;
+      if (t > studentData.total) rank++;
+    });
+
+    const cohortAverages = {};
+    if (totalStudents > 0) {
+       ALL_SUBJ.forEach(subj => {
+          let sum = 0;
+          Object.values(activeData).forEach(s => sum += (s.subjects[subj] || 0));
+          cohortAverages[subj] = sum / totalStudents;
+       });
+    }
+
+    const radarData = ALL_SUBJ.map(subj => ({
+       subject: subj.length > 8 ? subj.substring(0, 8) + '...' : subj,
+       score: studentData.subjects[subj] || 0
+    }));
+
+    const vsCohortData = ALL_SUBJ.map(subj => ({
+       subject: subj,
+       student: studentData.subjects[subj] || 0,
+       cohort: Math.round(cohortAverages[subj] || 0)
+    }));
+
+    let preVsPostData = null;
+    if (pre && post && reportType === 'both') {
+       preVsPostData = ALL_SUBJ.map(subj => ({
+          subject: subj,
+          pre: pre.subjects[subj] || 0,
+          post: post.subjects[subj] || 0
+       }));
+    }
+
+    const subjectRankings = Object.entries(studentData.subjects || {})
+      .map(([name, score]) => {
+        const cohortAvg = Math.round(cohortAverages[name] || 0);
+        return { name, score, cohortAvg, diff: score - cohortAvg };
+      })
+      .sort((a, b) => b.score - a.score);
+
+    const strongest = subjectRankings.length > 0 ? subjectRankings[0] : { name: 'N/A', score: 0, cohortAvg: 0 };
+    const weaknesses = [...subjectRankings].reverse().slice(0, 3);
+
+    let growth = null;
+    if (pre && post) {
+      growth = post.total - pre.total;
+    }
+
+    let mostImproved = { name: 'N/A', diff: -Infinity };
+    if (pre && post) {
+        Object.keys(pre.subjects).forEach(subj => {
+            const diff = (post.subjects[subj] || 0) - (pre.subjects[subj] || 0);
+            if (diff > mostImproved.diff) mostImproved = { name: subj, diff };
+        });
+    }
+
+    return {
+      rank,
+      totalStudents,
+      total: studentData.total,
+      growth,
+      strongest,
+      weaknesses,
+      subjectRankings,
+      mostImproved: mostImproved.diff !== -Infinity ? mostImproved : null,
+      activeType: fallbackType,
+      radarData,
+      vsCohortData,
+      preVsPostData
+    };
+  }, [selectedStudent, reportType, parsedData]);
+
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    show: { opacity: 1, transition: { staggerChildren: 0.1 } }
+  };
+  const itemVariants = {
+    hidden: { opacity: 0, y: 15 },
+    show: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 300, damping: 24 } }
+  };
+
+  const CustomTooltip = ({ active, payload, label }) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-card border border-border p-3 shadow-sm rounded-lg">
+          <p className="font-semibold text-fg text-sm mb-1">{label}</p>
+          {payload.map((entry, index) => (
+            <p key={index} style={{ color: entry.color }} className="text-sm font-medium">
+              {entry.name}: {entry.value}
+            </p>
+          ))}
+        </div>
+      );
+    }
+    return null;
+  };
+
+  return (
+    <AnimatePresence mode="wait">
+      {!isAuthenticated ? (
+        <motion.div
+          key="login"
+          exit={{ opacity: 0, transition: { duration: 0.3 } }}
+          className="absolute inset-0 z-50 bg-background"
+        >
+          <LoginPage onLogin={handleLogin} />
+        </motion.div>
+      ) : (
+        <motion.div
+          key="app"
+          initial={{ opacity: 0, filter: "blur(10px)" }}
+          animate={{ opacity: 1, filter: "blur(0px)" }}
+          transition={{ duration: 0.8, ease: "easeOut" }}
+          className="absolute inset-0 flex h-screen bg-canvas font-sans overflow-hidden text-fg"
+        >
+          
+          {/* LEFT SIDEBAR */}
+      <motion.aside 
+        animate={{ width: sidebarOpen ? 256 : 80 }}
+        transition={{ duration: 0.3, ease: "easeInOut" }}
+        className="bg-sidebar border-r border-border flex flex-col shrink-0 z-20 overflow-visible"
+      >
+        <div className="h-20 flex items-center pl-4 pr-4 shrink-0 overflow-hidden">
+          <button 
+            onClick={() => setSidebarOpen(!sidebarOpen)} 
+            className="p-2 text-muted hover:text-fg hover:bg-canvas rounded-lg transition-colors shrink-0"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+          <AnimatePresence mode="wait">
+            {sidebarOpen && (
+              <motion.div
+                key="full-logo"
+                initial={{ opacity: 0, width: 0, marginLeft: 0 }}
+                animate={{ opacity: 1, width: "auto", marginLeft: 10 }}
+                exit={{ opacity: 0, width: 0, marginLeft: 0 }}
+                transition={{ duration: 0.25 }}
+                className="overflow-hidden shrink-0"
+              >
+                <img
+                  src="/shore_logo.png"
+                  alt="SHORE.ed"
+                  className="h-10 w-auto object-contain"
+                  style={{ maxWidth: 140 }}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        <div className="flex-1 px-4 py-4 space-y-2 overflow-x-hidden overflow-y-auto custom-scrollbar">
+          {[
+            { id: 'dashboard',    icon: LayoutDashboard, label: 'Dashboard',     show: true },
+            { id: 'announcements',icon: Megaphone,       label: 'Announcements', show: true },
+            { id: 'calendar',     icon: Calendar,        label: 'Calendar',      show: true },
+          ].filter(i => i.show).map((item) => (
+            <div 
+              key={item.id}
+              onClick={() => setCurrentView(item.id)}
+              title={!sidebarOpen ? item.label : ""}
+              className="relative flex items-center cursor-pointer group rounded-xl overflow-hidden"
+            >
+              {currentView === item.id && (
+                <motion.div 
+                  layoutId="active-sidebar-pill"
+                  className="absolute inset-0 bg-primary shadow-sm"
+                  transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                />
+              )}
+              {currentView !== item.id && (
+                <div className="absolute inset-0 bg-canvas opacity-0 group-hover:opacity-100 transition-opacity" />
+              )}
+              
+              <div className={cn(
+                "relative z-10 flex items-center font-medium transition-all duration-200",
+                sidebarOpen ? "w-full px-3.5 py-3" : "w-11 h-11 justify-center",
+                currentView === item.id ? "text-white" : "text-muted group-hover:text-fg"
+              )}>
+                <item.icon className={cn("shrink-0 transition-opacity", sidebarOpen ? "w-5 h-5" : "w-5 h-5", currentView === item.id ? "opacity-100" : "opacity-70 group-hover:opacity-100")} />
+                <AnimatePresence>
+                  {sidebarOpen && (
+                    <motion.span 
+                      initial={{ opacity: 0, width: 0, marginLeft: 0 }}
+                      animate={{ opacity: 1, width: "auto", marginLeft: 12 }}
+                      exit={{ opacity: 0, width: 0, marginLeft: 0 }}
+                      className="whitespace-nowrap overflow-hidden"
+                    >
+                      {item.label}
+                    </motion.span>
+                  )}
+                </AnimatePresence>
+              </div>
+            </div>
+          ))}
+
+          <div className="pt-2 pb-1">
+            <button
+              onClick={() => {
+                if (!sidebarOpen) setSidebarOpen(true);
+                setClassToolsOpen(!classToolsOpen);
+              }}
+              className="w-full flex items-center justify-between text-muted hover:text-fg transition-colors px-3 py-2 rounded-xl group"
+              title={!sidebarOpen ? "Class Tools" : ""}
+            >
+               <div className="flex items-center gap-3">
+                 <Layers className={cn("shrink-0 transition-opacity", sidebarOpen ? "w-5 h-5" : "w-5 h-5 ml-0.5", "opacity-70 group-hover:opacity-100")} />
+                 <AnimatePresence>
+                   {sidebarOpen && (
+                     <motion.span 
+                       initial={{ opacity: 0, width: 0, marginLeft: 0 }}
+                       animate={{ opacity: 1, width: "auto", marginLeft: 12 }}
+                       exit={{ opacity: 0, width: 0, marginLeft: 0 }}
+                       className="whitespace-nowrap overflow-hidden text-sm font-bold"
+                     >
+                       Class Tools
+                     </motion.span>
+                   )}
+                 </AnimatePresence>
+               </div>
+               {sidebarOpen && (
+                 <ChevronDown className={cn("w-4 h-4 transition-transform duration-200", classToolsOpen ? "rotate-180" : "")} />
+               )}
+            </button>
+            <AnimatePresence>
+              {classToolsOpen && sidebarOpen && (
+                 <motion.div
+                   initial={{ height: 0, opacity: 0 }}
+                   animate={{ height: "auto", opacity: 1 }}
+                   exit={{ height: 0, opacity: 0 }}
+                   className="overflow-hidden flex flex-col gap-1 mt-1 pl-4 border-l border-border ml-5"
+                 >
+                   {[
+                      { id: 'attendance',   icon: ClipboardCheck,  label: 'Attendance',    show: true },
+                      { id: 'leaderboard',  icon: Star,            label: 'Leaderboard',   show: true },
+                      { id: 'recitations',  icon: Target,          label: 'Recitations',   show: userRole === 'admin' },
+                      { id: 'scholarships', icon: Award,           label: 'Scholarships',  show: true },
+                      { id: 'reports',      icon: FileText,        label: 'Reports',       show: userRole === 'admin' },
+                      { id: 'manageclass',  icon: GraduationCap,   label: 'Manage Class',  show: userRole === 'admin' },
+                      { id: 'manageteam',   icon: Shield,          label: 'Manage Team',   show: userRole === 'admin' },
+                      { id: 'accounts',     icon: Users,           label: 'Accounts',      show: userRole === 'admin' },
+                   ].filter(i => i.show).map((item) => (
+                      <div 
+                        key={item.id}
+                        onClick={() => setCurrentView(item.id)}
+                        className="relative flex items-center cursor-pointer group rounded-xl overflow-hidden mt-1"
+                      >
+                        {currentView === item.id && (
+                          <motion.div 
+                            layoutId="active-sidebar-pill"
+                            className="absolute inset-0 bg-primary shadow-sm"
+                            transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                          />
+                        )}
+                        {currentView !== item.id && (
+                          <div className="absolute inset-0 bg-canvas opacity-0 group-hover:opacity-100 transition-opacity" />
+                        )}
+                        
+                        <div className={cn(
+                          "relative z-10 flex items-center font-medium transition-all duration-200 w-full px-3 py-2",
+                          currentView === item.id ? "text-white" : "text-muted group-hover:text-fg"
+                        )}>
+                          <item.icon className={cn("shrink-0 transition-opacity w-4 h-4", currentView === item.id ? "opacity-100" : "opacity-70 group-hover:opacity-100")} />
+                          <span className="whitespace-nowrap overflow-hidden ml-3 text-sm">
+                            {item.label}
+                          </span>
+                        </div>
+                      </div>
+                   ))}
+                 </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </div>
+
+        <div className="mt-auto flex flex-col w-full">
+          {userRole === 'admin' && (
+            <div className="px-4 pb-4 flex flex-col items-center">
+              <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".xlsx,.xls" className="hidden" />
+              <button 
+                onClick={() => fileInputRef.current?.click()}
+                title={!sidebarOpen ? (file ? "Data Uploaded" : "Upload Tracker") : ""}
+                className={cn(
+                  "w-full px-3.5 py-3 rounded-xl border border-border bg-card text-sm font-semibold flex items-center transition-all shadow-sm overflow-hidden group shrink-0",
+                  file ? "border-primary/30 text-primary hover:bg-primary/5" : "text-fg hover:bg-canvas"
+                )}
+              >
+                <div className="flex items-center w-full">
+                  <div className="shrink-0 flex items-center justify-center">
+                    {file ? <CheckCircle2 className="w-5 h-5" /> : <Upload className="w-5 h-5" />}
+                  </div>
+                  <AnimatePresence>
+                    {sidebarOpen && (
+                      <motion.span 
+                        initial={{ opacity: 0, width: 0, marginLeft: 0 }}
+                        animate={{ opacity: 1, width: "auto", marginLeft: 12 }}
+                        exit={{ opacity: 0, width: 0, marginLeft: 0 }}
+                        className="whitespace-nowrap overflow-hidden text-left"
+                      >
+                        {file ? "Data Uploaded" : "Upload Tracker"}
+                      </motion.span>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </button>
+              <AnimatePresence>
+                {status && status.type === 'error' && sidebarOpen && (
+                  <motion.p 
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="text-xs text-accentRedFg mt-3 text-center w-full truncate overflow-hidden"
+                  >
+                    {status.msg}
+                  </motion.p>
+                )}
+              </AnimatePresence>
+            </div>
+          )}
+
+          <div className="p-4 border-t border-border flex flex-col gap-2 overflow-visible shrink-0 relative">
+            <AnimatePresence>
+              {isProfileMenuOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                  transition={{ duration: 0.15 }}
+                  className="absolute bottom-full left-4 w-52 mb-2 bg-card border border-border shadow-lg rounded-xl overflow-hidden flex flex-col z-50"
+                >
+                  <button
+                    onClick={() => {
+                      setCurrentView('settings');
+                      setIsProfileMenuOpen(false);
+                    }}
+                    className="w-full px-4 py-3 text-left text-sm font-medium text-fg hover:bg-canvas flex items-center gap-3 transition-colors"
+                  >
+                    <Settings className="w-4 h-4 text-muted" />
+                    Manage Account
+                  </button>
+                  <div className="h-px bg-border w-full" />
+                  <button
+                    onClick={() => {
+                      handleLogout();
+                      setIsProfileMenuOpen(false);
+                    }}
+                    className="w-full px-4 py-3 text-left text-sm font-medium text-accentRedFg hover:bg-accentRed/10 flex items-center gap-3 transition-colors"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    Sign Out
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+            
+            <div 
+              onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
+              className={cn(
+                "flex items-center w-full cursor-pointer group rounded-xl p-1 transition-colors",
+                isProfileMenuOpen ? "bg-canvas" : "hover:bg-canvas"
+              )}
+              title={!sidebarOpen ? "Profile Menu" : "Profile Menu"}
+            >
+              <div className="w-10 h-10 rounded-full overflow-hidden bg-primary/10 text-primary flex items-center justify-center font-bold shrink-0">
+                {profilePicture ? (
+                  <img src={profilePicture} alt="Profile" className="w-full h-full object-cover" />
+                ) : (
+                  userRole === 'admin' ? 'A' : userEmail.charAt(0).toUpperCase()
+                )}
+              </div>
+              <AnimatePresence>
+                {sidebarOpen && (
+                  <motion.div 
+                    initial={{ opacity: 0, width: 0, marginLeft: 0 }}
+                    animate={{ opacity: 1, width: "auto", marginLeft: 12 }}
+                    exit={{ opacity: 0, width: 0, marginLeft: 0 }}
+                    className="flex flex-col whitespace-nowrap overflow-hidden flex-1"
+                  >
+                    <span className="font-bold text-sm text-fg leading-tight truncate">
+                      {userRole === 'admin' ? 'Admin' : userEmail.split('@')[0]}
+                    </span>
+                    <span className="text-xs text-muted leading-tight mt-0.5 capitalize truncate">
+                      {userRole} Account
+                    </span>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
+        </div>
+      </motion.aside>
+
+      {/* MAIN CONTENT */}
+      <main className="flex-1 flex flex-col overflow-hidden relative">
+        
+        {currentView === 'dashboard' ? (
+          <>
+            {/* TOP HEADER */}
+            <header className="h-20 bg-card border-b border-border flex items-center justify-between px-10 shrink-0 z-10">
+          <div>
+            <p className="text-sm text-muted">Welcome back,</p>
+            <h2 className="text-xl font-bold text-fg tracking-tight">{userRole === 'admin' ? 'Admin' : userEmail.split('@')[0]}</h2>
+          </div>
+
+          <div className="flex items-center gap-4">
+            {students.length > 0 && (
+              <>
+                {userRole === 'admin' ? (
+                  <div className="relative">
+                    <select 
+                      value={selectedStudent} 
+                      onChange={(e) => setSelectedStudent(e.target.value)}
+                      className="appearance-none bg-canvas border border-border hover:border-borderHover rounded-lg pl-4 pr-10 py-2.5 text-sm font-medium text-fg focus:outline-none focus:border-primary transition-colors cursor-pointer min-w-[200px]"
+                    >
+                      <option value="" disabled>Select Student</option>
+                      {students.map(name => <option key={name} value={name}>{name}</option>)}
+                    </select>
+                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted pointer-events-none" />
+                  </div>
+                ) : (
+                  <div className="bg-canvas border border-border rounded-lg px-4 py-2.5 text-sm font-bold text-primary min-w-[200px] text-center shadow-sm">
+                    {userName || selectedStudent}
+                  </div>
+                )}
+
+                {/* Report Type */}
+                <div className="flex bg-canvas border border-border rounded-lg p-1">
+                  {REPORT_TYPES.map(type => (
+                    <button
+                      key={type.id}
+                      onClick={() => setReportType(type.id)}
+                      className={cn(
+                        "px-4 py-1.5 text-sm font-medium rounded-md transition-all",
+                        reportType === type.id ? "bg-card shadow-sm text-primary" : "text-muted hover:text-fg"
+                      )}
+                    >
+                      {type.label}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="w-px h-8 bg-border mx-2"></div>
+              </>
+            )}
+
+            {/* Download Button */}
+            <button
+              onClick={handleGenerate}
+              disabled={!selectedStudent || isGenerating}
+              className="bg-primary hover:bg-primaryHover disabled:opacity-50 text-white px-5 py-2.5 rounded-lg text-sm font-semibold flex items-center gap-2 transition-all shadow-sm"
+            >
+              {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+              Export PDF
+            </button>
+            
+            {userRole === 'admin' && (
+              <>
+                <div className="w-px h-8 bg-border mx-2"></div>
+                <button onClick={handleLogout} className="flex items-center gap-2 text-muted hover:text-accentRedFg transition-colors font-medium text-sm bg-canvas border border-border px-4 py-2 rounded-lg shadow-sm">
+                  <LogOut className="w-4 h-4" /> Sign Out
+                </button>
+              </>
+            )}
+          </div>
+        </header>
+
+        {/* SCROLLABLE DASHBOARD CONTENT */}
+        <div className="flex-1 overflow-y-auto p-10">
+          <div className="max-w-7xl mx-auto flex flex-col min-h-full">
+            
+            {!selectedStudent ? (
+              <div className="flex-1 flex flex-col items-center justify-center text-center max-w-md mx-auto opacity-70">
+                <div className="w-20 h-20 bg-card border border-border rounded-3xl flex items-center justify-center mb-6 shadow-sm">
+                  <LayoutDashboard className="w-10 h-10 text-muted" />
+                </div>
+                <h2 className="text-2xl font-bold text-fg mb-3">No Data Active</h2>
+                <p className="text-muted text-sm leading-relaxed">
+                  Upload an Excel tracker using the button in the bottom left, then select a student from the top menu to view analytics.
+                </p>
+              </div>
+            ) : !stats ? (
+               <div className="flex-1 flex items-center justify-center">
+                  <div className="text-muted">No data available for this report type.</div>
+               </div>
+            ) : (
+              <motion.div variants={containerVariants} initial="hidden" animate="show" className="space-y-8">
+                
+                {/* TOP METRICS ROW */}
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+                  {/* Card 1: Active Style */}
+                  <motion.div variants={itemVariants} className="bg-primary text-white rounded-2xl p-6 shadow-md relative overflow-hidden">
+                    <div className="relative z-10">
+                      <p className="text-white/80 font-medium text-sm mb-1">Total Score</p>
+                      <h3 className="text-5xl font-bold tracking-tight">{stats.total}</h3>
+                      {stats.growth !== null && (
+                        <div className="mt-4 inline-flex items-center gap-1.5 px-3 py-1 bg-white/20 rounded-full text-xs font-semibold">
+                          <TrendingUp className="w-3.5 h-3.5" />
+                          {stats.growth > 0 ? '+' : ''}{stats.growth} since Pre-Test
+                        </div>
+                      )}
+                    </div>
+                    {/* Decorative bg element */}
+                    <div className="absolute -right-8 -bottom-8 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
+                  </motion.div>
+
+                  {/* Card 2: Cohort Rank */}
+                  <motion.div variants={itemVariants} className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+                    <div className="flex items-center justify-between mb-4">
+                      <p className="text-fg font-semibold text-sm">Cohort Rank</p>
+                      <div className="w-8 h-8 rounded-full bg-accentBlue/50 flex items-center justify-center">
+                        <Trophy className="w-4 h-4 text-primary" />
+                      </div>
+                    </div>
+                    <div className="flex items-baseline gap-2">
+                      <h3 className="text-4xl font-bold text-fg tracking-tight">#{stats.rank}</h3>
+                      <span className="text-muted font-medium">/ {stats.totalStudents}</span>
+                    </div>
+                  </motion.div>
+
+                  {/* Card 3: Strongest Subject */}
+                  <motion.div variants={itemVariants} className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+                    <div className="flex items-center justify-between mb-4">
+                      <p className="text-fg font-semibold text-sm">Top Performer</p>
+                      <div className="w-8 h-8 rounded-full bg-accentGreen flex items-center justify-center">
+                        <Target className="w-4 h-4 text-accentGreenFg" />
+                      </div>
+                    </div>
+                    <h3 className="text-2xl font-bold text-fg truncate mb-1">{stats.strongest.name}</h3>
+                    <p className="text-muted font-medium text-sm">{stats.strongest.score} pts</p>
+                  </motion.div>
+
+                  {/* Card 4: Primary Weakness */}
+                  <motion.div variants={itemVariants} className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+                    <div className="flex items-center justify-between mb-4">
+                      <p className="text-fg font-semibold text-sm">Priority Focus</p>
+                      <div className="w-8 h-8 rounded-full bg-accentRed flex items-center justify-center">
+                        <AlertTriangle className="w-4 h-4 text-accentRedFg" />
+                      </div>
+                    </div>
+                    <h3 className="text-2xl font-bold text-fg truncate mb-1">{stats.weaknesses[0]?.name || 'N/A'}</h3>
+                    <p className="text-muted font-medium text-sm">{stats.weaknesses[0]?.score || 0} pts</p>
+                  </motion.div>
+                </div>
+
+                {/* MIDDLE CHARTS ROW */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Bar Chart */}
+                  <motion.div variants={itemVariants} className="bg-card border border-border rounded-2xl p-6 shadow-sm h-[380px] flex flex-col">
+                    <div className="flex items-center justify-between mb-6">
+                      <h3 className="text-base font-bold text-fg">
+                        {stats.preVsPostData ? 'Pre-Test vs Post-Test Growth' : 'Performance vs Cohort Average'}
+                      </h3>
+                      <span className="text-xs font-medium text-muted bg-canvas px-3 py-1 rounded-full">Score</span>
+                    </div>
+                    <div className="flex-1">
+                      {stats.preVsPostData ? (
+                         <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={stats.preVsPostData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                            <XAxis dataKey="subject" tick={{ fill: '#6B7280', fontSize: 11 }} axisLine={false} tickLine={false} />
+                            <YAxis tick={{ fill: '#6B7280', fontSize: 11 }} axisLine={false} tickLine={false} />
+                            <Tooltip content={<CustomTooltip />} cursor={{ fill: '#F4F3ED' }} />
+                            <Legend iconType="circle" wrapperStyle={{ fontSize: '12px', color: '#111827', paddingTop: '10px' }} />
+                            <Bar dataKey="pre" name="Pre-Test" fill="#D1D5DB" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                            <Bar dataKey="post" name="Post-Test" fill="#123524" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      ) : (
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={stats.vsCohortData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                            <XAxis dataKey="subject" tick={{ fill: '#6B7280', fontSize: 11 }} axisLine={false} tickLine={false} />
+                            <YAxis tick={{ fill: '#6B7280', fontSize: 11 }} axisLine={false} tickLine={false} />
+                            <Tooltip content={<CustomTooltip />} cursor={{ fill: '#F4F3ED' }} />
+                            <Legend iconType="circle" wrapperStyle={{ fontSize: '12px', color: '#111827', paddingTop: '10px' }} />
+                            <Bar dataKey="cohort" name="Cohort Average" fill="#D1D5DB" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                            <Bar dataKey="student" name={selectedStudent} fill="#123524" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      )}
+                    </div>
+                  </motion.div>
+
+                  {/* Radar Chart */}
+                  <motion.div variants={itemVariants} className="bg-card border border-border rounded-2xl p-6 shadow-sm h-[380px] flex flex-col">
+                    <h3 className="text-base font-bold text-fg mb-2">Mastery Profile</h3>
+                    <div className="flex-1">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <RadarChart cx="50%" cy="50%" outerRadius="70%" data={stats.radarData}>
+                          <PolarGrid stroke="#E5E7EB" />
+                          <PolarAngleAxis dataKey="subject" tick={{ fill: '#6B7280', fontSize: 11, fontWeight: 500 }} />
+                          <Radar name={selectedStudent} dataKey="score" stroke="#123524" strokeWidth={2} fill="#123524" fillOpacity={0.15} />
+                          <Tooltip content={<CustomTooltip />} />
+                        </RadarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </motion.div>
+                </div>
+
+                {/* BOTTOM SECTION: SUBJECT RANKINGS TABLE */}
+                <motion.div variants={itemVariants} className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
+                  <div className="px-6 py-5 border-b border-border flex items-center justify-between bg-white">
+                    <h3 className="text-base font-bold text-fg">Subject Performance Breakdown</h3>
+                    <span className="text-xs font-medium text-muted">Sorted by Score</span>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="bg-canvas/50">
+                          <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider">Subject</th>
+                          <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider">Student Score</th>
+                          <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider">Cohort Avg</th>
+                          <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider">Gap</th>
+                          <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider text-right">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border bg-white">
+                        {stats.subjectRankings.map((subj, idx) => (
+                          <tr key={subj.name} className="hover:bg-canvas/30 transition-colors">
+                            <td className="px-6 py-4">
+                              <div className="flex items-center gap-3">
+                                <span className="text-xs font-bold text-muted w-4">{idx + 1}</span>
+                                <span className="font-semibold text-fg">{subj.name}</span>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 font-bold text-fg">{subj.score}</td>
+                            <td className="px-6 py-4 font-medium text-muted">{subj.cohortAvg}</td>
+                            <td className="px-6 py-4">
+                              <span className={cn("font-bold", subj.diff >= 0 ? "text-accentGreenFg" : "text-accentRedFg")}>
+                                {subj.diff >= 0 ? `+${subj.diff}` : subj.diff}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 text-right">
+                              {subj.diff >= 0 ? (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-accentGreen text-accentGreenFg">
+                                  <TrendingUp className="w-3 h-3" /> Above Avg
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-accentRed text-accentRedFg">
+                                  <AlertTriangle className="w-3 h-3" /> Needs Work
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </motion.div>
+
+              </motion.div>
+            )}
+          </div>
+        </div>
+          </>
+        ) : currentView === 'calendar' ? (
+          <CalendarView userRole={userRole} />
+        ) : currentView === 'scholarships' ? (
+          <ScholarshipsView userRole={userRole} />
+        ) : currentView === 'settings' ? (
+          <SettingsView 
+            userEmail={userEmail} 
+            userRole={userRole} 
+            onUpdateUser={(user) => { 
+              setProfilePicture(user.profilePicture || null); 
+              localStorage.setItem('shore_user', JSON.stringify(user)); 
+            }} 
+          />
+        ) : currentView === 'accounts' && userRole === 'admin' ? (
+          <AccountsView />
+        ) : currentView === 'manageclass' && userRole === 'admin' ? (
+          <ManageClassView />
+        ) : currentView === 'manageteam' && userRole === 'admin' ? (
+          <ManageTeamView />
+        ) : currentView === 'attendance' ? (
+          userRole === 'admin' ? <AttendanceAdminView /> : <AttendanceStudentView userEmail={userEmail} userName={userName} />
+        ) : currentView === 'announcements' ? (
+          <AnnouncementsView userEmail={userEmail} userName={userName} userRole={userRole} profilePicture={profilePicture} />
+        ) : currentView === 'leaderboard' ? (
+          <LeaderboardView />
+        ) : currentView === 'recitations' ? (
+          <RecitationsAdminView />
+        ) : currentView === 'scholarships' ? (
+          <ScholarshipsView />
+        ) : (
+          <ReportsView parsedData={parsedData} students={students} />
+        )}
+      </main>
+
+    </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
