@@ -24,6 +24,7 @@ export default function CalendarView({ userRole = 'admin' }) {
   const [modalEndDate, setModalEndDate] = useState('');
   const [modalTitle, setModalTitle] = useState('');
   const [modalType, setModalType] = useState('events');
+  const [modalHidden, setModalHidden] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Details Modal state
@@ -34,6 +35,7 @@ export default function CalendarView({ userRole = 'admin' }) {
   const [editDate, setEditDate] = useState('');
   const [editEndDate, setEditEndDate] = useState('');
   const [editType, setEditType] = useState('events');
+  const [editHidden, setEditHidden] = useState(false);
 
   useEffect(() => {
     fetchEvents();
@@ -58,6 +60,7 @@ export default function CalendarView({ userRole = 'admin' }) {
     setModalEndDate('');
     setModalTitle('');
     setModalType('events');
+    setModalHidden(false);
     setShowModal(true);
   };
 
@@ -70,7 +73,8 @@ export default function CalendarView({ userRole = 'admin' }) {
       id: uuidv4(),
       title: modalTitle,
       date: format(modalDate, 'yyyy-MM-dd'),
-      type: modalType
+      type: modalType,
+      isHidden: modalHidden
     };
     if (modalEndDate) {
       newEvent.endDate = modalEndDate;
@@ -112,7 +116,8 @@ export default function CalendarView({ userRole = 'admin' }) {
       ...selectedEvent,
       title: editTitle,
       date: editDate,
-      type: editType
+      type: editType,
+      isHidden: editHidden
     };
     
     if (editEndDate) {
@@ -245,6 +250,7 @@ export default function CalendarView({ userRole = 'admin' }) {
 
       // 2. Calculate Events for this week
       const weekEvents = events.filter(e => {
+        if (userRole === 'student' && e.isHidden) return false;
         const eStart = e.date;
         const eEnd = e.endDate || e.date;
         return eStart <= weekEndStr && eEnd >= weekStartStr;
@@ -289,6 +295,7 @@ export default function CalendarView({ userRole = 'admin' }) {
               setEditDate(evt.date);
               setEditEndDate(evt.endDate || '');
               setEditType(evt.type);
+              setEditHidden(evt.isHidden || false);
               setIsEditing(false);
               setShowDetailsModal(true); 
             }}
@@ -416,6 +423,19 @@ export default function CalendarView({ userRole = 'admin' }) {
                         </button>
                       ))}
                     </div>
+                  </div>
+                  
+                  <div className="flex items-center gap-2 mt-4">
+                    <input 
+                      type="checkbox" 
+                      id="hideAdd" 
+                      checked={modalHidden}
+                      onChange={(e) => setModalHidden(e.target.checked)}
+                      className="w-4 h-4 text-primary bg-canvas border-border rounded focus:ring-primary focus:ring-2"
+                    />
+                    <label htmlFor="hideAdd" className="text-sm font-medium text-fg cursor-pointer">
+                      Hide from Students
+                    </label>
                   </div>
 
                 </div>
@@ -557,6 +577,19 @@ export default function CalendarView({ userRole = 'admin' }) {
                           </button>
                         ))}
                       </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 mt-4">
+                      <input 
+                        type="checkbox" 
+                        id="hideEdit" 
+                        checked={editHidden}
+                        onChange={(e) => setEditHidden(e.target.checked)}
+                        className="w-4 h-4 text-primary bg-canvas border-border rounded focus:ring-primary focus:ring-2"
+                      />
+                      <label htmlFor="hideEdit" className="text-sm font-medium text-fg cursor-pointer">
+                        Hide from Students
+                      </label>
                     </div>
 
                     <div className="mt-6 flex gap-3">
