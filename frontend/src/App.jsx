@@ -1071,15 +1071,18 @@ export default function App() {
       {/* MOBILE MENU ACTION SHEET */}
       <AnimatePresence>
         {isMenuSheetOpen && (
-          <>
             <motion.div
+              key="menu-overlay"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsMenuSheetOpen(false)}
               className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[60] md:hidden"
             />
+        )}
+        {isMenuSheetOpen && (
             <motion.div
+              key="menu-sheet"
               initial={{ y: "100%" }}
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
@@ -1155,7 +1158,6 @@ export default function App() {
                  </div>
               </div>
             </motion.div>
-          </>
         )}
       </AnimatePresence>
 
