@@ -65,7 +65,8 @@ def compute_benchmarks(data, test='post'):
     """Compute cohort averages for each subject."""
     benchmarks = {}
     for subj in ALL_SUBJ:
-        scores = [data[test][s].get(subj, 0) for s in data['students'] if s in data[test]]
+        test_data = data.get(test, {})
+        scores = [test_data[s].get(subj, 0) for s in test_data.keys()]
         benchmarks[subj] = sum(scores) / len(scores) if scores else 0
     return benchmarks
 

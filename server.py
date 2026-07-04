@@ -450,7 +450,7 @@ def handle_generate_pdf():
         from pdf_generator import generate_pdf_from_data
         pdf_bytes = generate_pdf_from_data(data, student_name, report_type)
         
-        buffer = io.BytesIO(pdf_bytes.getvalue())
+        buffer = io.BytesIO(pdf_bytes)
         
         safe_name = student_name.replace(" ", "_")
         prefix = "Progress"
