@@ -1081,7 +1081,41 @@ export default function App() {
       </main>
 
       {/* MOBILE BOTTOM NAV */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-card border-t border-border z-50 flex items-center justify-around px-2 shadow-[0_-4px_20px_-10px_rgba(0,0,0,0.1)] pb-safe">
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-50">
+        <AnimatePresence>
+          {isProfileMenuOpen && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 20 }}
+              className="absolute bottom-full right-4 mb-4 w-48 bg-card border border-border shadow-xl rounded-2xl overflow-hidden flex flex-col z-50"
+            >
+              <button
+                onClick={() => {
+                  setCurrentView('settings');
+                  setIsProfileMenuOpen(false);
+                }}
+                className="w-full px-4 py-3 text-left text-sm font-medium text-fg hover:bg-canvas flex items-center gap-3"
+              >
+                <Settings className="w-4 h-4 text-muted" />
+                Settings
+              </button>
+              <div className="h-px bg-border w-full" />
+              <button
+                onClick={() => {
+                  handleLogout();
+                  setIsProfileMenuOpen(false);
+                }}
+                className="w-full px-4 py-3 text-left text-sm font-medium text-accentRedFg hover:bg-accentRed/10 flex items-center gap-3"
+              >
+                <LogOut className="w-4 h-4" />
+                Sign Out
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+        
+        <div className="h-16 bg-card border-t border-border flex items-center justify-around px-2 shadow-[0_-4px_20px_-10px_rgba(0,0,0,0.1)] pb-safe relative z-40">
         {[
           { id: 'dashboard', icon: LayoutDashboard },
           { id: 'announcements', icon: Megaphone, badge: unreadAnnouncements },
@@ -1122,6 +1156,7 @@ export default function App() {
             </span>
           </button>
         ))}
+        </div>
       </div>
 
     </motion.div>
