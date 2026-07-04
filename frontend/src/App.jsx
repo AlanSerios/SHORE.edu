@@ -472,9 +472,13 @@ export default function App() {
                   )}
                 </AnimatePresence>
                 {item.badge > 0 && (
-                  <div className={cn("ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full", currentView === item.id ? "bg-white text-primary" : "bg-accentRed text-white")}>
-                    {item.badge}
-                  </div>
+                  sidebarOpen ? (
+                    <div className={cn("ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full", currentView === item.id ? "bg-white text-primary" : "bg-accentRedFg text-white")}>
+                      {item.badge}
+                    </div>
+                  ) : (
+                    <div className="absolute top-2 right-2 w-2 h-2 rounded-full bg-accentRedFg border border-card" />
+                  )
                 )}
               </div>
             </div>
