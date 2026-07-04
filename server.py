@@ -183,14 +183,25 @@ def update_allowed_volunteers():
 @app.route('/api/tracker_data', methods=['GET'])
 def get_tracker_data():
     data = load_dict(TRACKER_DATA_FILE)
-    if not data:
-        data = {'pre': {}, 'post': {}}
+    if isinstance(data, str):
+        import json
+        try:
+            data = json.loads(data)
+        except:
+            data = {}
+    if not data or not isinstance(data, dict):
+        data = {}
+    if 'pre' not in data:
+        data['pre'] = {}
+    if 'post' not in data:
+        data['post'] = {}
     return data
 
 @app.route('/api/tracker_data', methods=['POST'])
 def update_tracker_data():
     new_data = request.json
-    save_json(TRACKER_DATA_FILE, new_data)
+    import json
+    save_json(TRACKER_DATA_FILE, json.dumps(new_data))
     return {"success": True}
 
 @app.route('/')
