@@ -12,6 +12,5 @@ frontend/dist/
 Thumbs.db
 
 # Database and Trackers
-/*.json
 /*.xlsx
 /*.csv
