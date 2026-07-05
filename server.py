@@ -1,6 +1,6 @@
 import os
 import io
-from flask import Flask, request, send_file
+from flask import Flask, request, send_file, jsonify
 from flask_cors import CORS
 from pdf_generator import generate_pdf_bytes
 
@@ -165,7 +165,10 @@ def delete_user(email):
 
 @app.route('/api/allowed_students', methods=['GET'])
 def get_allowed_students():
-    return {"students": load_json(STUDENTS_FILE)}
+    data = {"students": load_json(STUDENTS_FILE)}
+    response = jsonify(data)
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    return response
 
 @app.route('/api/allowed_students', methods=['POST'])
 def update_allowed_students():
@@ -200,7 +203,9 @@ def get_tracker_data():
         data['pre'] = {}
     if 'post' not in data:
         data['post'] = {}
-    return data
+    response = jsonify(data)
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    return response
 
 @app.route('/api/tracker_data', methods=['POST'])
 def update_tracker_data():

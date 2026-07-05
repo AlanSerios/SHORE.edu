@@ -134,9 +134,19 @@ export default function App() {
     }
   }, []);
 
-  React.useEffect(() => {
-    if (isAuthenticated) {
-      fetch('/api/tracker_data')
+    React.useEffect(() => {
+      fetch(`/api/allowed_students?t=${Date.now()}`)
+        .then(res => res.json())
+        .then(data => setAllowedStudents(data.students || []));
+      
+      fetch(`/api/allowed_volunteers?t=${Date.now()}`)
+        .then(res => res.json())
+        .then(data => setAllowedVolunteers(data.volunteers || []));
+    }, []);
+
+    React.useEffect(() => {
+      if (isAuthenticated) {
+        fetch(`/api/tracker_data?t=${Date.now()}`)
         .then(res => res.json())
         .then(data => {
           if (data && data.pre && data.post) {

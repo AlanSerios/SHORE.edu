@@ -45,7 +45,7 @@ export default function LoginPage({ onLogin }) {
       }
       title="Welcome back!"
       description="Sign in by entering the information below"
-      images={["/shore1.jpg", "/shore2.jpg", "/shore3.jpg"]}
+      images={["/SHORE5.png"]}
       onSubmit={handleLogin}
       forgotPasswordHref="#"
       createAccountHref="#"
