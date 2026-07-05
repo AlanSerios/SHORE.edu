@@ -105,19 +105,24 @@ function StreakModalContent({ studentStreak, setExpandedCard }) {
   return (
     <div className="w-full p-4 pt-5 pb-4 flex flex-col items-center justify-center relative">
       <div className="relative flex flex-col items-center justify-center mb-0 mt-2">
-        {/* Fire Animation Behind Number */}
+        {/* Fire Animation On Top of Number */}
         <div 
-          className="streak-fire absolute bottom-2 w-32 h-32 sm:w-40 sm:h-40 opacity-0 -z-10" 
-          style={{ filter: fireFilter, transformOrigin: 'center bottom' }}
+          className="streak-fire w-32 h-32 sm:w-40 sm:h-40 opacity-0 mb-[-1.5rem] sm:mb-[-2rem]" 
+          style={{ 
+            filter: fireFilter, 
+            transformOrigin: 'center bottom',
+            WebkitMaskImage: 'linear-gradient(to bottom, black 65%, transparent 95%)',
+            maskImage: 'linear-gradient(to bottom, black 65%, transparent 95%)'
+          }}
         >
           <LottieFire />
         </div>
         {/* Number */}
-        <h1 className="streak-number text-[70px] sm:text-[90px] leading-none font-extrabold mb-0 tracking-tighter" style={{ color: streakColor, textShadow: '0 4px 0px rgba(0,0,0,0.3)' }}>
+        <h1 className="streak-number text-[70px] sm:text-[90px] leading-none font-extrabold mb-0 tracking-tighter relative z-10" style={{ color: streakColor, textShadow: '0 4px 0px rgba(0,0,0,0.3)' }}>
           0
         </h1>
       </div>
-      <h2 className="text-lg sm:text-xl font-bold mb-3 md:mb-5 tracking-wide" style={{ color: streakColor }}>session streak</h2>
+      <h2 className="text-lg sm:text-xl font-bold mb-3 md:mb-5 tracking-wide mt-2" style={{ color: streakColor }}>session streak</h2>
       
       {/* Milestones */}
       <div className="flex flex-wrap gap-x-1.5 gap-y-2 mb-4 w-full justify-center px-1">
