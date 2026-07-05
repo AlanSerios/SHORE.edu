@@ -1,7 +1,8 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import anime from 'animejs';
-import { DotLottieReact } from '@lottiefiles/dotlottie-react';
+import Lottie from 'lottie-react';
+import fireAnimation from '../public/fire.json';
 import { requestFirebaseNotificationPermission } from './firebase';
 import { Upload, CheckCircle2, ChevronDown, Download, AlertCircle, Loader2, ArrowLeft, Target, Trophy, TrendingUp, AlertTriangle, LayoutDashboard, Calendar, FileText, Flame, Clock } from 'lucide-react';
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
@@ -102,7 +103,7 @@ function StreakModalContent({ studentStreak, setExpandedCard }) {
         className="streak-fire w-24 h-24 sm:w-28 sm:h-28 relative mb-0 opacity-0" 
         style={{ filter: fireFilter, transformOrigin: 'center bottom' }}
       >
-        <DotLottieReact src="/fire.json" loop autoplay />
+        <Lottie animationData={fireAnimation} loop={true} autoplay={true} />
       </div>
       {/* Number */}
       <h1 className="streak-number text-[60px] sm:text-[80px] leading-none font-extrabold mb-0 tracking-tighter" style={{ color: streakColor, textShadow: '0 4px 0px rgba(0,0,0,0.3)' }}>
@@ -1133,7 +1134,7 @@ export default function App() {
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.95, opacity: 0, y: 20 }}
               transition={{ type: "spring", stiffness: 300, damping: 30 }}
-              className={cn("w-full shadow-2xl overflow-y-auto max-h-[90vh] md:max-h-[85vh] relative", expandedCard === 'streak' ? 'max-w-[360px] rounded-[2.5rem] bg-white/5 backdrop-blur-2xl border border-white/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.2),0_8px_32px_rgba(0,0,0,0.4)]' : 'max-w-lg rounded-3xl bg-card')}
+              className={cn("w-full shadow-2xl max-h-[90vh] md:max-h-[85vh] relative", expandedCard === 'streak' ? 'max-w-[360px] rounded-[2.5rem] bg-white/5 backdrop-blur-2xl border border-white/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.2),0_8px_32px_rgba(0,0,0,0.4)] overflow-hidden' : 'max-w-lg rounded-3xl bg-card overflow-y-auto')}
               onClick={e => e.stopPropagation()}
             >
               {expandedCard === 'streak' ? (
@@ -1321,7 +1322,7 @@ export default function App() {
                     </div>
                     {/* Lottie Animation Background for Streak */}
                     <div className={cn("absolute right-0 bottom-0 w-24 h-24 md:w-32 md:h-32 translate-y-4 translate-x-4 opacity-50", studentStreak === 0 && "grayscale opacity-10")}>
-                      <DotLottieReact src="/fire.json" loop autoplay />
+                      <Lottie animationData={fireAnimation} loop={true} autoplay={true} />
                     </div>
                   </motion.div>
 

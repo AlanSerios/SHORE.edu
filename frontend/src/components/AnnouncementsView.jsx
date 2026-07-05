@@ -4,6 +4,7 @@ import { Megaphone, MessageSquare, Eye, Send, Bold, Italic, Link2, Image as Imag
 import { cn } from '../utils';
 import { toast } from 'sonner';
 import AvatarBorder from './AvatarBorder';
+import Editor from 'react-simple-wysiwyg';
 
 // A simple utility to parse basic markdown for rendering
 const parseMarkdown = (text) => {
@@ -15,9 +16,12 @@ const parseMarkdown = (text) => {
     .replace(/\*(.*?)\*/g, '<em>$1</em>')
     .replace(/_(.*?)_/g, '<em>$1</em>')
     // Links
-    .replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-primary hover:underline">$1</a>')
-    // Newlines
-    .replace(/\n/g, '<br />');
+    .replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-primary hover:underline">$1</a>');
+    
+  // Newlines (only if text doesn't already contain block HTML tags)
+  if (!html.includes('<div') && !html.includes('<p') && !html.includes('<br')) {
+    html = html.replace(/\n/g, '<br />');
+  }
   return html;
 };
 
@@ -286,24 +290,7 @@ export default function AnnouncementsView({ userEmail, userName, userRole, profi
     reader.readAsDataURL(file);
   };
 
-  const insertFormatting = (prefix, suffix) => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const text = textarea.value;
-    const before = text.substring(0, start);
-    const selected = text.substring(start, end);
-    const after = text.substring(end);
 
-    setNewContent(before + prefix + selected + suffix + after);
-    
-    // Reset focus and selection
-    setTimeout(() => {
-      textarea.focus();
-      textarea.setSelectionRange(start + prefix.length, end + prefix.length);
-    }, 0);
-  };
 
   const handleComment = async (announcementId) => {
     const text = commentText[announcementId];
@@ -400,23 +387,20 @@ export default function AnnouncementsView({ userEmail, userName, userRole, profi
                   </select>
                 </div>
                 
-                {/* Formatting Toolbar */}
-                <div className="flex gap-2 p-2 bg-canvas/50 rounded-lg border border-border/50">
-                  <button onClick={() => insertFormatting('**', '**')} className="p-2 hover:bg-white rounded-md text-fg transition-colors" title="Bold"><Bold className="w-4 h-4" /></button>
-                  <button onClick={() => insertFormatting('*', '*')} className="p-2 hover:bg-white rounded-md text-fg transition-colors" title="Italic"><Italic className="w-4 h-4" /></button>
-                  <button onClick={() => insertFormatting('[', '](url)')} className="p-2 hover:bg-white rounded-md text-fg transition-colors" title="Link"><Link2 className="w-4 h-4" /></button>
-                  <div className="w-px h-6 bg-border/50 mx-2 self-center"></div>
-                  <button onClick={() => fileInputRef.current?.click()} className="p-2 hover:bg-white rounded-md text-fg transition-colors" title="Add Image"><ImageIcon className="w-4 h-4" /></button>
-                  <input type="file" ref={fileInputRef} onChange={handleImageUpload} accept="image/*" className="hidden" />
+                {/* Rich Text Editor & Image Attach */}
+                <div className="border border-border/50 rounded-xl overflow-hidden bg-canvas/30 focus-within:border-primary/50 transition-colors">
+                  <Editor 
+                    value={newContent} 
+                    onChange={(e) => setNewContent(e.target.value)} 
+                    containerProps={{ className: 'min-h-[150px] p-2 text-sm bg-transparent !border-none' }}
+                  />
+                  <div className="flex gap-2 p-2 bg-canvas/50 border-t border-border/50">
+                    <button onClick={() => fileInputRef.current?.click()} className="p-2 hover:bg-white rounded-md text-fg transition-colors flex items-center gap-2 text-xs font-bold" title="Attach Image">
+                      <ImageIcon className="w-4 h-4" /> Attach Image
+                    </button>
+                    <input type="file" ref={fileInputRef} onChange={handleImageUpload} accept="image/*" className="hidden" />
+                  </div>
                 </div>
-
-                <textarea
-                  ref={textareaRef}
-                  placeholder="Write your announcement here... Use the toolbar to format."
-                  value={newContent}
-                  onChange={(e) => setNewContent(e.target.value)}
-                  className="w-full min-h-[150px] p-4 bg-canvas/30 rounded-xl border border-border/50 resize-y outline-none focus:border-primary/50 text-sm"
-                />
 
                 {/* Attached Images Preview */}
                 {attachedImages.length > 0 && (
