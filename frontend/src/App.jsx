@@ -1,7 +1,7 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import anime from 'animejs';
-import Lottie from 'lottie-react';
+import { useLottie } from 'lottie-react';
 import fireAnimation from '../public/fire.json';
 import { requestFirebaseNotificationPermission } from './firebase';
 import { Upload, CheckCircle2, ChevronDown, Download, AlertCircle, Loader2, ArrowLeft, Target, Trophy, TrendingUp, AlertTriangle, LayoutDashboard, Calendar, FileText, Flame, Clock } from 'lucide-react';
@@ -40,6 +40,12 @@ const STREAK_THEMES = [
   { color: '#0ea5e9', filter: 'hue-rotate(180deg) saturate(1.2)' }, // Blue (6-10)
   { color: '#fbbf24', filter: 'hue-rotate(45deg) saturate(1.5) brightness(1.2)' } // Gold (11+)
 ];
+
+const LottieFire = () => {
+  const options = { animationData: fireAnimation, loop: true, autoplay: true };
+  const { View } = useLottie(options);
+  return <>{View}</>;
+};
 
 function StreakModalContent({ studentStreak, setExpandedCard }) {
   let themeIndex = 0;
@@ -103,7 +109,7 @@ function StreakModalContent({ studentStreak, setExpandedCard }) {
         className="streak-fire w-24 h-24 sm:w-28 sm:h-28 relative mb-0 opacity-0" 
         style={{ filter: fireFilter, transformOrigin: 'center bottom' }}
       >
-        <Lottie animationData={fireAnimation} loop={true} autoplay={true} />
+        <LottieFire />
       </div>
       {/* Number */}
       <h1 className="streak-number text-[60px] sm:text-[80px] leading-none font-extrabold mb-0 tracking-tighter" style={{ color: streakColor, textShadow: '0 4px 0px rgba(0,0,0,0.3)' }}>
@@ -1322,7 +1328,7 @@ export default function App() {
                     </div>
                     {/* Lottie Animation Background for Streak */}
                     <div className={cn("absolute right-0 bottom-0 w-24 h-24 md:w-32 md:h-32 translate-y-4 translate-x-4 opacity-50", studentStreak === 0 && "grayscale opacity-10")}>
-                      <Lottie animationData={fireAnimation} loop={true} autoplay={true} />
+                      <LottieFire />
                     </div>
                   </motion.div>
 
