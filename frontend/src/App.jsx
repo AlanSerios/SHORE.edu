@@ -830,6 +830,14 @@ export default function App() {
     return streak;
   }, [globalAttendance, globalUsers, selectedStudent, userRole, userEmail]);
 
+  const streakThemeIndex = useMemo(() => {
+    if (studentStreak >= 11) return 3;
+    if (studentStreak >= 6) return 2;
+    if (studentStreak >= 4) return 1;
+    return 0;
+  }, [studentStreak]);
+  const { color: streakCardColor, filter: streakCardFilter } = STREAK_THEMES[streakThemeIndex];
+
   return (
     <AnimatePresence mode="wait">
       {!isAuthenticated ? (
@@ -1323,25 +1331,34 @@ export default function App() {
                     className="col-span-2 xl:col-span-1 bg-card border border-border rounded-3xl p-4 md:p-6 shadow-sm flex flex-col justify-between relative overflow-hidden cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all active:scale-95"
                     onClick={() => handleSetExpandedCard('streak')}
                   >
-                    <div className="flex items-center justify-between mb-3 md:mb-4 relative z-10">
-                      <p className="text-fg font-semibold text-xs md:text-sm leading-tight mr-2">Attendance<br/>Streak</p>
-                      <div className={cn("w-7 h-7 md:w-8 md:h-8 rounded-full flex items-center justify-center shrink-0", studentStreak > 0 ? "bg-orange-500/20" : "bg-muted/20")}>
-                        <Flame className={cn("w-3 h-3 md:w-4 md:h-4", studentStreak > 0 ? "text-orange-500" : "text-muted")} />
+                      <div className="flex items-center justify-between mb-3 md:mb-4 relative z-10">
+                        <p className="text-fg font-semibold text-xs md:text-sm leading-tight mr-2">Attendance<br/>Streak</p>
+                        <div 
+                          className={cn("w-7 h-7 md:w-8 md:h-8 rounded-full flex items-center justify-center shrink-0", studentStreak === 0 && "bg-muted/20")}
+                          style={studentStreak > 0 ? { backgroundColor: `${streakCardColor}33` } : {}}
+                        >
+                          <Flame 
+                            className={cn("w-3 h-3 md:w-4 md:h-4", studentStreak === 0 && "text-muted")} 
+                            style={studentStreak > 0 ? { color: streakCardColor } : {}}
+                          />
+                        </div>
                       </div>
-                    </div>
-                    <div className="flex items-center justify-between relative z-10">
-                      <div className="flex items-baseline gap-1 md:gap-2">
-                        <h3 className={cn("text-2xl md:text-4xl font-bold tracking-tight", studentStreak > 0 ? "text-orange-500" : "text-muted")}>
-                          <AnimatedNumber value={studentStreak} />
-                        </h3>
-                        <span className="text-muted font-medium text-xs md:text-base">Days</span>
+                      <div className="flex items-center justify-between relative z-10">
+                        <div className="flex items-baseline gap-1 md:gap-2">
+                          <h3 
+                            className={cn("text-2xl md:text-4xl font-bold tracking-tight", studentStreak === 0 && "text-muted")}
+                            style={studentStreak > 0 ? { color: streakCardColor } : {}}
+                          >
+                            <AnimatedNumber value={studentStreak} />
+                          </h3>
+                          <span className="text-muted font-medium text-xs md:text-base">Days</span>
+                        </div>
                       </div>
-                    </div>
-                    {/* Lottie Animation Background for Streak */}
-                    <div className={cn("absolute right-0 bottom-0 w-24 h-24 md:w-32 md:h-32 translate-y-4 translate-x-4 opacity-50", studentStreak === 0 && "grayscale opacity-10")}>
-                      <LottieFire />
-                    </div>
-                  </motion.div>
+                      {/* Lottie Animation Background for Streak */}
+                      <div className={cn("absolute right-0 bottom-0 w-24 h-24 md:w-32 md:h-32 translate-y-4 translate-x-4 opacity-50", studentStreak === 0 && "grayscale opacity-10")}>
+                        <LottieFire style={studentStreak > 0 ? { filter: streakCardFilter, width: '100%', height: '100%' } : { width: '100%', height: '100%' }} />
+                      </div>
+                    </motion.div>
 
                   {/* Card 2: Cohort Rank */}
                   <motion.div variants={itemVariants} 
