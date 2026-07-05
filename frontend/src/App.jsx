@@ -43,8 +43,8 @@ const STREAK_THEMES = [
 
 const LottieFire = () => {
   const options = { animationData: fireAnimation, loop: true, autoplay: true };
-  const { View } = useLottie(options);
-  return <>{View}</>;
+  const { View } = useLottie(options, { width: '100%', height: '100%', transform: 'scale(1.3) translateY(12%)' });
+  return <div className="w-full h-full overflow-hidden">{View}</div>;
 };
 
 function StreakModalContent({ studentStreak, setExpandedCard }) {
