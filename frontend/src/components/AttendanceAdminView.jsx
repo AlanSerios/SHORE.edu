@@ -765,37 +765,79 @@ const AttendanceAdminView = () => {
                   </div>
 
                   {statsData.length > 0 && (
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                      <div className="h-64 w-full">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-2">
+                      <div className="h-72 w-full pr-4">
                         <ResponsiveContainer width="100%" height="100%">
                           <BarChart data={statsData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
-                            <XAxis dataKey="event" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#6B7280' }} />
-                            <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#6B7280' }} />
-                            <Tooltip cursor={{ fill: '#F3F4F6' }} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
-                            <Bar dataKey="attendees" name="Total Attendees" fill="#1A4B6E" radius={[4, 4, 0, 0]} />
+                            <defs>
+                              <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stopColor="#0ea5e9" stopOpacity={1}/>
+                                <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.8}/>
+                              </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F3F4F6" />
+                            <XAxis dataKey="event" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#9CA3AF', fontWeight: 500 }} dy={10} />
+                            <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#9CA3AF', fontWeight: 500 }} dx={-10} />
+                            <Tooltip 
+                              cursor={{ fill: '#F8FAFC' }} 
+                              contentStyle={{ 
+                                borderRadius: '12px', 
+                                border: '1px solid #E2E8F0', 
+                                boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.05), 0 4px 6px -4px rgb(0 0 0 / 0.05)',
+                                backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                                backdropFilter: 'blur(8px)',
+                                padding: '12px 16px',
+                                fontWeight: 600
+                              }} 
+                              itemStyle={{ color: '#0F172A', fontWeight: 700 }}
+                            />
+                            <Bar dataKey="attendees" name="Total Attendees" fill="url(#barGradient)" radius={[6, 6, 0, 0]} barSize={40} />
                           </BarChart>
                         </ResponsiveContainer>
                       </div>
-                      <div className="h-64 w-full flex items-center justify-center">
+                      <div className="h-72 w-full flex items-center justify-center">
                         <ResponsiveContainer width="100%" height="100%">
                           <PieChart>
                             <Pie
                               data={statsData}
                               dataKey="attendees"
                               nameKey="event"
-                              cx="50%"
+                              cx="40%"
                               cy="50%"
-                              innerRadius={60}
-                              outerRadius={80}
-                              paddingAngle={5}
+                              innerRadius={65}
+                              outerRadius={95}
+                              paddingAngle={4}
+                              stroke="none"
                             >
                               {statsData.map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={['#1A4B6E', '#2C3E50', '#7F8C8D', '#BDC3C7', '#E6F0F9'][index % 5]} />
+                                <Cell key={`cell-${index}`} fill={['#0ea5e9', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#f43f5e', '#84cc16', '#14b8a6', '#6366f1'][index % 10]} />
                               ))}
                             </Pie>
-                            <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
-                            <Legend />
+                            <Tooltip 
+                              contentStyle={{ 
+                                borderRadius: '12px', 
+                                border: '1px solid #E2E8F0', 
+                                boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.05)',
+                                backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                                backdropFilter: 'blur(8px)',
+                                padding: '12px 16px',
+                                fontWeight: 600
+                              }} 
+                              itemStyle={{ color: '#0F172A', fontWeight: 700 }}
+                            />
+                            <Legend 
+                              layout="vertical" 
+                              verticalAlign="middle" 
+                              align="right"
+                              wrapperStyle={{
+                                paddingLeft: '20px',
+                                fontSize: '12px',
+                                fontWeight: 500,
+                                color: '#475569'
+                              }}
+                              iconType="circle"
+                              iconSize={10}
+                            />
                           </PieChart>
                         </ResponsiveContainer>
                       </div>
