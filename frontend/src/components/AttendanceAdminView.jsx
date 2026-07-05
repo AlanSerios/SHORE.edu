@@ -308,6 +308,27 @@ const AttendanceAdminView = () => {
     { id: 'stats',   label: 'Statistics',     icon: BarChart3    },
   ];
 
+  const generateInsights = useCallback((data) => {
+    if (!data || data.length === 0) return "Not enough data to form an insight yet.";
+    if (data.length === 1) return `The program has kicked off with ${data[0].attendees} attendees in ${data[0].event}.`;
+    
+    const first = data[0].attendees;
+    const last = data[data.length - 1].attendees;
+    const max = Math.max(...data.map(d => d.attendees));
+    const maxEvents = data.filter(d => d.attendees === max).map(d => d.event).join(' and ');
+    
+    let trendText = "";
+    if (last > first) {
+      trendText = "Overall attendance has shown positive growth compared to the initial session.";
+    } else if (last < first) {
+      trendText = "We are seeing a slight drop in attendance compared to the initial session. Consider reaching out to absent participants.";
+    } else {
+      trendText = "Attendance has remained highly stable across all sessions so far.";
+    }
+  
+    return `${trendText} Peak attendance was reached during ${maxEvents} with ${max} participants.`;
+  }, []);
+
   const showControls = activeTab === 'scanner' || activeTab === 'sheet';
 
   return (
@@ -840,6 +861,21 @@ const AttendanceAdminView = () => {
                             />
                           </PieChart>
                         </ResponsiveContainer>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Insights Section */}
+                  {statsData.length > 0 && (
+                    <div className="mx-6 mt-2 mb-6 bg-primary/5 border border-primary/20 rounded-xl p-5 flex gap-4 items-start">
+                      <div className="bg-primary/20 p-2.5 rounded-lg shrink-0">
+                        <Lightbulb className="w-5 h-5 text-primary" />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-fg mb-1 text-sm">Key Insights & Trends</h4>
+                        <p className="text-sm text-fg/80 leading-relaxed">
+                          {generateInsights(statsData)}
+                        </p>
                       </div>
                     </div>
                   )}
