@@ -119,7 +119,7 @@ export function AuthFormSplitScreen({
   return (
     <div className="relative flex min-h-screen w-full flex-col md:flex-row">
       {/* Left Panel: Form */}
-      <div className="flex w-full flex-col items-center justify-center bg-background p-8 md:w-1/2 relative z-10">
+      <div className="flex flex-1 w-full flex-col items-center justify-center bg-background p-8 md:w-1/2 relative z-10">
         <div className="w-full max-w-md">
           <motion.div
             variants={containerVariants}
