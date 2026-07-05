@@ -1,8 +1,10 @@
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import anime from 'animejs';
+import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 import { requestFirebaseNotificationPermission } from './firebase';
-import { Upload, CheckCircle2, ChevronDown, Download, AlertCircle, Loader2, ArrowLeft, Target, Trophy, TrendingUp, AlertTriangle, LayoutDashboard, Calendar, FileText } from 'lucide-react';
-import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
+import { Upload, CheckCircle2, ChevronDown, Download, AlertCircle, Loader2, ArrowLeft, Target, Trophy, TrendingUp, AlertTriangle, LayoutDashboard, Calendar, FileText, Flame, Clock } from 'lucide-react';
+import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 import * as XLSX from 'xlsx';
 import { cn } from './utils';
 import CalendarView from './components/CalendarView';
@@ -21,6 +23,7 @@ import RecitationsAdminView from './components/RecitationsAdminView';
 import ShopView from './components/ShopView';
 import TicketsView from './components/TicketsView';
 import { LifeBuoy } from 'lucide-react';
+import AvatarBorder from './components/AvatarBorder';
 
 const REPORT_TYPES = [
   { id: 'pre', label: 'Pre-Test Only' },
@@ -30,10 +33,302 @@ const REPORT_TYPES = [
 
 const ALL_SUBJ = ["Arithmetic", "Algebra", "Geometry", "Calculus", "Trigonometry", "Logic", "Chemistry", "Biology", "Earth Science", "Physics", "English"];
 
+const STREAK_THEMES = [
+  { color: '#ff9600', filter: 'none' }, // Orange (0-3)
+  { color: '#b026ff', filter: 'hue-rotate(240deg) saturate(1.5)' }, // Violet (4-5)
+  { color: '#0ea5e9', filter: 'hue-rotate(180deg) saturate(1.2)' }, // Blue (6-10)
+  { color: '#fbbf24', filter: 'hue-rotate(45deg) saturate(1.5) brightness(1.2)' } // Gold (11+)
+];
+
+function StreakModalContent({ studentStreak, setExpandedCard }) {
+  let themeIndex = 0;
+  if (studentStreak >= 11) themeIndex = 3; // Gold
+  else if (studentStreak >= 6) themeIndex = 2; // Blue
+  else if (studentStreak >= 4) themeIndex = 1; // Violet
+  
+  const { color: streakColor, filter: fireFilter } = STREAK_THEMES[themeIndex];
+
+  useEffect(() => {
+    // Animate the fire dropping in
+    anime({
+      targets: '.streak-fire',
+      translateY: [-50, 0],
+      scale: [0.5, 1],
+      opacity: [0, 1],
+      easing: 'spring(1, 80, 10, 0)',
+      duration: 1200
+    });
+
+    // Animate the number counting up
+    const obj = { val: 0 };
+    anime({
+      targets: obj,
+      val: studentStreak,
+      round: 1,
+      duration: 1500,
+      easing: 'easeOutExpo',
+      update: function() {
+        const el = document.querySelector('.streak-number');
+        if (el) el.innerHTML = obj.val;
+      }
+    });
+
+    // Staggered reveal for milestones
+    anime({
+      targets: '.streak-milestone',
+      translateY: [20, 0],
+      scale: [0.8, 1],
+      opacity: [0, 1],
+      delay: anime.stagger(100, { start: 500 }),
+      easing: 'easeOutBack',
+      duration: 800
+    });
+    
+    // Animate continue button
+    anime({
+      targets: '.streak-btn',
+      translateY: [20, 0],
+      opacity: [0, 1],
+      delay: 1500,
+      easing: 'easeOutCubic',
+      duration: 600
+    });
+  }, [studentStreak]);
+
+  return (
+    <div className="w-full p-5 pt-6 pb-5 flex flex-col items-center justify-center relative">
+      {/* Fire Animation */}
+      <div 
+        className="streak-fire w-24 h-24 sm:w-28 sm:h-28 relative mb-0 opacity-0" 
+        style={{ filter: fireFilter, transformOrigin: 'center bottom' }}
+      >
+        <DotLottieReact src="/fire.json" loop autoplay />
+      </div>
+      {/* Number */}
+      <h1 className="streak-number text-[60px] sm:text-[80px] leading-none font-extrabold mb-0 tracking-tighter" style={{ color: streakColor, textShadow: '0 4px 0px rgba(0,0,0,0.3)' }}>
+        0
+      </h1>
+      <h2 className="text-lg sm:text-2xl font-bold mb-4 md:mb-6 tracking-wide" style={{ color: streakColor }}>session streak</h2>
+      
+      {/* Milestones */}
+      <div className="flex flex-wrap gap-x-1.5 gap-y-2 sm:gap-y-3 sm:gap-x-2 mb-4 md:mb-8 w-full justify-center px-1">
+        {['OB', 'S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7', 'S8', 'ME', 'GR'].map((day, i) => {
+          const isChecked = i < studentStreak;
+          const isCurrent = i === studentStreak;
+          return (
+            <div key={day} className="streak-milestone flex flex-col items-center gap-1 w-[32px] sm:w-[36px] opacity-0">
+              <span className={cn("font-bold text-[9px] sm:text-[10px]", isCurrent ? "" : "text-white/40")} style={isCurrent ? { color: streakColor } : {}}>{day}</span>
+              <div className={cn("w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center border-[2px]", 
+                !isChecked && "bg-white/5 border-white/5"
+              )} style={isChecked ? { backgroundColor: streakColor, borderColor: streakColor, color: '#000' } : {}}>
+                {isChecked && <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6 stroke-black stroke-[1.5]" style={{ fill: streakColor }} />}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      
+      <p className="text-white/70 font-medium text-xs sm:text-base mb-4 sm:mb-6 text-center px-2">You're making great progress!</p>
+      
+      <motion.button 
+        whileHover={{ scale: 1.05 }}
+        whileTap={{ scale: 0.95 }}
+        onClick={() => setExpandedCard(null)}
+        className="streak-btn opacity-0 w-full max-w-[240px] bg-[#1cb0f6] hover:bg-[#1899d6] text-white font-extrabold text-sm sm:text-base py-2.5 sm:py-3 rounded-2xl uppercase tracking-widest transition-colors shadow-[0_4px_0_#1899d6]"
+      >
+        Continue
+      </motion.button>
+    </div>
+  );
+}
+
+const CustomTooltip = ({ active, payload, label }) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-card border border-border p-3 shadow-sm rounded-lg">
+        <p className="font-semibold text-fg text-sm mb-1">{label}</p>
+        {payload.map((entry, index) => (
+          <p key={index} style={{ color: entry.color }} className="text-sm font-medium">
+            {entry.name}: {entry.value}
+          </p>
+        ))}
+      </div>
+    );
+  }
+  return null;
+};
+
+function AnimatedNumber({ value }) {
+  const nodeRef = React.useRef();
+  
+  React.useEffect(() => {
+    if (!nodeRef.current) return;
+    const obj = { val: 0 };
+    anime({
+      targets: obj,
+      val: value,
+      round: 1,
+      duration: 1500,
+      easing: 'easeOutExpo',
+      update: function() {
+        if (nodeRef.current) {
+          nodeRef.current.innerHTML = obj.val;
+        }
+      }
+    });
+  }, [value]);
+
+  return <span ref={nodeRef}>0</span>;
+}
+
+function TotalScoreContent({ stats }) {
+  const data = stats.radarData || [];
+  
+  return (
+    <div className="p-4 flex flex-col w-full">
+      <div className="bg-primary/10 border border-primary/20 rounded-xl p-4 mb-4">
+        <h3 className="text-primary font-bold text-base mb-0.5">Total Score Progression</h3>
+        <p className="text-xs text-fg/80 mb-3">A breakdown of your score distribution across all subjects compared to the class average.</p>
+        <div className="h-44 w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={data} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+              <defs>
+                <linearGradient id="colorScore" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.5}/>
+                  <stop offset="95%" stopColor="#4f46e5" stopOpacity={0}/>
+                </linearGradient>
+                <linearGradient id="colorAvg" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#94a3b8" stopOpacity={0.3}/>
+                  <stop offset="95%" stopColor="#94a3b8" stopOpacity={0}/>
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
+              <XAxis dataKey="subject" tick={{fill: '#94a3b8', fontSize: 9}} axisLine={false} tickLine={false} />
+              <YAxis tick={{fill: '#94a3b8', fontSize: 9}} axisLine={false} tickLine={false} />
+              <Tooltip content={<CustomTooltip />} />
+              <Legend iconType="circle" wrapperStyle={{ fontSize: '10px' }}/>
+              <Area type="monotone" dataKey="avg" name="Class Average" stroke="#94a3b8" fillOpacity={1} fill="url(#colorAvg)" />
+              <Area type="monotone" dataKey="score" name="Your Score" stroke="#4f46e5" strokeWidth={3} fillOpacity={1} fill="url(#colorScore)" />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+      
+      <div className="grid grid-cols-2 gap-3">
+        <div className="bg-canvas border border-border rounded-xl p-3">
+          <p className="text-[10px] font-bold text-muted uppercase tracking-wider mb-1">Total Score</p>
+          <h4 className="text-2xl font-bold text-fg"><AnimatedNumber value={stats.total} /></h4>
+        </div>
+        <div className="bg-canvas border border-border rounded-xl p-3">
+          <p className="text-[10px] font-bold text-muted uppercase tracking-wider mb-1">Growth</p>
+          <h4 className="text-2xl font-bold text-accentGreenFg">
+            {stats.growth !== null ? (
+              <>
+                {stats.growth > 0 ? '+' : ''}<AnimatedNumber value={stats.growth} />
+              </>
+            ) : 'N/A'}
+          </h4>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CohortRankContent({ stats }) {
+  const { rank, totalStudents } = stats;
+  if (!rank || !totalStudents) return <div className="p-8 text-center text-muted">Data not available</div>;
+
+  const percentile = Math.round((1 - (rank / totalStudents)) * 100);
+  
+  let tier = 'Bronze';
+  let tierColor = '#cd7f32'; // Bronze
+  if (percentile >= 90) { tier = 'Diamond'; tierColor = '#0ea5e9'; }
+  else if (percentile >= 75) { tier = 'Platinum'; tierColor = '#10b981'; }
+  else if (percentile >= 50) { tier = 'Gold'; tierColor = '#fbbf24'; }
+  else if (percentile >= 25) { tier = 'Silver'; tierColor = '#94a3b8'; }
+
+  return (
+    <div className="p-4 md:p-8 flex flex-col items-center justify-center">
+      <div className="w-24 h-24 md:w-32 md:h-32 rounded-full flex items-center justify-center mb-4 md:mb-6 shadow-2xl relative" style={{ background: `radial-gradient(circle, ${tierColor} 0%, transparent 70%)` }}>
+        <Trophy className="w-12 h-12 md:w-16 md:h-16" style={{ color: tierColor, filter: 'drop-shadow(0 0 10px rgba(255,255,255,0.5))' }} />
+      </div>
+      <h3 className="text-2xl md:text-3xl font-extrabold mb-2" style={{ color: tierColor }}>{tier} Tier</h3>
+      <p className="text-base md:text-lg text-fg font-medium text-center mb-4 md:mb-6">You are in the top <span className="font-bold text-primary">{100 - percentile}%</span> of your cohort!</p>
+      
+      <div className="w-full bg-canvas rounded-full h-4 mb-2 overflow-hidden border border-border">
+        <div className="h-full rounded-full" style={{ width: `${percentile}%`, backgroundColor: tierColor }} />
+      </div>
+      <p className="text-xs text-muted font-medium w-full text-right">Percentile: {percentile}</p>
+    </div>
+  );
+}
+
+function TopPerformerContent({ stats }) {
+  const { vsCohortData } = stats;
+  if (!vsCohortData) return <div className="p-8 text-center text-muted">Data not available</div>;
+
+  return (
+    <div className="p-4 md:p-6 flex flex-col items-center justify-center">
+      <h3 className="text-base md:text-lg font-bold text-fg mb-4 md:mb-6">Subject Mastery: You vs Average</h3>
+      <div className="w-full h-[200px] md:h-[300px]">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={vsCohortData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
+            <XAxis dataKey="subject" tick={{ fill: '#888', fontSize: 10 }} tickFormatter={(val) => val.substring(0, 3)} />
+            <YAxis tick={{ fill: '#888', fontSize: 10 }} />
+            <Tooltip content={<CustomTooltip />} />
+            <Legend wrapperStyle={{ fontSize: '10px' }} />
+            <Bar dataKey="student" name="Your Score" fill="#1cb0f6" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="cohort" name="Class Average" fill="#88888840" radius={[4, 4, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
+function PriorityFocusContent({ stats }) {
+  const { weaknesses } = stats;
+  if (!weaknesses || weaknesses.length === 0) return <div className="p-8 text-center text-muted">Data not available</div>;
+
+  const primary = weaknesses[0];
+
+  return (
+    <div className="p-4 md:p-6 flex flex-col w-full">
+      <div className="bg-accentRed/10 border border-accentRed/20 rounded-2xl p-4 md:p-5 mb-4 md:mb-6">
+        <h3 className="text-accentRedFg font-bold text-base md:text-lg mb-1">Priority Focus: {primary.name}</h3>
+        <p className="text-xs md:text-sm text-fg/80 mb-3 md:mb-4">Your score is {Math.abs(primary.diff)} points below the cohort average. Let's fix this!</p>
+        
+        <div className="w-full bg-black/20 rounded-full h-3 mb-2 overflow-hidden">
+          <div className="h-full rounded-full bg-accentRedFg" style={{ width: '30%' }} />
+        </div>
+        <p className="text-[10px] md:text-xs font-bold text-accentRedFg w-full text-right mb-3 md:mb-4">30% Mastery - Needs Review</p>
+        
+        <div className="bg-black/20 rounded-xl p-2 md:p-3 flex items-center gap-2 md:gap-3">
+          <div className="w-6 h-6 md:w-8 md:h-8 rounded-full bg-accentRedFg text-white flex items-center justify-center font-bold text-xs md:text-sm shrink-0">1</div>
+          <p className="text-xs md:text-sm font-medium text-fg">Next Step: Review core concepts in {primary.name}.</p>
+        </div>
+      </div>
+
+      <h4 className="text-[10px] md:text-sm font-bold text-muted uppercase tracking-wider mb-2 md:mb-3 px-1">Other Areas for Improvement</h4>
+      <div className="flex flex-col gap-2">
+        {weaknesses.slice(1).map((w, i) => (
+          <div key={w.name} className="flex items-center justify-between bg-canvas rounded-xl p-2 md:p-3 border border-border">
+            <span className="font-semibold text-fg text-xs md:text-sm">{w.name}</span>
+            <span className="text-[10px] md:text-xs font-bold text-accentRedFg px-2 py-1 bg-accentRed/10 rounded-lg">{(w.score)} pts</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [file, setFile] = useState(null);
   const [students, setStudents] = useState([]);
   const [parsedData, setParsedData] = useState({ pre: {}, post: {} });
+  const [globalAttendance, setGlobalAttendance] = useState([]);
+  const [globalUsers, setGlobalUsers] = useState([]);
   const [selectedStudent, setSelectedStudent] = useState('');
   const [reportType, setReportType] = useState('both');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -50,11 +345,62 @@ export default function App() {
   const [userEmail, setUserEmail] = useState('');
   const [userName, setUserName] = useState('');
   const [profilePicture, setProfilePicture] = useState(null);
+  const [equippedBorder, setEquippedBorder] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isMenuSheetOpen, setIsMenuSheetOpen] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [classToolsOpen, setClassToolsOpen] = useState(false);
   const [unreadAnnouncements, setUnreadAnnouncements] = useState(0);
+  const [allowedStudents, setAllowedStudents] = useState([]);
+  const [allowedVolunteers, setAllowedVolunteers] = useState([]);
+  const [expandedCard, setExpandedCard] = useState(null);
+
+  const playSound = (type) => {
+    try {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContext) return;
+      const ctx = new AudioContext();
+      const osc = ctx.createOscillator();
+      const gainNode = ctx.createGain();
+      osc.connect(gainNode);
+      gainNode.connect(ctx.destination);
+      if (type === 'pop') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(400, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(600, ctx.currentTime + 0.1);
+        gainNode.gain.setValueAtTime(0.5, ctx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.1);
+      } else if (type === 'whoosh') {
+        const bufferSize = ctx.sampleRate * 0.3;
+        const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+        const noise = ctx.createBufferSource();
+        noise.buffer = buffer;
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(100, ctx.currentTime);
+        filter.frequency.exponentialRampToValueAtTime(2000, ctx.currentTime + 0.15);
+        filter.frequency.exponentialRampToValueAtTime(100, ctx.currentTime + 0.3);
+        const noiseGain = ctx.createGain();
+        noiseGain.gain.setValueAtTime(0, ctx.currentTime);
+        noiseGain.gain.linearRampToValueAtTime(0.3, ctx.currentTime + 0.15);
+        noiseGain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.3);
+        noise.connect(filter);
+        filter.connect(noiseGain);
+        noiseGain.connect(ctx.destination);
+        noise.start(ctx.currentTime);
+      }
+    } catch(e) {}
+  };
+
+  const handleSetExpandedCard = (card) => {
+    if (card && !expandedCard) playSound('whoosh');
+    else if (!card && expandedCard) playSound('pop');
+    setExpandedCard(card);
+  };
 
   React.useEffect(() => {
     if (isAuthenticated && userEmail) {
@@ -125,6 +471,7 @@ export default function App() {
         setUserRole(user.role);
         setUserName(user.name);
         setProfilePicture(user.profilePicture || null);
+        setEquippedBorder(user.equippedBorder || null);
         if (user.role === 'student' && user.name) {
           setSelectedStudent(user.name);
         }
@@ -158,8 +505,27 @@ export default function App() {
           }
         })
         .catch(err => console.error("Failed to load tracker data", err));
+
+        fetch(`/api/attendance?t=${Date.now()}`)
+        .then(res => res.json())
+        .then(data => setGlobalAttendance(data.attendance || []))
+        .catch(err => console.error("Failed to load attendance", err));
+        
+        fetch(`/api/users?t=${Date.now()}`)
+        .then(res => res.json())
+        .then(data => setGlobalUsers(data.users || []))
+        .catch(err => console.error("Failed to load users", err));
+      }
+    }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (userEmail && globalUsers.length > 0) {
+      const u = globalUsers.find(x => x.email === userEmail);
+      if (u && u.equippedBorder !== equippedBorder) {
+        setEquippedBorder(u.equippedBorder);
+      }
     }
-  }, [isAuthenticated]);
+  }, [globalUsers, userEmail, equippedBorder]);
 
   const fileInputRef = useRef(null);
 
@@ -169,6 +535,7 @@ export default function App() {
     setUserRole(user.role);
     setUserName(user.name);
     setProfilePicture(user.profilePicture || null);
+    setEquippedBorder(user.equippedBorder || null);
     setCurrentView('dashboard');
     if (user.role === 'student' && user.name) {
       setSelectedStudent(user.name);
@@ -181,6 +548,7 @@ export default function App() {
     setUserRole(null);
     setUserEmail('');
     setProfilePicture(null);
+    setEquippedBorder(null);
     setCurrentView('dashboard');
     localStorage.removeItem('shore_user');
   };
@@ -401,21 +769,48 @@ export default function App() {
     show: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 300, damping: 24 } }
   };
 
-  const CustomTooltip = ({ active, payload, label }) => {
-    if (active && payload && payload.length) {
-      return (
-        <div className="bg-card border border-border p-3 shadow-sm rounded-lg">
-          <p className="font-semibold text-fg text-sm mb-1">{label}</p>
-          {payload.map((entry, index) => (
-            <p key={index} style={{ color: entry.color }} className="text-sm font-medium">
-              {entry.name}: {entry.value}
-            </p>
-          ))}
-        </div>
-      );
+  const studentStreak = useMemo(() => {
+    if (!globalAttendance || globalAttendance.length === 0) return 0;
+    
+    let targetEmail = userEmail;
+    if (userRole === 'admin' || userRole === 'volunteer') {
+      const matchingUser = globalUsers.find(u => u.name === selectedStudent);
+      if (matchingUser) targetEmail = matchingUser.email;
+      else return 0;
     }
-    return null;
-  };
+    
+    if (!targetEmail) return 0;
+
+    const allTimeIns = globalAttendance.filter(log => log.type === 'Time In');
+    if (allTimeIns.length === 0) return 0;
+    
+    const classDatesSet = new Set();
+    allTimeIns.forEach(log => {
+      const d = new Date(log.timestamp);
+      classDatesSet.add(d.toISOString().split('T')[0]);
+    });
+    
+    const classDatesList = Array.from(classDatesSet).sort((a, b) => new Date(b) - new Date(a));
+    if (classDatesList.length === 0) return 0;
+
+    const studentLogs = allTimeIns.filter(log => log.email === targetEmail);
+    const studentDatesSet = new Set();
+    studentLogs.forEach(log => {
+      const d = new Date(log.timestamp);
+      studentDatesSet.add(d.toISOString().split('T')[0]);
+    });
+
+    let streak = 0;
+    for (const date of classDatesList) {
+      if (studentDatesSet.has(date)) {
+        streak++;
+      } else {
+        break; // Streak broken
+      }
+    }
+    
+    return streak;
+  }, [globalAttendance, globalUsers, selectedStudent, userRole, userEmail]);
 
   return (
     <AnimatePresence mode="wait">
@@ -692,13 +1087,15 @@ export default function App() {
               )}
               title={!sidebarOpen ? "Profile Menu" : "Profile Menu"}
             >
-              <div className="w-10 h-10 rounded-full overflow-hidden bg-primary/10 text-primary flex items-center justify-center font-bold shrink-0">
-                {profilePicture ? (
-                  <img src={profilePicture} alt="Profile" className="w-full h-full object-cover" />
-                ) : (
-                  userRole === 'admin' ? 'A' : userEmail.charAt(0).toUpperCase()
-                )}
-              </div>
+              <AvatarBorder borderId={equippedBorder} className="w-10 h-10 shrink-0">
+                <div className="w-full h-full rounded-full overflow-hidden bg-primary/10 text-primary flex items-center justify-center font-bold">
+                  {profilePicture ? (
+                    <img src={profilePicture} alt="Profile" className="w-full h-full object-cover" />
+                  ) : (
+                    userRole === 'admin' ? 'A' : userEmail.charAt(0).toUpperCase()
+                  )}
+                </div>
+              </AvatarBorder>
               <AnimatePresence>
                 {sidebarOpen && (
                   <motion.div 
@@ -721,6 +1118,53 @@ export default function App() {
         </div>
       </motion.aside>
 
+      {/* Expanded Card Modal Shell */}
+      <AnimatePresence>
+        {expandedCard && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+            onClick={() => handleSetExpandedCard(null)}
+          >
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 20 }}
+              transition={{ type: "spring", stiffness: 300, damping: 30 }}
+              className={cn("w-full shadow-2xl overflow-y-auto max-h-[90vh] md:max-h-[85vh] relative", expandedCard === 'streak' ? 'max-w-[360px] rounded-[2.5rem] bg-white/5 backdrop-blur-2xl border border-white/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.2),0_8px_32px_rgba(0,0,0,0.4)]' : 'max-w-lg rounded-3xl bg-card')}
+              onClick={e => e.stopPropagation()}
+            >
+              {expandedCard === 'streak' ? (
+                <StreakModalContent studentStreak={studentStreak} setExpandedCard={handleSetExpandedCard} />
+              ) : (
+                <>
+                  <div className="p-6 border-b border-border flex justify-between items-center bg-card">
+                    <h2 className="text-xl font-bold text-fg capitalize">
+                      {expandedCard === 'total' ? 'Total Score Details' :
+                       expandedCard === 'rank' ? 'Cohort Rank Details' :
+                       expandedCard === 'top' ? 'Top Performer Breakdown' :
+                       expandedCard === 'priority' ? 'Priority Focus Area' : 'Details'}
+                    </h2>
+                    <button 
+                      onClick={() => handleSetExpandedCard(null)}
+                      className="p-2 hover:bg-muted/10 rounded-full transition-colors"
+                    >
+                      <LogOut className="w-5 h-5 text-muted hover:text-fg" />
+                    </button>
+                  </div>
+                  {expandedCard === 'rank' && stats && <CohortRankContent stats={stats} />}
+                  {expandedCard === 'top' && stats && <TopPerformerContent stats={stats} />}
+                  {expandedCard === 'priority' && stats && <PriorityFocusContent stats={stats} />}
+                  {expandedCard === 'total' && stats && <TotalScoreContent stats={stats} />}
+                </>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
 {/* MAIN CONTENT */}
       <main className="flex-1 flex flex-col overflow-hidden relative pb-16 md:pb-0">
         
@@ -729,13 +1173,15 @@ export default function App() {
             {/* TOP HEADER */}
             <header className="pt-6 pb-4 px-4 md:px-10 shrink-0 z-10 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-full bg-white text-primary flex items-center justify-center font-bold text-lg shadow-[inset_0_1px_0_rgba(255,255,255,0.1),0_2px_10px_rgba(0,0,0,0.05)] border border-border overflow-hidden">
-                  {profilePicture ? (
-                    <img src={profilePicture} alt="Profile" className="w-full h-full object-cover" />
-                  ) : (
-                    userRole === 'admin' ? 'A' : (userEmail ? userEmail.charAt(0).toUpperCase() : '')
-                  )}
-                </div>
+                <AvatarBorder borderId={equippedBorder} className="w-11 h-11 shrink-0">
+                  <div className="w-full h-full rounded-full bg-white text-primary flex items-center justify-center font-bold text-lg shadow-[inset_0_1px_0_rgba(255,255,255,0.1),0_2px_10px_rgba(0,0,0,0.05)] border border-border overflow-hidden">
+                    {profilePicture ? (
+                      <img src={profilePicture} alt="Profile" className="w-full h-full object-cover" />
+                    ) : (
+                      userRole === 'admin' ? 'A' : (userEmail ? userEmail.charAt(0).toUpperCase() : '')
+                    )}
+                  </div>
+                </AvatarBorder>
                 <div>
                   <p className="text-[10px] font-bold text-muted uppercase tracking-widest mb-0.5">Welcome back,</p>
                   <h2 className="text-lg md:text-xl font-bold text-fg tracking-tight leading-none">{userRole === 'admin' ? 'Admin' : (userEmail ? userEmail.split('@')[0] : '')}</h2>
@@ -830,16 +1276,19 @@ export default function App() {
               <motion.div variants={containerVariants} initial="hidden" animate="show" className="space-y-8">
                 
                 {/* TOP METRICS ROW */}
-                <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 md:gap-6">
+                <div className="grid grid-cols-2 xl:grid-cols-5 gap-4 md:gap-6">
                   {/* Card 1: Active Style */}
-                  <motion.div variants={itemVariants} className="col-span-2 xl:col-span-1 bg-primary text-white rounded-3xl p-5 md:p-6 shadow-md relative overflow-hidden flex flex-row items-center justify-between xl:flex-col xl:items-start">
+                  <motion.div variants={itemVariants} 
+                    className="col-span-2 xl:col-span-1 bg-primary text-white rounded-3xl p-5 md:p-6 shadow-md relative overflow-hidden flex flex-row items-center justify-between xl:flex-col xl:items-start cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all active:scale-95"
+                    onClick={() => handleSetExpandedCard('total')}
+                  >
                     <div className="relative z-10">
                       <p className="text-white/80 font-medium text-sm mb-1">Total Score</p>
-                      <h3 className="text-4xl md:text-5xl font-bold tracking-tight">{stats.total}</h3>
+                      <h3 className="text-4xl md:text-5xl font-bold tracking-tight"><AnimatedNumber value={stats.total} /></h3>
                       {stats.growth !== null && (
                         <div className="mt-2 md:mt-4 inline-flex items-center gap-1.5 px-3 py-1 bg-white/20 rounded-full text-xs font-semibold">
                           <TrendingUp className="w-3.5 h-3.5 shrink-0" />
-                          <span>{stats.growth > 0 ? '+' : ''}{stats.growth} since Pre-Test</span>
+                          <span>{stats.growth > 0 ? '+' : ''}<AnimatedNumber value={stats.growth} /> since Pre-Test</span>
                         </div>
                       )}
                     </div>
@@ -851,46 +1300,79 @@ export default function App() {
                     <div className="absolute -right-8 -bottom-8 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
                   </motion.div>
 
+                  {/* Card 1.5: Attendance Streak */}
+                  <motion.div variants={itemVariants} 
+                    className="col-span-2 xl:col-span-1 bg-card border border-border rounded-3xl p-4 md:p-6 shadow-sm flex flex-col justify-between relative overflow-hidden cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all active:scale-95"
+                    onClick={() => handleSetExpandedCard('streak')}
+                  >
+                    <div className="flex items-center justify-between mb-3 md:mb-4 relative z-10">
+                      <p className="text-fg font-semibold text-xs md:text-sm leading-tight mr-2">Attendance<br/>Streak</p>
+                      <div className={cn("w-7 h-7 md:w-8 md:h-8 rounded-full flex items-center justify-center shrink-0", studentStreak > 0 ? "bg-orange-500/20" : "bg-muted/20")}>
+                        <Flame className={cn("w-3 h-3 md:w-4 md:h-4", studentStreak > 0 ? "text-orange-500" : "text-muted")} />
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between relative z-10">
+                      <div className="flex items-baseline gap-1 md:gap-2">
+                        <h3 className={cn("text-2xl md:text-4xl font-bold tracking-tight", studentStreak > 0 ? "text-orange-500" : "text-muted")}>
+                          <AnimatedNumber value={studentStreak} />
+                        </h3>
+                        <span className="text-muted font-medium text-xs md:text-base">Days</span>
+                      </div>
+                    </div>
+                    {/* Lottie Animation Background for Streak */}
+                    <div className={cn("absolute right-0 bottom-0 w-24 h-24 md:w-32 md:h-32 translate-y-4 translate-x-4 opacity-50", studentStreak === 0 && "grayscale opacity-10")}>
+                      <DotLottieReact src="/fire.json" loop autoplay />
+                    </div>
+                  </motion.div>
+
                   {/* Card 2: Cohort Rank */}
-                  <motion.div variants={itemVariants} className="col-span-1 bg-card border border-border rounded-3xl p-4 md:p-6 shadow-sm flex flex-col justify-between">
+                  <motion.div variants={itemVariants} 
+                    className="col-span-1 bg-card border border-border rounded-3xl p-4 md:p-6 shadow-sm flex flex-col justify-between cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all active:scale-95"
+                    onClick={() => handleSetExpandedCard('rank')}
+                  >
                     <div className="flex items-center justify-between mb-3 md:mb-4">
-                      <p className="text-fg font-semibold text-xs md:text-sm truncate mr-2">Cohort Rank</p>
+                      <p className="text-fg font-semibold text-xs md:text-sm leading-tight mr-2">Cohort<br/>Rank</p>
                       <div className="w-7 h-7 md:w-8 md:h-8 rounded-full bg-accentBlue/50 flex items-center justify-center shrink-0">
                         <Trophy className="w-3 h-3 md:w-4 md:h-4 text-primary" />
                       </div>
                     </div>
                     <div className="flex items-baseline gap-1 md:gap-2">
-                      <h3 className="text-2xl md:text-4xl font-bold text-fg tracking-tight">#{stats.rank}</h3>
+                      <h3 className="text-2xl md:text-4xl font-bold text-fg tracking-tight">#<AnimatedNumber value={stats.rank} /></h3>
                       <span className="text-muted font-medium text-xs md:text-base">/ {stats.totalStudents}</span>
                     </div>
                   </motion.div>
 
                   {/* Card 3: Strongest Subject */}
-                  <motion.div variants={itemVariants} className="col-span-1 bg-card border border-border rounded-3xl p-4 md:p-6 shadow-sm flex flex-col justify-between">
+                  <motion.div variants={itemVariants} 
+                    className="col-span-1 bg-card border border-border rounded-3xl p-4 md:p-6 shadow-sm flex flex-col justify-between cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all active:scale-95"
+                    onClick={() => handleSetExpandedCard('top')}
+                  >
                     <div className="flex items-center justify-between mb-3 md:mb-4">
-                      <p className="text-fg font-semibold text-xs md:text-sm truncate mr-2">Top Performer</p>
+                      <p className="text-fg font-semibold text-xs md:text-sm leading-tight mr-2">Top<br/>Performer</p>
                       <div className="w-7 h-7 md:w-8 md:h-8 rounded-full bg-accentGreen flex items-center justify-center shrink-0">
                         <Target className="w-3 h-3 md:w-4 md:h-4 text-accentGreenFg" />
                       </div>
                     </div>
                     <div>
-                      <h3 className="text-lg md:text-2xl font-bold text-fg truncate mb-0.5 md:mb-1">{stats.strongest.name}</h3>
-                      <p className="text-muted font-medium text-xs md:text-sm">{stats.strongest.score} pts</p>
+                      <h3 className="text-sm md:text-base font-bold text-fg truncate mb-0.5 md:mb-1" title={stats.strongest.name}>{stats.strongest.name}</h3>
+                      <p className="text-muted font-medium text-xs md:text-sm"><AnimatedNumber value={stats.strongest.score} /> pts</p>
                     </div>
                   </motion.div>
 
                   {/* Card 4: Primary Weakness */}
-                  <motion.div variants={itemVariants} className="col-span-2 xl:col-span-1 bg-card border border-border rounded-3xl p-4 md:p-6 shadow-sm flex items-center xl:items-start xl:flex-col justify-between">
-                    <div className="flex xl:w-full items-center justify-between xl:mb-4 gap-3 xl:gap-0">
-                      <div className="w-12 h-12 xl:w-8 xl:h-8 rounded-full bg-accentRed flex items-center justify-center shrink-0">
-                        <AlertTriangle className="w-5 h-5 xl:w-4 xl:h-4 text-accentRedFg" />
+                  <motion.div variants={itemVariants} 
+                    className="col-span-2 xl:col-span-1 bg-card border border-border rounded-3xl p-4 md:p-6 shadow-sm flex flex-col justify-between cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all active:scale-95"
+                    onClick={() => handleSetExpandedCard('priority')}
+                  >
+                    <div className="flex items-center justify-between mb-3 md:mb-4">
+                      <p className="text-fg font-semibold text-xs md:text-sm leading-tight mr-2 text-left">Priority<br/>Focus</p>
+                      <div className="w-7 h-7 md:w-8 md:h-8 rounded-full bg-accentRed flex items-center justify-center shrink-0">
+                        <AlertTriangle className="w-3 h-3 md:w-4 md:h-4 text-accentRedFg" />
                       </div>
-                      <p className="text-fg font-semibold text-sm hidden xl:block">Priority Focus</p>
                     </div>
-                    <div className="flex-1 ml-4 xl:ml-0 text-left">
-                      <p className="text-fg font-semibold text-xs mb-1 block xl:hidden text-muted">Priority Focus</p>
-                      <h3 className="text-xl md:text-2xl font-bold text-fg truncate mb-0.5 md:mb-1">{stats.weaknesses[0]?.name || 'N/A'}</h3>
-                      <p className="text-muted font-medium text-xs md:text-sm">{stats.weaknesses[0]?.score || 0} pts</p>
+                    <div className="text-left overflow-hidden">
+                      <h3 className="text-sm md:text-base font-bold text-fg truncate mb-0.5 md:mb-1" title={stats.weaknesses[0]?.name || 'N/A'}>{stats.weaknesses[0]?.name || 'N/A'}</h3>
+                      <p className="text-muted font-medium text-xs md:text-sm"><AnimatedNumber value={stats.weaknesses[0]?.score || 0} /> pts</p>
                     </div>
                   </motion.div>
                 </div>
@@ -1107,9 +1589,11 @@ export default function App() {
             >
               <div className="flex-1 overflow-y-auto p-6 pb-8">
                  <div className="flex items-center gap-4 bg-white border border-border p-4 rounded-2xl shadow-sm mb-6">
-                    <div className="w-14 h-14 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xl font-bold shrink-0">
-                       {profilePicture ? <img src={profilePicture} className="w-full h-full object-cover rounded-full" /> : (userRole === 'admin' ? 'A' : userEmail.charAt(0).toUpperCase())}
-                    </div>
+                    <AvatarBorder borderId={equippedBorder} className="w-14 h-14 shrink-0">
+                      <div className="w-full h-full rounded-full bg-primary/10 text-primary flex items-center justify-center text-xl font-bold">
+                         {profilePicture ? <img src={profilePicture} className="w-full h-full object-cover rounded-full" /> : (userRole === 'admin' ? 'A' : userEmail.charAt(0).toUpperCase())}
+                      </div>
+                    </AvatarBorder>
                     <div className="flex-1 min-w-0">
                        <h2 className="text-lg font-bold text-fg tracking-tight truncate">{userRole === 'admin' ? 'Admin' : userEmail.split('@')[0]}</h2>
                        <p className="text-sm text-muted capitalize truncate">{userRole} Account</p>

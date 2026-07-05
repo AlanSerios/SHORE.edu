@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { ShoppingBag, CheckCircle, Info, Edit, Plus, Trash2, Save, X, Banknote, Pizza, PenTool, CupSoda, Smartphone, StickyNote, Candy, Cookie, Soup, Gift } from 'lucide-react';
+import { ShoppingBag, CheckCircle, Info, Edit, Plus, Trash2, Save, X, Banknote, Pizza, PenTool, CupSoda, Smartphone, StickyNote, Candy, Cookie, Soup, Gift, Flame, Hexagon, Crown, Shield } from 'lucide-react';
 import { toast } from 'sonner';
 
 // Map icon strings to actual Lucide components
 const IconMap = {
-  Banknote, Pizza, PenTool, CupSoda, Smartphone, StickyNote, Candy, Cookie, Soup, Gift
+  Banknote, Pizza, PenTool, CupSoda, Smartphone, StickyNote, Candy, Cookie, Soup, Gift, Flame, Hexagon, Crown, Shield
 };
 
 export default function ShopView({ userEmail, userRole }) {
@@ -13,6 +13,10 @@ export default function ShopView({ userEmail, userRole }) {
   const [purchasingItem, setPurchasingItem] = useState(null);
   const [showSuccess, setShowSuccess] = useState(false);
   const [inventory, setInventory] = useState([]);
+  
+  // Border State
+  const [ownedBorders, setOwnedBorders] = useState([]);
+  const [equippedBorder, setEquippedBorder] = useState(null);
   
   // Admin State
   const [isEditing, setIsEditing] = useState(false);
@@ -24,18 +28,27 @@ export default function ShopView({ userEmail, userRole }) {
 
   const fetchData = async () => {
     try {
-      const [attRes, recRes, invRes, purRes] = await Promise.all([
+      const [attRes, recRes, invRes, purRes, usersRes] = await Promise.all([
         fetch('/api/attendance'),
         fetch('/api/recitations'),
         fetch('/api/inventory'),
-        fetch('/api/purchases')
+        fetch('/api/purchases'),
+        fetch('/api/users')
       ]);
       const attData = await attRes.json();
       const recData = await recRes.json();
       const invData = await invRes.json();
       const purData = await purRes.json();
+      const usersData = await usersRes.json();
 
       setInventory(invData.inventory || []);
+
+      // Find user data for borders
+      const currentUser = (usersData.users || []).find(u => u.email === userEmail);
+      if (currentUser) {
+        setOwnedBorders(currentUser.ownedBorders || []);
+        setEquippedBorder(currentUser.equippedBorder || null);
+      }
 
       let attCount = 0;
       (attData.attendance || []).forEach(log => {
@@ -72,7 +85,7 @@ export default function ShopView({ userEmail, userRole }) {
       toast.error("Not enough SHORE coins!");
       return;
     }
-    if (item.stock <= 0) {
+    if (item.stock <= 0 && item.itemType !== 'border') {
       toast.error("This item is out of stock!");
       return;
     }
@@ -94,20 +107,43 @@ export default function ShopView({ userEmail, userRole }) {
       setBalance(prev => prev - item.price);
       
       // Update local stock immediately
-      setInventory(prev => prev.map(i => i.id === item.id ? { ...i, stock: i.stock - 1 } : i));
-
-      setShowSuccess(true);
-      setTimeout(() => {
-        setShowSuccess(false);
-        setPurchasingItem(null);
+      if (item.itemType !== 'border') {
+        setInventory(prev => prev.map(i => i.id === item.id ? { ...i, stock: i.stock - 1 } : i));
+        setShowSuccess(true);
+        setTimeout(() => {
+          setShowSuccess(false);
+          setPurchasingItem(null);
+        }, 3000);
+      } else {
+        // Automatically equip if it's a border purchase
+        setOwnedBorders(prev => [...prev, item.id]);
         toast.success(`Purchased ${item.name}!`);
-      }, 2500);
+        handleEquip(item.id);
+      }
 
     } catch (e) {
       toast.error("Network error during purchase.");
     }
   };
 
+  const handleEquip = async (borderId) => {
+    try {
+      const res = await fetch('/api/inventory/equip', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userEmail, borderId })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setEquippedBorder(borderId);
+        toast.success("Avatar border equipped! Reload the page to see it everywhere.");
+      } else {
+        toast.error(data.error || "Failed to equip border.");
+      }
+    } catch {
+      toast.error("Network error.");
+    }
+  };
   const startEditing = () => {
     setEditInventory(JSON.parse(JSON.stringify(inventory)));
     setIsEditing(true);
@@ -152,6 +188,94 @@ export default function ShopView({ userEmail, userRole }) {
       color: "bg-gray-100 text-gray-600"
     };
     setEditInventory([...editInventory, newItem]);
+  };
+
+  const renderItem = (item) => {
+    const IconComp = IconMap[item.iconType] || Gift;
+    const isBorder = item.itemType === 'border';
+    const isOutOfStock = !isBorder && item.stock <= 0;
+    const isOwned = isBorder && ownedBorders.includes(item.id);
+    const isEquipped = isBorder && equippedBorder === item.id;
+    
+    return (
+      <div 
+        key={item.id} 
+        className={`bg-white rounded-3xl border border-border/60 shadow-sm overflow-hidden flex flex-col relative transition-all duration-300 ${isOutOfStock ? 'opacity-75 grayscale-[0.5]' : 'hover:shadow-md'} ${isEquipped ? 'ring-2 ring-primary ring-offset-2' : ''}`}
+      >
+        {isOutOfStock && (
+          <div className="absolute top-4 right-4 z-20 px-3 py-1 bg-red-500 text-white text-[10px] font-black uppercase tracking-widest rounded-full shadow-sm">
+            Out of Stock
+          </div>
+        )}
+        {isEquipped && (
+          <div className="absolute top-4 right-4 z-20 px-3 py-1 bg-primary text-white text-[10px] font-black uppercase tracking-widest rounded-full shadow-sm">
+            Equipped
+          </div>
+        )}
+        
+        <div className={`h-48 ${item.color || 'bg-gray-100 text-gray-600'} flex items-center justify-center relative overflow-hidden`}>
+          {item.imageUrl ? (
+            <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover relative z-10 pixelated" style={{ imageRendering: 'pixelated' }} />
+          ) : (
+            <IconComp className="w-16 h-16 relative z-10 drop-shadow-md" />
+          )}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/5 to-transparent pointer-events-none"></div>
+        </div>
+        
+        <div className="p-6 flex-1 flex flex-col justify-between">
+          <div>
+            <h3 className="text-lg font-bold text-fg mb-1">{item.name}</h3>
+            {!isOwned && (
+              <div className="flex items-center gap-1.5 mb-2">
+                <img src="/shore-coin.png" alt="coin" className="w-4 h-4 opacity-70" />
+                <span className="font-bold text-sm text-muted">{item.price} Coins</span>
+              </div>
+            )}
+            <div className="text-xs font-semibold text-muted/70 mb-4 uppercase tracking-wider">
+              {isBorder ? 'Digital Cosmetic' : `${item.stock} Available`}
+            </div>
+          </div>
+          
+          {isBorder ? (
+            isOwned ? (
+              <button
+                onClick={() => handleEquip(item.id)}
+                disabled={isEquipped}
+                className={`w-full py-3 px-4 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2
+                  ${isEquipped ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed' : 'bg-fg text-white hover:bg-fg/90 active:scale-95 shadow-sm'}`}
+              >
+                <Shield className="w-4 h-4" />
+                {isEquipped ? 'Equipped' : 'Equip Border'}
+              </button>
+            ) : (
+              <button
+                onClick={() => handlePurchase(item)}
+                disabled={balance < item.price}
+                className={`w-full py-3 px-4 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2
+                  ${balance >= item.price ? 'bg-fg text-white hover:bg-fg/90 active:scale-95 shadow-sm' : 'bg-canvas text-muted border border-border/60 cursor-not-allowed'}`}
+              >
+                <ShoppingBag className="w-4 h-4" />
+                {balance >= item.price ? 'Unlock Border' : 'Not Enough Coins'}
+              </button>
+            )
+          ) : (
+            <button
+              onClick={() => handlePurchase(item)}
+              disabled={showSuccess || isOutOfStock || balance < item.price}
+              className={`w-full py-3 px-4 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2
+                ${isOutOfStock ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200' :
+                  balance >= item.price 
+                  ? 'bg-fg text-white hover:bg-fg/90 active:scale-95 shadow-sm' 
+                  : 'bg-canvas text-muted border border-border/60 cursor-not-allowed'
+                }`}
+            >
+              <ShoppingBag className="w-4 h-4" />
+              {isOutOfStock ? 'Out of Stock' : (balance >= item.price ? 'Redeem Item' : 'Not Enough Coins')}
+            </button>
+          )}
+        </div>
+      </div>
+    );
   };
 
   if (loading) return <div className="p-8">Loading Rewards Shop...</div>;
@@ -259,61 +383,31 @@ export default function ShopView({ userEmail, userRole }) {
           </div>
         </div>
 
-        {/* Shop Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {inventory.map((item) => {
-            const IconComp = IconMap[item.iconType] || Gift;
-            const isOutOfStock = item.stock <= 0;
-            
-            return (
-              <div 
-                key={item.id} 
-                className={`bg-white rounded-3xl border border-border/60 shadow-sm overflow-hidden flex flex-col relative transition-all duration-300 ${isOutOfStock ? 'opacity-75 grayscale-[0.5]' : 'hover:shadow-md'}`}
-              >
-                {isOutOfStock && (
-                  <div className="absolute top-4 right-4 z-20 px-3 py-1 bg-red-500 text-white text-[10px] font-black uppercase tracking-widest rounded-full shadow-sm">
-                    Out of Stock
-                  </div>
-                )}
-                
-                <div className={`h-48 ${item.color || 'bg-gray-100 text-gray-600'} flex items-center justify-center relative overflow-hidden`}>
-                  {item.imageUrl ? (
-                    <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover relative z-10 pixelated" style={{ imageRendering: 'pixelated' }} />
-                  ) : (
-                    <IconComp className="w-16 h-16 relative z-10 drop-shadow-md" />
-                  )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/5 to-transparent pointer-events-none"></div>
-                </div>
-                
-                <div className="p-6 flex-1 flex flex-col justify-between">
-                  <div>
-                    <h3 className="text-lg font-bold text-fg mb-1">{item.name}</h3>
-                    <div className="flex items-center gap-1.5 mb-2">
-                      <img src="/shore-coin.png" alt="coin" className="w-4 h-4 opacity-70" />
-                      <span className="font-bold text-sm text-muted">{item.price} Coins</span>
-                    </div>
-                    <div className="text-xs font-semibold text-muted/70 mb-4 uppercase tracking-wider">
-                      {item.stock} Available
-                    </div>
-                  </div>
-                  
-                  <button
-                    onClick={() => handlePurchase(item)}
-                    disabled={showSuccess || isOutOfStock}
-                    className={`w-full py-3 px-4 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2
-                      ${isOutOfStock ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200' :
-                        balance >= item.price 
-                        ? 'bg-fg text-white hover:bg-fg/90 active:scale-95 shadow-sm' 
-                        : 'bg-canvas text-muted border border-border/60 cursor-not-allowed'
-                      }`}
-                  >
-                    <ShoppingBag className="w-4 h-4" />
-                    {isOutOfStock ? 'Out of Stock' : (balance >= item.price ? 'Redeem Item' : 'Not Enough Coins')}
-                  </button>
-                </div>
-              </div>
-            );
-          })}
+        {/* Categories */}
+        <div className="space-y-12 pb-12">
+          
+          {/* Section: Physical Rewards */}
+          <div>
+            <h2 className="text-xl font-bold text-fg mb-6 flex items-center gap-2">
+              <Gift className="w-6 h-6 text-primary" />
+              Physical Rewards
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {inventory.filter(i => i.itemType !== 'border').map(renderItem)}
+            </div>
+          </div>
+
+          {/* Section: Digital Cosmetics */}
+          <div>
+            <h2 className="text-xl font-bold text-fg mb-6 flex items-center gap-2">
+              <Crown className="w-6 h-6 text-primary" />
+              Digital Cosmetics
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {inventory.filter(i => i.itemType === 'border').map(renderItem)}
+            </div>
+          </div>
+
         </div>
 
       </div>

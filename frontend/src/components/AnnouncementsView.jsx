@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Megaphone, MessageSquare, Eye, Send, Bold, Italic, Link2, Image as ImageIcon, CheckCircle2, Trash2 } from 'lucide-react';
 import { cn } from '../utils';
 import { toast } from 'sonner';
+import AvatarBorder from './AvatarBorder';
 
 // A simple utility to parse basic markdown for rendering
 const parseMarkdown = (text) => {
@@ -20,7 +21,7 @@ const parseMarkdown = (text) => {
   return html;
 };
 
-const AnnouncementItem = ({ post, userRole, userEmail, userName, profilePicture, renderAvatar, handleMarkAsRead, handleComment, commentText, setCommentText, handleDeleteAnnouncement }) => {
+const AnnouncementItem = ({ post, userRole, userEmail, userName, profilePicture, userEquippedBorder, renderAvatar, handleMarkAsRead, handleComment, commentText, setCommentText, handleDeleteAnnouncement }) => {
   const hasRead = post.read_by?.includes(userEmail);
   const postRef = useRef(null);
 
@@ -125,14 +126,18 @@ const AnnouncementItem = ({ post, userRole, userEmail, userName, profilePicture,
         </div>
 
         {/* Add Comment */}
-        <div className="flex gap-3">
-          <div className="w-8 h-8 rounded-full overflow-hidden bg-primary text-white flex items-center justify-center font-bold text-xs shrink-0">
-            {profilePicture ? (
-              <img src={profilePicture} alt={userName} className="w-full h-full object-cover" />
-            ) : (
-              userName.charAt(0).toUpperCase()
-            )}
-          </div>
+        <div className="flex gap-3 mt-4">
+          <AvatarBorder borderId={userEquippedBorder} className="w-8 h-8 shrink-0">
+            <div className="w-full h-full rounded-full overflow-hidden bg-canvas border border-border/50 shrink-0">
+              {profilePicture ? (
+                <img src={profilePicture} alt="You" className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center font-bold text-primary text-xs">
+                  {userRole === 'admin' ? 'A' : (userEmail ? userEmail.charAt(0).toUpperCase() : '')}
+                </div>
+              )}
+            </div>
+          </AvatarBorder>
           <div className="flex-1 relative">
             <input
               type="text"
@@ -203,10 +208,15 @@ export default function AnnouncementsView({ userEmail, userName, userRole, profi
 
   const renderAvatar = (email, name) => {
     const user = allUsers.find(u => u.email === email);
-    if (user && user.profilePicture) {
-      return <img src={user.profilePicture} alt={name} className="w-full h-full object-cover" />;
-    }
-    return name ? name.charAt(0).toUpperCase() : '?';
+    const content = (user && user.profilePicture) 
+      ? <img src={user.profilePicture} alt={name} className="w-full h-full object-cover rounded-full" />
+      : <div className="w-full h-full flex items-center justify-center bg-canvas text-primary font-bold rounded-full">{name ? name.charAt(0).toUpperCase() : '?'}</div>;
+    
+    return user?.equippedBorder ? (
+      <AvatarBorder borderId={user.equippedBorder} className="w-full h-full">
+        {content}
+      </AvatarBorder>
+    ) : content;
   };
 
   const handlePostAnnouncement = async () => {
@@ -458,6 +468,7 @@ export default function AnnouncementsView({ userEmail, userName, userRole, profi
                 userEmail={userEmail}
                 userName={userName}
                 profilePicture={profilePicture}
+                userEquippedBorder={allUsers.find(u => u.email === userEmail)?.equippedBorder}
                 renderAvatar={renderAvatar}
                 handleMarkAsRead={handleMarkAsRead}
                 handleComment={handleComment}

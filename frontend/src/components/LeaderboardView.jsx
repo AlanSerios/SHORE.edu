@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Trophy, Medal, Star, Target } from 'lucide-react';
 import { toast } from 'sonner';
+import AvatarBorder from './AvatarBorder';
 
 export default function LeaderboardView() {
   const [attendanceLeaders, setAttendanceLeaders] = useState([]);
@@ -39,7 +40,8 @@ export default function LeaderboardView() {
             email,
             name: user ? user.name || email.split('@')[0] : email,
             score: count,
-            profilePicture: user?.profilePicture
+            profilePicture: user?.profilePicture,
+            equippedBorder: user?.equippedBorder
           };
         })
         .sort((a, b) => b.score - a.score)
@@ -58,7 +60,8 @@ export default function LeaderboardView() {
             email,
             name: user ? user.name || email.split('@')[0] : email,
             score: score,
-            profilePicture: user?.profilePicture
+            profilePicture: user?.profilePicture,
+            equippedBorder: user?.equippedBorder
           };
         })
         .sort((a, b) => b.score - a.score)
@@ -99,13 +102,15 @@ export default function LeaderboardView() {
                 <div className="flex items-center gap-4">
                   {getRankBadge(idx)}
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-primary/10 overflow-hidden flex items-center justify-center text-primary font-bold shrink-0">
-                      {student.profilePicture ? (
-                        <img src={student.profilePicture} alt="Profile" className="w-full h-full object-cover" />
-                      ) : (
-                        student.name.charAt(0).toUpperCase()
-                      )}
-                    </div>
+                    <AvatarBorder borderId={student.equippedBorder} className="w-10 h-10 shrink-0">
+                      <div className="w-full h-full rounded-full bg-primary/10 overflow-hidden flex items-center justify-center text-primary font-bold shrink-0 border border-border/50">
+                        {student.profilePicture ? (
+                          <img src={student.profilePicture} alt="Profile" className="w-full h-full object-cover" />
+                        ) : (
+                          student.name.charAt(0).toUpperCase()
+                        )}
+                      </div>
+                    </AvatarBorder>
                     <div className="min-w-0">
                       <p className="font-bold text-fg truncate">{student.name}</p>
                       <p className="text-[10px] text-muted font-medium uppercase tracking-wider truncate">{label}</p>

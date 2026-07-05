@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Camera, Save, Plus, Trash2, CheckCircle2, QrCode, X } from 'lucide-react';
+import { Camera, Save, Plus, Trash2, CheckCircle2, QrCode, X, User } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { toast } from 'sonner';
 import Cropper from 'react-easy-crop';
 import { motion, AnimatePresence } from 'framer-motion';
 import anime from 'animejs';
 import getCroppedImg from '../utils/cropImage';
+import AvatarBorder from './AvatarBorder';
 
 export default function SettingsView({ userEmail, userRole, onUpdateUser }) {
   const [profilePicture, setProfilePicture] = useState(null);
@@ -14,6 +15,11 @@ export default function SettingsView({ userEmail, userRole, onUpdateUser }) {
   const [isLoading, setIsLoading] = useState(true);
   const fileInputRef = useRef(null);
   
+  const [ownedBorders, setOwnedBorders] = useState([]);
+  const [equippedBorder, setEquippedBorder] = useState(null);
+  const [borderInventory, setBorderInventory] = useState([]);
+  const [currentUserData, setCurrentUserData] = useState(null);
+
   const [showQRPopout, setShowQRPopout] = useState(false);
   const qrModalRef = useRef(null);
 
@@ -37,7 +43,18 @@ export default function SettingsView({ userEmail, userRole, onUpdateUser }) {
 
   useEffect(() => {
     fetchUserData();
+    fetchInventory();
   }, [userEmail]);
+
+  const fetchInventory = async () => {
+    try {
+      const res = await fetch('/api/inventory');
+      const data = await res.json();
+      setBorderInventory((data.inventory || []).filter(i => i.itemType === 'border'));
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   const fetchUserData = async () => {
     try {
@@ -45,8 +62,11 @@ export default function SettingsView({ userEmail, userRole, onUpdateUser }) {
       const data = await res.json();
       const currentUser = data.users.find(u => u.email === userEmail);
       if (currentUser) {
+        setCurrentUserData(currentUser);
         setProfilePicture(currentUser.profilePicture || null);
         setAppliedScholarships(currentUser.appliedScholarships || []);
+        setOwnedBorders(currentUser.ownedBorders || []);
+        setEquippedBorder(currentUser.equippedBorder || null);
       }
     } catch (error) {
       toast.error('Failed to load user data');
@@ -72,6 +92,28 @@ export default function SettingsView({ userEmail, userRole, onUpdateUser }) {
       return { success: false, error: data.error || 'Failed to save' };
     } catch (error) {
       return { success: false, error: error.message };
+    }
+  };
+
+  const handleEquipBorder = async (borderId) => {
+    try {
+      const res = await fetch('/api/inventory/equip', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userEmail, borderId })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setEquippedBorder(borderId);
+        toast.success("Avatar border equipped! (reload app to see everywhere)");
+        if (onUpdateUser && currentUserData) {
+          onUpdateUser({ ...currentUserData, equippedBorder: borderId });
+        }
+      } else {
+        toast.error(data.error || "Failed to equip border.");
+      }
+    } catch {
+      toast.error("Network error.");
     }
   };
 
@@ -225,25 +267,27 @@ export default function SettingsView({ userEmail, userRole, onUpdateUser }) {
         <p className="text-muted mt-1">Update your profile and track your scholarship applications.</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-6 h-full">
-        {/* Profile Details */}
-        <div className="lg:col-span-1 xl:col-span-1 flex flex-col">
+      <div className="flex flex-col lg:flex-row gap-6 h-full pb-12">
+        {/* Left Column: Profile & Borders */}
+        <div className="lg:w-1/3 flex flex-col gap-6">
           <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
             <h2 className="text-lg font-bold text-fg mb-6">Profile Settings</h2>
             
             <div className="flex flex-col items-center">
               <div className="relative group mb-6">
-                <div className="w-32 h-32 rounded-full overflow-hidden bg-canvas border-2 border-primary/20 flex items-center justify-center text-4xl font-bold text-primary">
-                  {profilePicture ? (
-                    <img src={profilePicture} alt="Profile" className="w-full h-full object-cover" />
-                  ) : (
-                    userRole === 'admin' ? 'A' : (userEmail ? userEmail.charAt(0).toUpperCase() : '')
-                  )}
-                </div>
+                <AvatarBorder borderId={equippedBorder} className="w-32 h-32 shrink-0">
+                  <div className="w-full h-full rounded-full overflow-hidden bg-canvas border-2 border-primary/20 flex items-center justify-center text-4xl font-bold text-primary">
+                    {profilePicture ? (
+                      <img src={profilePicture} alt="Profile" className="w-full h-full object-cover" />
+                    ) : (
+                      userRole === 'admin' ? 'A' : (userEmail ? userEmail.charAt(0).toUpperCase() : '')
+                    )}
+                  </div>
+                </AvatarBorder>
                 
                 <button 
                   onClick={() => fileInputRef.current?.click()}
-                  className="absolute bottom-0 right-0 bg-primary text-white p-2.5 rounded-full shadow-md hover:bg-primaryHover transition-transform hover:scale-105"
+                  className="absolute bottom-0 right-0 z-20 bg-primary text-white p-2.5 rounded-full shadow-md hover:bg-primaryHover transition-transform hover:scale-105"
                   title="Change Picture"
                 >
                   <Camera className="w-5 h-5" />
@@ -266,93 +310,147 @@ export default function SettingsView({ userEmail, userRole, onUpdateUser }) {
               </div>
             </div>
           </div>
-        </div>
 
-        {/* Digital ID / QR Code */}
-        <div className="lg:col-span-1">
-          <div className="bg-card border border-border rounded-2xl p-6 shadow-sm h-full flex flex-col items-center justify-center text-center relative overflow-hidden group">
-            <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-primary to-primary/40" />
+          <div className="bg-card border border-border rounded-2xl p-6 shadow-sm flex-1 flex flex-col">
+            <h2 className="text-lg font-bold text-fg mb-2">Digital Cosmetics</h2>
+            <p className="text-xs text-muted mb-6">Equip the avatar borders you've unlocked from the Rewards Shop.</p>
             
-            <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mb-4 text-primary">
-              <QrCode className="w-6 h-6" />
-            </div>
-            <h2 className="text-lg font-bold text-fg mb-1">Attendance ID</h2>
-            <p className="text-sm text-muted mb-6">Scan this code at events</p>
-            
-            <div 
-              className="bg-white p-4 rounded-xl shadow-sm border border-border/30 group-hover:scale-105 transition-transform duration-300 cursor-pointer"
-              onClick={() => setShowQRPopout(true)}
-              title="Click to enlarge"
-            >
-              <QRCodeSVG 
-                value={userEmail} 
-                size={120} 
-                bgColor="#ffffff"
-                fgColor="#000000"
-                level="H"
-                includeMargin={false}
-              />
-              <p className="text-[10px] text-center font-bold text-muted uppercase mt-3">Click to enlarge</p>
-            </div>
-            
-            <div className="mt-6">
-              <p className="font-bold text-fg">{userEmail.split('@')[0]}</p>
-            </div>
+            {ownedBorders.length === 0 ? (
+              <div className="flex-1 flex flex-col items-center justify-center text-center p-6 border-2 border-dashed border-border/60 rounded-xl bg-canvas/50">
+                <p className="text-sm font-bold text-muted">No borders unlocked yet.</p>
+                <p className="text-xs text-muted mt-1">Visit the Rewards Shop to get some!</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={() => handleEquipBorder(null)}
+                  className={`p-3 rounded-xl border flex flex-col items-center justify-center gap-2 transition-all ${
+                    !equippedBorder ? 'border-primary bg-primary/5 shadow-sm' : 'border-border/60 bg-canvas hover:bg-slate-50'
+                  }`}
+                >
+                  <div className="w-10 h-10 rounded-full bg-slate-200 border-2 border-slate-300 flex items-center justify-center text-slate-400">
+                    <X className="w-5 h-5" />
+                  </div>
+                  <span className={`text-[10px] font-bold uppercase tracking-wider ${!equippedBorder ? 'text-primary' : 'text-muted'}`}>No Border</span>
+                </button>
+                
+                {borderInventory.filter(b => ownedBorders.includes(b.id)).map(border => {
+                  const isActive = equippedBorder === border.id;
+                  return (
+                    <button
+                      key={border.id}
+                      onClick={() => handleEquipBorder(border.id)}
+                      className={`p-3 rounded-xl border flex flex-col items-center justify-center gap-2 transition-all ${
+                        isActive ? 'border-primary bg-primary/5 shadow-sm' : 'border-border/60 bg-canvas hover:bg-slate-50'
+                      }`}
+                    >
+                      <div className="w-12 h-12 relative flex items-center justify-center mb-1">
+                        <AvatarBorder borderId={border.id}>
+                          <div className="w-full h-full bg-slate-100 rounded-full flex items-center justify-center text-slate-400 border border-slate-200">
+                             <User className="w-6 h-6" />
+                          </div>
+                        </AvatarBorder>
+                      </div>
+                      <span className={`text-[10px] text-center font-bold uppercase tracking-wider ${isActive ? 'text-primary' : 'text-muted'}`}>
+                        {border.name}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Scholarships Tracker */}
-        <div className="lg:col-span-2">
-          <div className="bg-card border border-border rounded-2xl p-6 shadow-sm h-full flex flex-col">
-            <div className="mb-6">
-              <h2 className="text-lg font-bold text-fg">Scholarship Tracker</h2>
-              <p className="text-sm text-muted mt-1">Keep track of the scholarships you are currently applying for.</p>
-            </div>
-
-            <div className="flex gap-3 mb-6">
-              <input 
-                type="text" 
-                value={newScholarship}
-                onChange={e => setNewScholarship(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleAddScholarship()}
-                placeholder="e.g. DOST-SEI Merit Scholarship"
-                className="flex-1 min-w-0 px-4 py-2.5 rounded-xl border border-border bg-canvas focus:outline-none focus:border-primary transition-colors"
-              />
-              <button 
-                onClick={handleAddScholarship}
-                className="bg-primary hover:bg-primaryHover text-white px-5 py-2.5 rounded-xl font-medium flex items-center gap-2 transition-colors shadow-sm shrink-0"
+        {/* Right Column: QR & Tracker */}
+        <div className="lg:w-2/3 flex flex-col xl:flex-row gap-6">
+          
+          {/* Digital ID / QR Code */}
+          <div className="xl:w-1/2">
+            <div className="bg-card border border-border rounded-2xl p-6 shadow-sm h-full flex flex-col items-center justify-center text-center relative overflow-hidden group">
+              <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-primary to-primary/40" />
+              
+              <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mb-4 text-primary">
+                <QrCode className="w-6 h-6" />
+              </div>
+              <h2 className="text-lg font-bold text-fg mb-1">Attendance ID</h2>
+              <p className="text-sm text-muted mb-6">Scan this code at events</p>
+              
+              <div 
+                className="bg-white p-4 rounded-xl shadow-sm border border-border/30 group-hover:scale-105 transition-transform duration-300 cursor-pointer"
+                onClick={() => setShowQRPopout(true)}
+                title="Click to enlarge"
               >
-                <Plus className="w-5 h-5" /> <span className="hidden sm:inline">Add</span>
-              </button>
+                <QRCodeSVG 
+                  value={userEmail} 
+                  size={120} 
+                  bgColor="#ffffff"
+                  fgColor="#000000"
+                  level="H"
+                  includeMargin={false}
+                />
+                <p className="text-[10px] text-center font-bold text-muted uppercase mt-3">Click to enlarge</p>
+              </div>
+              
+              <div className="mt-6">
+                <p className="font-bold text-fg">{userEmail.split('@')[0]}</p>
+              </div>
             </div>
+          </div>
 
-            <div className="flex-1 bg-canvas rounded-xl p-4 overflow-y-auto">
-              {appliedScholarships.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center text-muted/60 text-sm py-12">
-                  <CheckCircle2 className="w-12 h-12 mb-3 opacity-50" />
-                  <p>You haven't added any scholarships to your tracker yet.</p>
-                </div>
-              ) : (
-                <ul className="space-y-3">
-                  {appliedScholarships.map((scholarship, idx) => (
-                    <li key={idx} className="bg-card border border-border p-4 rounded-xl flex items-center justify-between group shadow-sm">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-8 h-8 rounded-full bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0">
-                          <CheckCircle2 className="w-4 h-4" />
+          {/* Scholarships Tracker */}
+          <div className="xl:w-1/2 flex flex-col">
+            <div className="bg-card border border-border rounded-2xl p-6 shadow-sm h-full flex flex-col">
+              <div className="mb-6">
+                <h2 className="text-lg font-bold text-fg">Scholarship Tracker</h2>
+                <p className="text-sm text-muted mt-1">Keep track of the scholarships you are currently applying for.</p>
+              </div>
+
+              <div className="flex gap-3 mb-6">
+                <input 
+                  type="text" 
+                  value={newScholarship}
+                  onChange={e => setNewScholarship(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleAddScholarship()}
+                  placeholder="e.g. DOST-SEI Merit"
+                  className="flex-1 min-w-0 px-4 py-2.5 rounded-xl border border-border bg-canvas focus:outline-none focus:border-primary transition-colors text-sm"
+                />
+                <button 
+                  onClick={handleAddScholarship}
+                  className="bg-primary hover:bg-primaryHover text-white px-4 py-2.5 rounded-xl font-medium flex items-center gap-2 transition-colors shadow-sm shrink-0 text-sm"
+                >
+                  <Plus className="w-4 h-4" /> <span className="hidden sm:inline">Add</span>
+                </button>
+              </div>
+
+              <div className="flex-1 bg-canvas rounded-xl p-4 overflow-y-auto">
+                {appliedScholarships.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center text-muted/60 text-sm py-12">
+                    <CheckCircle2 className="w-12 h-12 mb-3 opacity-50" />
+                    <p>No scholarships tracked yet.</p>
+                  </div>
+                ) : (
+                  <ul className="space-y-3">
+                    {appliedScholarships.map((scholarship, idx) => (
+                      <li key={idx} className="bg-card border border-border p-4 rounded-xl flex items-center justify-between group shadow-sm">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-8 h-8 rounded-full bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0">
+                            <CheckCircle2 className="w-4 h-4" />
+                          </div>
+                          <span className="font-medium text-fg truncate text-sm">{scholarship}</span>
                         </div>
-                        <span className="font-medium text-fg truncate">{scholarship}</span>
-                      </div>
-                      <button 
-                        onClick={() => handleRemoveScholarship(idx)}
-                        className="text-muted hover:text-accentRedFg p-2 rounded-lg hover:bg-accentRed/10 transition-colors opacity-100 md:opacity-0 md:group-hover:opacity-100 focus:opacity-100"
-                        title="Remove from tracker"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
+                        <button 
+                          onClick={() => handleRemoveScholarship(idx)}
+                          className="text-muted hover:text-accentRedFg p-2 rounded-lg hover:bg-accentRed/10 transition-colors opacity-100 md:opacity-0 md:group-hover:opacity-100 focus:opacity-100"
+                          title="Remove from tracker"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </div>
           </div>
         </div>

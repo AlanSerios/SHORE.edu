@@ -549,7 +549,20 @@ def get_inventory():
             {"id": 5, "name": "Assorted Snacks", "price": 200, "stock": 50, "iconType": "Cookie", "color": "bg-orange-100 text-orange-600", "imageUrl": "/snacks.png"},
             {"id": 6, "name": "₱10 Cash", "price": 100, "stock": 50, "iconType": "Banknote", "color": "bg-emerald-100 text-emerald-600", "imageUrl": "/10_pesos.png"}
         ]
-        save_json(INVENTORY_FILE, inventory)
+        
+    # Always ensure borders exist
+    borders = [
+        {"id": "border_fire", "name": "Fire Streak Border", "price": 500, "stock": 99999, "itemType": "border", "iconType": "Flame", "color": "bg-orange-100 text-orange-600", "borderStyle": "fire"},
+        {"id": "border_cyber", "name": "Cyber Diamond Border", "price": 1000, "stock": 99999, "itemType": "border", "iconType": "Hexagon", "color": "bg-cyan-100 text-cyan-600", "borderStyle": "cyber"},
+        {"id": "border_gold", "name": "Gold Tier Border", "price": 1500, "stock": 99999, "itemType": "border", "iconType": "Crown", "color": "bg-yellow-100 text-yellow-600", "borderStyle": "gold"},
+        {"id": "border_shore", "name": "Ocean Shore Border", "price": 800, "stock": 99999, "itemType": "border", "iconType": "Waves", "color": "bg-blue-100 text-blue-600", "borderStyle": "shore"},
+        {"id": "border_nebula", "name": "Cosmic Nebula Border", "price": 1200, "stock": 99999, "itemType": "border", "iconType": "Sparkles", "color": "bg-purple-100 text-purple-600", "borderStyle": "nebula"}
+    ]
+    for b in borders:
+        if not any(i.get('id') == b['id'] for i in inventory):
+            inventory.append(b)
+            
+    save_json(INVENTORY_FILE, inventory)
     return {"inventory": inventory}
 
 @app.route('/api/inventory', methods=['POST'])
@@ -574,6 +587,7 @@ def purchase_item():
         
         inventory = load_json(INVENTORY_FILE)
         purchases = load_json(PURCHASES_FILE)
+        users = load_json(USERS_FILE)
         
         # Find item
         item = next((i for i in inventory if i.get('id') == item_id), None)
@@ -586,6 +600,14 @@ def purchase_item():
         # Deduct stock
         item['stock'] -= 1
         save_json(INVENTORY_FILE, inventory)
+        
+        user = next((u for u in users if u.get('email') == user_email), None)
+        if user and item.get('itemType') == 'border':
+            if 'ownedBorders' not in user:
+                user['ownedBorders'] = []
+            if item_id not in user['ownedBorders']:
+                user['ownedBorders'].append(item_id)
+            save_json(USERS_FILE, users)
         
         # Log purchase
         import datetime
@@ -600,11 +622,35 @@ def purchase_item():
         purchases.append(new_purchase)
         save_json(PURCHASES_FILE, purchases)
         
-        return {"success": True, "purchase": new_purchase}
+        # Return updated user if available
+        safe_user = {k: v for k, v in user.items() if k != 'password'} if user else None
+        
+        return {"success": True, "purchase": new_purchase, "user": safe_user}
     except Exception as e:
         import traceback
         traceback.print_exc()
         return {"error": str(e)}, 500
+
+@app.route('/api/inventory/equip', methods=['POST'])
+def equip_border():
+    try:
+        data = request.json
+        user_email = data.get('userEmail')
+        border_id = data.get('borderId')
+        
+        users = load_json(USERS_FILE)
+        user = next((u for u in users if u.get('email') == user_email), None)
+        if not user:
+            return {"error": "User not found"}, 404
+            
+        user['equippedBorder'] = border_id
+        save_json(USERS_FILE, users)
+        
+        safe_user = {k: v for k, v in user.items() if k != 'password'}
+        return {"success": True, "user": safe_user}
+    except Exception as e:
+        return {"error": str(e)}, 500
+
 
 @app.route('/api/generate-pdf', methods=['POST'])
 def handle_generate_pdf():
