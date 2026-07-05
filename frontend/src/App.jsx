@@ -107,7 +107,7 @@ function StreakModalContent({ studentStreak, setExpandedCard }) {
       <div className="relative flex flex-col items-center justify-center mb-0 mt-2">
         {/* Fire Animation On Top of Number */}
         <div 
-          className="streak-fire w-32 h-32 sm:w-40 sm:h-40 opacity-0 mb-[-1.5rem] sm:mb-[-2rem]" 
+          className="streak-fire w-32 h-32 sm:w-40 sm:h-40 opacity-0 mb-[-1.5rem] sm:mb-[-2rem] relative z-20 pointer-events-none" 
           style={{ 
             filter: fireFilter, 
             transformOrigin: 'center bottom',
@@ -127,6 +127,13 @@ function StreakModalContent({ studentStreak, setExpandedCard }) {
       {/* Milestones */}
       <div className="flex flex-wrap gap-x-1.5 gap-y-2 mb-4 w-full justify-center px-1">
         {['OB', 'S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7', 'S8', 'ME', 'GR'].map((day, i) => {
+          const maxVisible = 8;
+          let startIdx = 0;
+          if (studentStreak >= 5) {
+            startIdx = Math.min(studentStreak - 4, 11 - maxVisible);
+          }
+          if (i < startIdx || i >= startIdx + maxVisible) return null;
+
           const isChecked = i < studentStreak;
           const isCurrent = i === studentStreak;
           return (
