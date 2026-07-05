@@ -104,25 +104,25 @@ function StreakModalContent({ studentStreak, setExpandedCard }) {
 
   return (
     <div className="w-full p-4 pt-5 pb-4 flex flex-col items-center justify-center relative">
-      <div className="relative flex flex-col items-center justify-center mb-0 mt-2">
-        {/* Fire Animation On Top of Number */}
+      <div className="relative flex flex-row items-center justify-center mb-2 mt-2 gap-4">
+        {/* Fire Animation on Left */}
         <div 
-          className="streak-fire w-32 h-32 sm:w-40 sm:h-40 opacity-0 mb-[-1.5rem] sm:mb-[-2rem] relative z-20 pointer-events-none" 
+          className="streak-fire w-24 h-24 sm:w-32 sm:h-32 opacity-0 relative z-20 pointer-events-none" 
           style={{ 
             filter: fireFilter, 
-            transformOrigin: 'center bottom',
-            WebkitMaskImage: 'linear-gradient(to bottom, black 65%, transparent 95%)',
-            maskImage: 'linear-gradient(to bottom, black 65%, transparent 95%)'
+            transformOrigin: 'center center',
+            WebkitMaskImage: 'linear-gradient(to bottom, black 80%, transparent 100%)',
+            maskImage: 'linear-gradient(to bottom, black 80%, transparent 100%)'
           }}
         >
           <LottieFire />
         </div>
-        {/* Number */}
-        <h1 className="streak-number text-[70px] sm:text-[90px] leading-none font-extrabold mb-0 tracking-tighter relative z-10" style={{ color: streakColor, textShadow: '0 4px 0px rgba(0,0,0,0.3)' }}>
+        {/* Number on Right */}
+        <h1 className="streak-number text-[80px] sm:text-[100px] leading-none font-extrabold mb-0 tracking-tighter relative" style={{ color: streakColor, textShadow: '0 4px 0px rgba(0,0,0,0.3)' }}>
           0
         </h1>
       </div>
-      <h2 className="text-lg sm:text-xl font-bold mb-3 md:mb-5 tracking-wide mt-2" style={{ color: streakColor }}>session streak</h2>
+      <h2 className="text-lg sm:text-xl font-bold mb-3 md:mb-5 tracking-wide" style={{ color: streakColor }}>session streak</h2>
       
       {/* Milestones */}
       <div className="flex flex-wrap gap-x-1.5 gap-y-2 mb-4 w-full justify-center px-1">
