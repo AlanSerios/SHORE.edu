@@ -38,7 +38,7 @@ const STREAK_THEMES = [
   { color: '#ff9600', filter: 'none' }, // Orange (0-3)
   { color: '#b026ff', filter: 'hue-rotate(240deg) saturate(1.5)' }, // Violet (4-5)
   { color: '#0ea5e9', filter: 'hue-rotate(180deg) saturate(1.2)' }, // Blue (6-10)
-  { color: '#fbbf24', filter: 'hue-rotate(45deg) saturate(1.5) brightness(1.2)' } // Gold (11+)
+  { color: '#fbbf24', filter: 'hue-rotate(15deg) saturate(1.4) brightness(1.2)' } // Gold (11+)
 ];
 
 const LottieFire = ({ style = { width: '100%', height: '100%' }, className = "w-full h-full" }) => {
