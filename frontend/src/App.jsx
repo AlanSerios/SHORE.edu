@@ -109,9 +109,7 @@ function StreakModalContent({ studentStreak, setExpandedCard }) {
         <div 
           className="streak-fire w-24 h-24 sm:w-28 sm:h-28 opacity-0 relative z-20 pointer-events-none flex items-center justify-center" 
           style={{ 
-            filter: fireFilter, 
-            WebkitMaskImage: 'linear-gradient(to bottom, black 80%, transparent 100%)',
-            maskImage: 'linear-gradient(to bottom, black 80%, transparent 100%)'
+            filter: fireFilter
           }}
         >
           <LottieFire style={{ width: '100%', height: '100%', transform: 'scale(1.25)' }} />
