@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Megaphone, MessageSquare, Eye, Send, Bold, Italic, Link2, Image as ImageIcon, CheckCircle2, Trash2 } from 'lucide-react';
+import { Megaphone, MessageSquare, Eye, Send, Bold, Italic, Link2, Image as ImageIcon, CheckCircle2, Trash2, X } from 'lucide-react';
 import { cn } from '../utils';
 import { toast } from 'sonner';
 import AvatarBorder from './AvatarBorder';
@@ -25,7 +25,7 @@ const parseMarkdown = (text) => {
   return html;
 };
 
-const AnnouncementItem = ({ post, userRole, userEmail, userName, profilePicture, userEquippedBorder, renderAvatar, handleMarkAsRead, handleComment, commentText, setCommentText, handleDeleteAnnouncement }) => {
+const AnnouncementItem = ({ post, userRole, userEmail, userName, profilePicture, userEquippedBorder, renderAvatar, handleMarkAsRead, handleComment, commentText, setCommentText, handleDeleteAnnouncement, onImageClick }) => {
   const hasRead = post.read_by?.includes(userEmail);
   const postRef = useRef(null);
 
@@ -79,9 +79,15 @@ const AnnouncementItem = ({ post, userRole, userEmail, userName, profilePicture,
 
         {post.images && post.images.length > 0 && (
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-6">
-            {post.images.map((img, i) => (
-              <img key={i} src={img} alt="Announcement Attachment" className="w-full h-48 object-cover rounded-2xl border border-border/50" />
-            ))}
+              {post.images.map((img, i) => (
+                <img 
+                  key={i} 
+                  src={img} 
+                  alt="Announcement Attachment" 
+                  className="w-full h-48 object-cover rounded-2xl border border-border/50 cursor-pointer hover:opacity-90 transition-opacity" 
+                  onClick={() => onImageClick && onImageClick(img)}
+                />
+              ))}
           </div>
         )}
         
@@ -180,6 +186,9 @@ export default function AnnouncementsView({ userEmail, userName, userRole, profi
 
   // Comment State
   const [commentText, setCommentText] = useState({});
+
+  // Lightbox State
+  const [expandedImage, setExpandedImage] = useState(null);
 
   useEffect(() => {
     if (newContent === '' && textareaRef.current) {
@@ -285,8 +294,8 @@ export default function AnnouncementsView({ userEmail, userName, userRole, profi
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) {
-      toast.error('Image must be less than 2MB');
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('Image or GIF must be less than 10MB');
       return;
     }
     const reader = new FileReader();
@@ -400,8 +409,8 @@ export default function AnnouncementsView({ userEmail, userName, userRole, profi
                       <button onClick={() => document.execCommand('italic', false, null)} className="p-2 hover:bg-white rounded-md text-fg transition-colors" title="Italic"><Italic className="w-4 h-4" /></button>
                       <button onClick={() => { const url = prompt('Enter link URL:'); if (url) document.execCommand('createLink', false, url); }} className="p-2 hover:bg-white rounded-md text-fg transition-colors" title="Link"><Link2 className="w-4 h-4" /></button>
                       <div className="w-px h-6 bg-border/50 mx-2 self-center"></div>
-                      <button onClick={() => fileInputRef.current?.click()} className="p-2 hover:bg-white rounded-md text-fg transition-colors flex items-center gap-2 text-xs font-bold" title="Attach Image">
-                        <ImageIcon className="w-4 h-4" /> Attach Image
+                      <button onClick={() => fileInputRef.current?.click()} className="p-2 hover:bg-white rounded-md text-fg transition-colors flex items-center gap-2 text-xs font-bold" title="Attach Image or GIF">
+                        <ImageIcon className="w-4 h-4" /> Attach Image/GIF
                       </button>
                       <input type="file" ref={fileInputRef} onChange={handleImageUpload} accept="image/*" className="hidden" />
                     </div>
@@ -473,11 +482,41 @@ export default function AnnouncementsView({ userEmail, userName, userRole, profi
                 commentText={commentText}
                 setCommentText={setCommentText}
                 handleDeleteAnnouncement={handleDeleteAnnouncement}
+                onImageClick={setExpandedImage}
               />
             ))
           )}
         </div>
       </div>
+
+      {/* Lightbox Modal */}
+      <AnimatePresence>
+        {expandedImage && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setExpandedImage(null)}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 sm:p-8"
+          >
+            <button 
+              className="absolute top-6 right-6 text-white/70 hover:text-white p-2 transition-colors rounded-full hover:bg-white/10"
+              onClick={() => setExpandedImage(null)}
+            >
+              <X className="w-8 h-8" />
+            </button>
+            <motion.img
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()} // Prevent click from closing when clicking image
+              src={expandedImage}
+              alt="Expanded view"
+              className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
