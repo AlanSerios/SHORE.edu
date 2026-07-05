@@ -4,7 +4,7 @@ import { Megaphone, MessageSquare, Eye, Send, Bold, Italic, Link2, Image as Imag
 import { cn } from '../utils';
 import { toast } from 'sonner';
 import AvatarBorder from './AvatarBorder';
-import Editor from 'react-simple-wysiwyg';
+
 
 // A simple utility to parse basic markdown for rendering
 const parseMarkdown = (text) => {
@@ -180,6 +180,12 @@ export default function AnnouncementsView({ userEmail, userName, userRole, profi
 
   // Comment State
   const [commentText, setCommentText] = useState({});
+
+  useEffect(() => {
+    if (newContent === '' && textareaRef.current) {
+      textareaRef.current.innerHTML = '';
+    }
+  }, [newContent]);
 
   useEffect(() => {
     fetchAnnouncements();
@@ -386,21 +392,29 @@ export default function AnnouncementsView({ userEmail, userName, userRole, profi
                     <option value="volunteers">Volunteers Only</option>
                   </select>
                 </div>
-                
-                {/* Rich Text Editor & Image Attach */}
-                <div className="border border-border/50 rounded-xl overflow-hidden bg-canvas/30 focus-within:border-primary/50 transition-colors">
-                  <Editor 
-                    value={newContent} 
-                    onChange={(e) => setNewContent(e.target.value)} 
-                    containerProps={{ className: 'min-h-[150px] p-2 text-sm bg-transparent !border-none' }}
-                  />
-                  <div className="flex gap-2 p-2 bg-canvas/50 border-t border-border/50">
-                    <button onClick={() => fileInputRef.current?.click()} className="p-2 hover:bg-white rounded-md text-fg transition-colors flex items-center gap-2 text-xs font-bold" title="Attach Image">
-                      <ImageIcon className="w-4 h-4" /> Attach Image
-                    </button>
-                    <input type="file" ref={fileInputRef} onChange={handleImageUpload} accept="image/*" className="hidden" />
+                                {/* Rich Text Editor & Image Attach */}
+                  <div className="border border-border/50 rounded-xl overflow-hidden bg-canvas/30 focus-within:border-primary/50 transition-colors flex flex-col">
+                    {/* Toolbar */}
+                    <div className="flex gap-2 p-2 bg-canvas/50 border-b border-border/50">
+                      <button onClick={() => document.execCommand('bold', false, null)} className="p-2 hover:bg-white rounded-md text-fg transition-colors" title="Bold"><Bold className="w-4 h-4" /></button>
+                      <button onClick={() => document.execCommand('italic', false, null)} className="p-2 hover:bg-white rounded-md text-fg transition-colors" title="Italic"><Italic className="w-4 h-4" /></button>
+                      <button onClick={() => { const url = prompt('Enter link URL:'); if (url) document.execCommand('createLink', false, url); }} className="p-2 hover:bg-white rounded-md text-fg transition-colors" title="Link"><Link2 className="w-4 h-4" /></button>
+                      <div className="w-px h-6 bg-border/50 mx-2 self-center"></div>
+                      <button onClick={() => fileInputRef.current?.click()} className="p-2 hover:bg-white rounded-md text-fg transition-colors flex items-center gap-2 text-xs font-bold" title="Attach Image">
+                        <ImageIcon className="w-4 h-4" /> Attach Image
+                      </button>
+                      <input type="file" ref={fileInputRef} onChange={handleImageUpload} accept="image/*" className="hidden" />
+                    </div>
+                    
+                    {/* ContentEditable Area */}
+                    <div 
+                      ref={textareaRef}
+                      contentEditable
+                      className="min-h-[150px] p-4 text-sm outline-none resize-y overflow-y-auto"
+                      onInput={(e) => setNewContent(e.currentTarget.innerHTML)}
+                      onBlur={(e) => setNewContent(e.currentTarget.innerHTML)}
+                    />
                   </div>
-                </div>
 
                 {/* Attached Images Preview */}
                 {attachedImages.length > 0 && (
