@@ -41,10 +41,10 @@ const STREAK_THEMES = [
   { color: '#fbbf24', filter: 'hue-rotate(45deg) saturate(1.5) brightness(1.2)' } // Gold (11+)
 ];
 
-const LottieFire = () => {
+const LottieFire = ({ style = { width: '100%', height: '100%' }, className = "w-full h-full" }) => {
   const options = { animationData: fireAnimation, loop: true, autoplay: true };
-  const { View } = useLottie(options, { width: '100%', height: '100%', transform: 'scale(1.3) translateY(12%)' });
-  return <div className="w-full h-full overflow-hidden">{View}</div>;
+  const { View } = useLottie(options, style);
+  return <div className={className}>{View}</div>;
 };
 
 function StreakModalContent({ studentStreak, setExpandedCard }) {
@@ -103,45 +103,47 @@ function StreakModalContent({ studentStreak, setExpandedCard }) {
   }, [studentStreak]);
 
   return (
-    <div className="w-full p-5 pt-6 pb-5 flex flex-col items-center justify-center relative">
-      {/* Fire Animation */}
-      <div 
-        className="streak-fire w-24 h-24 sm:w-28 sm:h-28 relative mb-0 opacity-0" 
-        style={{ filter: fireFilter, transformOrigin: 'center bottom' }}
-      >
-        <LottieFire />
+    <div className="w-full p-4 pt-5 pb-4 flex flex-col items-center justify-center relative">
+      <div className="relative flex flex-col items-center justify-center mb-0 mt-2">
+        {/* Fire Animation Behind Number */}
+        <div 
+          className="streak-fire absolute bottom-2 w-32 h-32 sm:w-40 sm:h-40 opacity-0 -z-10" 
+          style={{ filter: fireFilter, transformOrigin: 'center bottom' }}
+        >
+          <LottieFire />
+        </div>
+        {/* Number */}
+        <h1 className="streak-number text-[70px] sm:text-[90px] leading-none font-extrabold mb-0 tracking-tighter" style={{ color: streakColor, textShadow: '0 4px 0px rgba(0,0,0,0.3)' }}>
+          0
+        </h1>
       </div>
-      {/* Number */}
-      <h1 className="streak-number text-[60px] sm:text-[80px] leading-none font-extrabold mb-0 tracking-tighter" style={{ color: streakColor, textShadow: '0 4px 0px rgba(0,0,0,0.3)' }}>
-        0
-      </h1>
-      <h2 className="text-lg sm:text-2xl font-bold mb-4 md:mb-6 tracking-wide" style={{ color: streakColor }}>session streak</h2>
+      <h2 className="text-lg sm:text-xl font-bold mb-3 md:mb-5 tracking-wide" style={{ color: streakColor }}>session streak</h2>
       
       {/* Milestones */}
-      <div className="flex flex-wrap gap-x-1.5 gap-y-2 sm:gap-y-3 sm:gap-x-2 mb-4 md:mb-8 w-full justify-center px-1">
+      <div className="flex flex-wrap gap-x-1.5 gap-y-2 mb-4 w-full justify-center px-1">
         {['OB', 'S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7', 'S8', 'ME', 'GR'].map((day, i) => {
           const isChecked = i < studentStreak;
           const isCurrent = i === studentStreak;
           return (
-            <div key={day} className="streak-milestone flex flex-col items-center gap-1 w-[32px] sm:w-[36px] opacity-0">
+            <div key={day} className="streak-milestone flex flex-col items-center gap-1 w-[30px] sm:w-[34px] opacity-0">
               <span className={cn("font-bold text-[9px] sm:text-[10px]", isCurrent ? "" : "text-white/40")} style={isCurrent ? { color: streakColor } : {}}>{day}</span>
-              <div className={cn("w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center border-[2px]", 
+              <div className={cn("w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center border-[2px]", 
                 !isChecked && "bg-white/5 border-white/5"
               )} style={isChecked ? { backgroundColor: streakColor, borderColor: streakColor, color: '#000' } : {}}>
-                {isChecked && <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6 stroke-black stroke-[1.5]" style={{ fill: streakColor }} />}
+                {isChecked && <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-black" />}
               </div>
             </div>
           );
         })}
       </div>
       
-      <p className="text-white/70 font-medium text-xs sm:text-base mb-4 sm:mb-6 text-center px-2">You're making great progress!</p>
+      <p className="text-white/70 font-medium text-xs sm:text-base mb-3 sm:mb-5 text-center px-2">You're making great progress!</p>
       
       <motion.button 
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
         onClick={() => setExpandedCard(null)}
-        className="streak-btn opacity-0 w-full max-w-[240px] bg-[#1cb0f6] hover:bg-[#1899d6] text-white font-extrabold text-sm sm:text-base py-2.5 sm:py-3 rounded-2xl uppercase tracking-widest transition-colors shadow-[0_4px_0_#1899d6]"
+        className="streak-btn w-[90%] max-w-[240px] bg-[#1cb0f6] hover:bg-[#1899d6] text-white font-extrabold text-sm sm:text-base py-3 sm:py-3.5 rounded-2xl uppercase tracking-widest transition-colors shadow-[0_4px_0_#1899d6]"
       >
         Continue
       </motion.button>
