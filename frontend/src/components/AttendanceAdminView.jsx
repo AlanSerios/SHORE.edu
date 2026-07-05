@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Camera, CheckCircle2, Clock, ChevronDown, Activity, ScanLine, CameraOff, Trash2,
   TrendingUp, TrendingDown, Minus, BarChart3, Users, ClipboardList,
-  Download, Search, Filter
+  Download, Search, Filter, Lightbulb
 } from 'lucide-react';
 import { cn } from '../utils';
 import { toast } from 'sonner';
