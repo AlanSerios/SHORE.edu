@@ -25,7 +25,7 @@
 
 ## 📖 About SHORE-Skwela
 
-**SHORE-Skwela** (headed and founded by **Alan Serios** in partnership with community scholars, the **ISDA Bulua Association**, and the **Sangguniang Kabataan of Barangay Bulua**) is an award-winning grassroots educational initiative based in **Cagayan de Oro City, Philippines**.
+**SHORE-Skwela** (led by Head of Organization **Alan Serios** in partnership with community scholars, the **ISDA Bulua Association**, and the **Sangguniang Kabataan of Barangay Bulua**) is an award-winning grassroots educational initiative based in **Cagayan de Oro City, Philippines**.
 
 The mission of SHORE-Skwela is to democratize quality academic mentorship, college entrance exam preparation (CETs), and government/private scholarship coaching (including DOST-SEI, City Scholarships, and CHED) for senior high school students across partner institutions like **Bulua National High School**.
 
@@ -328,7 +328,7 @@ RESULTS: 16/16 PASSED (100.0%) | 0 FAILED
 
 ## 👥 Organization & Leadership
 
-- **Founder & Head of Organization**: **Alan Serios**
+- **Head of Organization & Platform Lead**: **Alan Serios**
 - **Partner Organizations**: 
   - **ISDA (IsKolar sa Dakbayan) Bulua Association**
   - **Sangguniang Kabataan (SK) of Barangay Bulua**
