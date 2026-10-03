@@ -29,11 +29,11 @@
 
 Headed by college scholars and student leaders across Cagayan de Oro universities, SHORE-Skwela’s mission is to equip aspiring scholars—particularly from financially challenged backgrounds, public senior high schools, and Out-of-School Youth (OSY)—with the knowledge, mastery, and confidence to ace competitive college entrance tests (CETs) and scholarship examinations (including DOST-SEI, CHED, SM Foundation, City Scholarships, and university grants).
 
-Rooted in the motto **"PASAR SHORE"**, the organization blends rigorous academic review with values formation, peer mentorship, and leadership development.
+Rooted in the iconic tagline **"BASTA SHORE, PASAR!"**, the organization blends rigorous academic review with values formation, peer mentorship, and leadership development.
 
 ```
                   ┌────────────────────────────────────────┐
-                  │              PASAR SHORE               │
+                  │          BASTA SHORE, PASAR!           │
                   │   Where Hope Meets Real Opportunity    │
                   └───────────────────┬────────────────────┘
                                       │
@@ -383,6 +383,6 @@ Distributed under the **MIT License**. See `LICENSE` for details.
 
 <div align="center">
 
-*PASAR SHORE — Raising our sail to reclaim, rebuild, and reimagine education across Cagayan de Oro and Northern Mindanao.*
+*BASTA SHORE, PASAR! — Raising our sail to reclaim, rebuild, and reimagine education across Cagayan de Oro and Northern Mindanao.*
 
 </div>
