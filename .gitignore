@@ -1,18 +1,61 @@
-# Python Virtual Environment
+# ==========================================
+# SHORE Web App — Git Ignore Rules
+# Clean repository configuration for GitHub
+# ==========================================
+
+# 1. Virtual Environments (Local only)
 venv/
+**/venv/
+ENV/
+env/
+
+# 2. Python Bytecode & Cache
 __pycache__/
-*.pyc
+**/__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
 
-# Node Modules
-frontend/node_modules/
-frontend/dist/
+# 3. Node Modules & Build Artifacts (Vercel builds dist on deployment)
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+.vite/
+.output/
 
-# OS Files
+# 4. Secret Credentials & Keys (NEVER COMMIT TO GITHUB)
+firebase_key.json
+**/firebase_key.json
+*.pem
+*.key
+.env
+.env.*
+!.env.example
+
+# 5. Legacy Code & Heavy Archives (Kept locally only)
+archive/
+**/archive/
+SHORE.edu/
+**/SHORE.edu/
+
+# 6. IDE, AI Agent & Tool Metadata
+.agents/
+.data/
+.vscode/
+.idea/
+
+# 7. OS & System Files
 .DS_Store
 Thumbs.db
+ehthumbs.db
+desktop.ini
 
-# Database and Trackers
-/*.xlsx
-/*.csv
-firebase_key.json
-.data/
+# 8. Temporary Data, Export Logs & Test Artifacts
+*.log
+*.xlsx
+*.csv
+*.pdf
+!frontend/public/*.pdf
+test_*
+downloaded_tracker_data.json

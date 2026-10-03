@@ -1,0 +1,7 @@
+﻿flask
+openpyxl
+reportlab
+matplotlib
+gunicorn
+firebase-admin
+flask-cors

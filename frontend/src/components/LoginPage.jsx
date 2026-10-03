@@ -31,7 +31,10 @@ export default function LoginPage({ onLogin }) {
       return result; // return early, don't login automatically
     }
     
-    onLogin(result.user);
+    if (result.token) {
+      localStorage.setItem('shore_token', result.token);
+    }
+    onLogin(result.user, result.token);
   };
 
   return (

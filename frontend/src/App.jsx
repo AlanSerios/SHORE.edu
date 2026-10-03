@@ -16,15 +16,16 @@ import ScholarshipsView from './components/ScholarshipsView';
 import SettingsView from './components/SettingsView';
 import AttendanceStudentView from './components/AttendanceStudentView';
 import AttendanceAdminView from './components/AttendanceAdminView';
-import { LogOut, Users, Menu, Award, Settings, ClipboardCheck, GraduationCap, Shield, Megaphone, Star, Layers, ShoppingBag } from 'lucide-react';
+import { LogOut, Users, Menu, Award, Settings, ClipboardCheck, GraduationCap, Shield, Megaphone, Star, Layers, ShoppingBag, LifeBuoy } from 'lucide-react';
 import ManageClassView from './components/ManageClassView';
 import ManageTeamView from './components/ManageTeamView';
 import AnnouncementsView from './components/AnnouncementsView';
 import RecitationsAdminView from './components/RecitationsAdminView';
 import ShopView from './components/ShopView';
 import TicketsView from './components/TicketsView';
-import { LifeBuoy } from 'lucide-react';
 import AvatarBorder from './components/AvatarBorder';
+import PWAInstallBanner from './components/PWAInstallBanner';
+import OfflineIndicator from './components/OfflineIndicator';
 
 const REPORT_TYPES = [
   { id: 'pre', label: 'Pre-Test Only' },
@@ -467,7 +468,7 @@ export default function App() {
         body: JSON.stringify({ email: userEmail })
       }).catch(console.error);
     }
-  }, [currentView, unreadAnnouncements, userEmail]);
+  }, [currentView, userEmail]);
 
   React.useEffect(() => {
     const handleHashChange = () => {
@@ -539,15 +540,15 @@ export default function App() {
   useEffect(() => {
     if (userEmail && globalUsers.length > 0) {
       const u = globalUsers.find(x => x.email === userEmail);
-      if (u && u.equippedBorder !== equippedBorder) {
+      if (u && u.equippedBorder !== undefined && u.equippedBorder !== equippedBorder) {
         setEquippedBorder(u.equippedBorder);
       }
     }
-  }, [globalUsers, userEmail, equippedBorder]);
+  }, [globalUsers, userEmail]);
 
   const fileInputRef = useRef(null);
 
-  const handleLogin = (user) => {
+  const handleLogin = (user, token) => {
     setIsAuthenticated(true);
     setUserEmail(user.email);
     setUserRole(user.role);
@@ -557,6 +558,9 @@ export default function App() {
     setCurrentView('dashboard');
     if (user.role === 'student' && user.name) {
       setSelectedStudent(user.name);
+    }
+    if (token) {
+      localStorage.setItem('shore_token', token);
     }
     localStorage.setItem('shore_user', JSON.stringify(user));
   };
@@ -569,6 +573,7 @@ export default function App() {
     setEquippedBorder(null);
     setCurrentView('dashboard');
     localStorage.removeItem('shore_user');
+    localStorage.removeItem('shore_token');
   };
 
   const handleFileUpload = async (e) => {
@@ -839,6 +844,7 @@ export default function App() {
   const { color: streakCardColor, filter: streakCardFilter } = STREAK_THEMES[streakThemeIndex];
 
   return (
+    <>
     <AnimatePresence mode="wait">
       {!isAuthenticated ? (
         <motion.div
@@ -994,10 +1000,13 @@ export default function App() {
                    ].filter(i => i.show).map((item) => (
                       <div 
                         key={item.id}
-                        onClick={() => setCurrentView(item.id)}
+                        onClick={() => {
+                          if (item.onClick) item.onClick();
+                          else setCurrentView(item.id);
+                        }}
                         className="relative flex items-center cursor-pointer group rounded-xl overflow-hidden mt-1"
                       >
-                        {currentView === item.id && (
+                        {currentView === item.id && !item.isAction && (
                           <motion.div 
                             layoutId="active-sidebar-pill"
                             className="absolute inset-0 bg-primary shadow-sm"
@@ -1568,7 +1577,7 @@ export default function App() {
         ) : currentView === 'calendar' ? (
           <CalendarView userRole={userRole} />
         ) : currentView === 'scholarships' ? (
-          <ScholarshipsView userRole={userRole} />
+          <ScholarshipsView userRole={userRole} userEmail={userEmail} />
         ) : currentView === 'settings' ? (
           <SettingsView 
             userEmail={userEmail} 
@@ -1592,8 +1601,6 @@ export default function App() {
           <ShopView userEmail={userEmail} userRole={userRole} />
         ) : currentView === 'recitations' ? (
           <RecitationsAdminView />
-        ) : currentView === 'scholarships' ? (
-          <ScholarshipsView />
         ) : currentView === 'tickets' ? (
           <TicketsView userEmail={userEmail} userName={userName} userRole={userRole} />
         ) : (
@@ -1648,11 +1655,15 @@ export default function App() {
                           { id: 'manageteam',   icon: Shield,          label: 'Team',   show: userRole === 'admin' },
                           { id: 'accounts',     icon: Users,           label: 'Accounts',      show: userRole === 'admin' },
                        ].filter(i => i.show).map((item) => (
-                          <button
+                          <div 
                             key={item.id}
                             onClick={() => {
-                              setCurrentView(item.id);
-                              setIsMenuSheetOpen(false);
+                              if (item.onClick) {
+                                item.onClick();
+                              } else {
+                                setCurrentView(item.id);
+                                setIsMenuSheetOpen(false);
+                              }
                             }}
                             className="bg-canvas border border-border rounded-2xl p-3 flex flex-col items-center justify-center gap-2 shadow-sm text-fg active:scale-[0.98] transition-transform"
                           >
@@ -1660,7 +1671,7 @@ export default function App() {
                                 <item.icon className="w-5 h-5" />
                              </div>
                              <span className="text-[10px] font-semibold">{item.label}</span>
-                          </button>
+                          </div>
                        ))}
                     </div>
                  </div>
@@ -1747,5 +1758,8 @@ export default function App() {
     </motion.div>
       )}
     </AnimatePresence>
+    <OfflineIndicator />
+    <PWAInstallBanner />
+    </>
   );
 }

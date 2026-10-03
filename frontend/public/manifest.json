@@ -1,0 +1,32 @@
+{
+  "short_name": "SHORE Skwela",
+  "name": "SHORE Skwela Hub - Educational Platform",
+  "description": "Mentorship, Diagnostic Tracker, Scholarships, and Student Rewards Portal for SHORE Skwela.",
+  "icons": [
+    {
+      "src": "/shore_logo.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any"
+    },
+    {
+      "src": "/SHORE5.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/favicon.jpg",
+      "type": "image/jpeg",
+      "sizes": "180x180",
+      "purpose": "any"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#0B132B",
+  "theme_color": "#0B132B",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "categories": ["education", "productivity"]
+}

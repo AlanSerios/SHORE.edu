@@ -6,6 +6,37 @@ import { Toaster } from 'sonner'
 import App from './App.jsx'
 import './index.css'
 
+// -------------------------------------------------------------
+// JWT AUTH INTERCEPTOR: Attaches Authorization Bearer token to /api/ requests
+// -------------------------------------------------------------
+const originalFetch = window.fetch;
+window.fetch = async function (url, options = {}) {
+  const token = localStorage.getItem('shore_token');
+  if (typeof url === 'string' && url.startsWith('/api') && token) {
+    options = { ...options };
+    options.headers = {
+      ...(options.headers || {}),
+      'Authorization': `Bearer ${token}`
+    };
+  }
+  return originalFetch(url, options);
+};
+
+// -------------------------------------------------------------
+// PWA SERVICE WORKER REGISTRATION
+// -------------------------------------------------------------
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js')
+      .then((reg) => {
+        console.log('[PWA] Service Worker registered with scope:', reg.scope);
+      })
+      .catch((err) => {
+        console.warn('[PWA] Service Worker registration failed:', err);
+      });
+  });
+}
+
 class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
@@ -34,6 +65,6 @@ createRoot(document.getElementById('root')).render(
     <ErrorBoundary>
       <App />
     </ErrorBoundary>
-    <Toaster position="bottom-right" theme="light" />
+    <Toaster position="top-right" richColors closeButton theme="light" />
   </StrictMode>,
 )
