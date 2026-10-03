@@ -1,11 +1,11 @@
-# 🌊 SHORE.edu — SHORE-Skwela Educational Platform
+# 🌊 SHORE.edu — The Official SHORE-Skwela Platform
 
 <div align="center">
 
 ![SHORE Logo](frontend/public/shore_logo.png)
 
-### *Student Holistic Outcomes & Records Engine*
-**The Official Academic & Student Management Platform for the SHORE-Skwela Initiative**
+### **Supplementary and Holistic Opportunity to Refresh One's e-Skwela**
+*The Official Academic & Student Management Platform for the SHORE-Skwela Organization*
 
 [![React](https://img.shields.io/badge/React-19.0-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev/)
 [![Vite](https://img.shields.io/badge/Vite-5.0-646CFF?style=for-the-badge&logo=vite&logoColor=white)](https://vitejs.dev/)
@@ -15,9 +15,9 @@
 [![Firebase](https://img.shields.io/badge/Firebase-Realtime_DB-FFCA28?style=for-the-badge&logo=firebase&logoColor=black)](https://firebase.google.com/)
 [![PWA Ready](https://img.shields.io/badge/PWA-Offline_Ready-5A0FC8?style=for-the-badge&logo=pwa&logoColor=white)](https://web.dev/progressive-web-apps/)
 
-**Recognized at the 2023 Kinanao Awards as an Outstanding Community-Based Educational Project in Cagayan de Oro City.**
+**Registered with the National Youth Commission (NYC - YORP) & Accredited Partner of the Oro Youth Council.**
 
-[Live Web App](https://shore-backend.onrender.com) • [About SHORE-Skwela](#-about-shore-skwela) • [Architecture](#-system-architecture) • [Features](#-core-platform-modules) • [Setup Guide](#-getting-started)
+[Live Application](https://shore-backend.onrender.com) • [About SHORE-Skwela](#-about-shore-skwela) • [Track Record & Impact](#-track-record--impact) • [Features](#-core-platform-modules) • [Architecture](#-system-architecture) • [Getting Started](#-getting-started)
 
 </div>
 
@@ -25,18 +25,52 @@
 
 ## 📖 About SHORE-Skwela
 
-**SHORE-Skwela** (led by Head of Organization **Alan Serios** in partnership with community scholars, the **ISDA Bulua Association**, and the **Sangguniang Kabataan of Barangay Bulua**) is an award-winning grassroots educational initiative based in **Cagayan de Oro City, Philippines**.
+**SHORE-Skwela** (*Supplementary and Holistic Opportunity to Refresh One's e-Skwela*) is an **independent, youth-led non-profit educational organization** founded in Barangay Bulua, Cagayan de Oro City, Philippines.
 
-The mission of SHORE-Skwela is to democratize quality academic mentorship, college entrance exam preparation (CETs), and government/private scholarship coaching (including DOST-SEI, City Scholarships, and CHED) for senior high school students across partner institutions like **Bulua National High School**.
+Headed by college scholars and student leaders across Cagayan de Oro universities, SHORE-Skwela’s mission is to equip aspiring scholars—particularly from financially challenged backgrounds, public senior high schools, and Out-of-School Youth (OSY)—with the knowledge, mastery, and confidence to ace competitive college entrance tests (CETs) and scholarship examinations (including DOST-SEI, CHED, SM Foundation, City Scholarships, and university grants).
 
-In **2023**, SHORE-Skwela was honored with the prestigious **Kinanao Award for Outstanding Community-Based Project** by the Cagayan de Oro City Scholarships Office for its transformative impact on student outcomes.
+Rooted in the motto **"PASAR SHORE"**, the organization blends rigorous academic review with values formation, peer mentorship, and leadership development.
 
-### 🎯 Why this Platform was Built
-To scale the initiative and replace manual paperwork, Alan Serios engineered the **SHORE Web Application** as an end-to-end digital command center:
-1. **Track Real Academic Growth**: Automatically calculate pre-test vs. post-test score gains and subject competency radials across cohorts.
-2. **Automate Grading**: Scan physical bubble-sheet mock exams instantly via Computer Vision (OMR).
-3. **Gamify Attendance & Learning**: Keep students motivated with attendance streaks, recitation leaderboards, and rewards shop cosmetics.
-4. **Resilience in Low-Connectivity**: Provide an offline-first Progressive Web App (PWA) so students in regional Mindanao can access notes and requirements with zero mobile data.
+```
+                  ┌────────────────────────────────────────┐
+                  │              PASAR SHORE               │
+                  │   Where Hope Meets Real Opportunity    │
+                  └───────────────────┬────────────────────┘
+                                      │
+        ┌─────────────────────────────┼─────────────────────────────┐
+        ▼                             ▼                             ▼
+  📚 Academic Review            🤝 Peer Mentorship          💡 Values & Leadership
+  • Math, Science, English      • University Scholars       • Community Service
+  • Abstract Reasoning (4.0)    • 1-on-1 Consultations      • Ethical Leadership
+  • Simulated Mock Exams        • College Life Navigation   • Volunteerism Culture
+```
+
+---
+
+## 🏆 Track Record & Accolades
+
+### 📈 Proven Impact Across Cohorts
+- **100% Passing Rate**: Achieved a perfect 100% scholarship qualification rate in its first two years of operations (2021–2022).
+- **83% Overall Success Rate**: Maintained an 83% multi-year success rate across 100+ scholars entering institutions such as **Xavier University (Ateneo de Cagayan)**, **USTP**, **MSU-IIT**, **Liceo de Cagayan**, and **Cagayan de Oro College**.
+- **Multiple Scholarship Qualifiers**: High proportion of scholars earning simultaneous offers from national programs (DOST, CHED) and local LGU/private grants.
+
+### 🎖️ Major Institutional Recognitions
+- 🏆 **Most Outstanding Project of the Year** — Kinanao Awards 2023 *(City Scholarships Office, Cagayan de Oro)*
+- 🏆 **Outstanding Emerging Youth Organization** — 2025 Kasadya Awards *(Oro Youth Council)*
+- 🏆 **Outstanding City-wide Project for Social Involvement** — 2025 Kasadya Awards *(Oro Youth Council)*
+- 🏆 **Most Sustainable Project** — Pinas Forward e-Bayanihan Ideathon 2023 *(Taiwan Foundation)*
+- 🏛️ **National Youth Commission (NYC)**: Officially registered under the **Youth Organization Registration Program (YORP)**.
+
+---
+
+## 🎯 Why this Platform was Built
+
+To scale SHORE-Skwela from manual tracking and paper logs into a data-driven, regional educational ecosystem, Head of Organization **Alan Serios** engineered the **SHORE Web Application**:
+
+1. **Automate Assessment & Diagnostics**: Eliminate grading bottlenecks by scanning physical bubble sheets via Computer Vision (OMR) and calculating baseline vs. diagnostic score deltas ($Score_{post} - Score_{pre}$).
+2. **Gamify Student Retention**: Foster consistent study habits through animated attendance streaks, recitation leaderboards, and a rewards coin economy with customizable avatar borders.
+3. **Bridge the Digital Divide**: Built as an **Offline-First Progressive Web App (PWA)** with service worker caching, ensuring students in low-connectivity areas across Mindanao can access schedules, materials, and scholarship trackers with zero cellular data.
+4. **Institutional Reporting**: Enable rapid PDF generation of comprehensive student report cards for parents, school administrators, and partner organizations.
 
 ---
 
@@ -46,37 +80,37 @@ To scale the initiative and replace manual paperwork, Alan Serios engineered the
 ┌──────────────────────────────────────────────────────────────────────────┐
 │                        SHORE.edu Command Center                          │
 ├───────────────────┬──────────────────────────────┬───────────────────────┤
-│ 📊 Academic Engine │ 👥 Operations & Cohorts      │ 🎮 Gamification & PWA │
+│ 📊 Academic Engine │ 👥 Cohort & Student Ops      │ 🎮 Gamification & PWA │
 ├───────────────────┼──────────────────────────────┼───────────────────────┤
-│ • Pre/Post Deltas │ • Admin & Volunteer Portals  │ • Session Streaks     │
-│ • OMR Bubble Scan │ • QR Attendance Logging      │ • Recitations Podium  │
-│ • Subject Radars  │ • Real-time Announcements    │ • Rewards Points Shop │
-│ • PDF Generators  │ • Scholarship Trackers       │ • Offline PWA Shell   │
+│ • Pre/Post Deltas │ • Admin & Volunteer Portals  │ • Lottie Fire Streaks │
+│ • OMR Bubble Scan │ • QR Attendance Check-In     │ • Recitations Podium  │
+│ • Subject Radars  │ • Real-time Announcements    │ • Rewards Avatar Shop │
+│ • PDF Generator   │ • Scholarship Requirement DB │ • Offline PWA Shell   │
 └───────────────────┴──────────────────────────────┴───────────────────────┘
 ```
 
-### 1. 📊 Academic Performance & Pre/Post-Test Analytics
-- **Continuous Evaluation**: Tracks student baseline competency (Pre-Test) and measures diagnostic growth post-intervention (Post-Test).
-- **Competency Radar Graphs**: Visual breakdowns across Science, Mathematics, English, and Abstract Reasoning.
-- **Automated PDF Reports**: Compiles institutional progress summaries via Python ReportLab for parent-teacher reviews.
+### 1. 📊 Academic Analytics & Diagnostic Engine
+- **Pre-Test & Post-Test Analytics**: Continuous tracking of baseline vs. post-intervention score deltas.
+- **Subject Competency Radars**: Visual competence mapping across Mathematics, Science, English, and Abstract Reasoning.
+- **Automated PDF Reports**: Compiles institutional progress summaries via Python ReportLab.
 
 ### 2. 📷 Optical Mark Recognition (OMR) Scanner
-- **Camera & Photo Scanner**: Instant browser-based optical evaluation of printed bubble sheets for mock entrance exams, eliminating hours of manual grading.
+- **Camera & Photo Scanner**: Instant browser-based optical evaluation of printed bubble sheets for simulated mock entrance exams.
 
 ### 3. 🛡️ Attendance Engine & Milestone Streaks
-- **QR & Tap Check-in**: Fast session attendance for large classrooms.
-- **Streak Celebrations**: Gamified attendance tracker featuring animated Lottie flame milestones (OB, S1–S8, Midterms, Graduation).
+- **QR & Single-Tap Check-in**: Streamlined session attendance for students and volunteer tutors.
+- **Milestone Celebrations**: Dynamic Lottie flame animations tracking attendance milestones (OB, S1–S8, Midterms, Graduation).
 
-### 4. 🏆 Recitations & Live Leaderboard
-- **Active Participation Scoring**: Volunteers award live points during lectures.
-- **Podium Rankings**: Real-time leaderboard with confetti particle physics to boost classroom engagement.
+### 4. 🏆 Live Recitations & Podium Leaderboard
+- **Participation Points**: Volunteers award live points during lectures.
+- **Interactive Leaderboard**: Real-time podium rankings with celebratory confetti particle effects.
 
-### 5. 🛍️ Student Economy & Profile Customization
-- **In-App Rewards Shop**: Points earned from attendance and recitations can be redeemed for school supplies, load allowance, and avatar borders (Emerald, Neon Wave, Gold Aureole, Cyber Pulse).
-- **Dynamic Profile Borders**: Custom animated SVG rings surrounding student avatars.
+### 5. 🛍️ Points Economy & Avatar Customization
+- **In-App Shop**: Students redeem academic points for digital perks and cosmetic profile borders (Emerald, Neon Wave, Gold Aureole, Cyber Pulse).
+- **Dynamic Avatar Frames**: Custom SVG animated rings surrounding student profile photos.
 
 ### 6. 🎓 Scholarship & Opportunity Tracker
-- **Requirements Checklist**: Tracks deadlines, GPA prerequisites, and submission status for DOST-SEI, CHED, and local LGU scholarships.
+- **Requirements Database**: Tracks deadlines, GPA prerequisites, and submission status for DOST-SEI, CHED, City Scholarships, and private grants.
 
 ### 7. 📱 Offline-Resilient Progressive Web App (PWA)
 - **Zero-Data Mode**: Pre-cached app shell with offline network fallback, allowing students with poor data reception to review saved scholarship requirements and class schedules.
@@ -119,7 +153,7 @@ To scale the initiative and replace manual paperwork, Alan Serios engineered the
 
 ## 🛠️ Technology Stack
 
-| Domain | Technology | Purpose |
+| Layer | Technology | Purpose |
 |---|---|---|
 | **Frontend Framework** | **React 19** + **Vite 5** | High-performance reactive client with instant HMR |
 | **Styling & Design** | **Tailwind CSS 3.4** + **Google Fonts** | Inter & Geist typography, sleek card UI, custom scrollbars |
@@ -326,15 +360,20 @@ RESULTS: 16/16 PASSED (100.0%) | 0 FAILED
 
 ---
 
-## 👥 Organization & Leadership
+## 👥 Organization & Community Ecosystem
 
-- **Head of Organization & Platform Lead**: **Alan Serios**
-- **Partner Organizations**: 
-  - **ISDA (IsKolar sa Dakbayan) Bulua Association**
-  - **Sangguniang Kabataan (SK) of Barangay Bulua**
-  - **Bulua National High School (BNHS)**
-  - **Cagayan de Oro City Scholarships Program**
-- **Accolades**: 🏆 *Outstanding Project in Community-Based Category — 2023 Kinanao Awards*
+- **Head of Organization & Lead Developer**: **Alan Serios**
+- **Founder**: **Crist Leyson Millare** *(Magis 18 Awardee 2024, Kinanao Exemplar Awardee 2023 & 2024)*
+- **Affiliation**: Independent Youth Organization (formerly partnered with ISDA Bulua Association and SK Bulua)
+- **Accreditations & Registrations**: 
+  - **National Youth Commission (NYC)** — *Youth Organization Registration Program (YORP)*
+  - **Oro Youth Council** — *Accredited Partner Organization*
+- **Key Community & Educational Partners**:
+  - Bulua National High School (BNHS)
+  - City Education Development Office (CEDO)
+  - ISDA Iponan Association
+  - StudyCo
+  - CDO Golden Eagles Club, Virginia Inc., Estenzo Images, Tabang Sikad, Balaod Mindanao, 3Zero Club Philippines
 
 ---
 
@@ -344,6 +383,6 @@ Distributed under the **MIT License**. See `LICENSE` for details.
 
 <div align="center">
 
-*SHORE.edu — Empowering educators, scholars, and future leaders across Northern Mindanao.*
+*PASAR SHORE — Raising our sail to reclaim, rebuild, and reimagine education across Cagayan de Oro and Northern Mindanao.*
 
 </div>
