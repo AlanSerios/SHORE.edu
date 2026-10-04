@@ -412,6 +412,31 @@ def get_all_users():
     users = load_json(USERS_FILE)
     return {"users": users}
 
+@app.route('/api/users/change-password', methods=['POST'])
+def change_password():
+    data = request.json or {}
+    email = (data.get('email') or '').strip().lower()
+    current_password = data.get('current_password')
+    new_password = data.get('new_password')
+    
+    if not email:
+        return jsonify({"error": "Account email is required."}), 400
+    if not current_password:
+        return jsonify({"error": "Current password is required."}), 400
+    if not new_password or len(str(new_password)) < 6:
+        return jsonify({"error": "New password must be at least 6 characters long."}), 400
+
+    users = load_json(USERS_FILE)
+    for i, user in enumerate(users):
+        if (user.get('email') or '').strip().lower() == email:
+            if not safe_str_compare(user.get('password'), current_password):
+                return jsonify({"error": "Current password is incorrect."}), 400
+            users[i]['password'] = str(new_password)
+            save_json(USERS_FILE, users)
+            return jsonify({"success": True, "message": "Password changed successfully."}), 200
+            
+    return jsonify({"error": "User account not found."}), 404
+
 @app.route('/api/users/reset-password', methods=['POST'])
 def reset_password():
     data = request.json or {}

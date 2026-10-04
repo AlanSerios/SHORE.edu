@@ -1,17 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { format, startOfWeek, addDays, startOfMonth, endOfMonth, endOfWeek, isSameMonth, isSameDay, addMonths, subMonths, parseISO } from 'date-fns';
-import { ChevronLeft, ChevronRight, Plus, Trash2, X, Calendar as CalendarIcon } from 'lucide-react';
+import { format, startOfWeek, addDays, startOfMonth, endOfMonth, endOfWeek, isSameMonth, isSameDay, addMonths, subMonths, parseISO, differenceInDays } from 'date-fns';
+import { ChevronLeft, ChevronRight, Plus, Trash2, X, Calendar as CalendarIcon, Clock, Sparkles, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '../utils';
 
 const EVENT_TYPES = [
-  { id: 'events', label: 'Events', color: 'bg-yellow-400 text-yellow-950' },
-  { id: 'meeting', label: 'Meeting', color: 'bg-cyan-400 text-cyan-950' },
-  { id: 'activities', label: 'Activities', color: 'bg-emerald-500 text-white' },
-  { id: 'due', label: 'Due', color: 'bg-rose-500 text-white' },
-  { id: 'online_post', label: 'Online Post', color: 'bg-orange-500 text-white' },
-  { id: 'overdue', label: 'Overdue', color: 'bg-indigo-500 text-white' },
+  { id: 'events', label: 'Events', color: 'bg-amber-400 text-amber-950 border-amber-500/40', badge: 'bg-amber-400' },
+  { id: 'meeting', label: 'Meeting', color: 'bg-cyan-500 text-white border-cyan-600/40', badge: 'bg-cyan-500' },
+  { id: 'activities', label: 'Activities', color: 'bg-emerald-500 text-white border-emerald-600/40', badge: 'bg-emerald-500' },
+  { id: 'due', label: 'Due / Deadline', color: 'bg-rose-500 text-white border-rose-600/40', badge: 'bg-rose-500' },
+  { id: 'online_post', label: 'Online Post', color: 'bg-orange-500 text-white border-orange-600/40', badge: 'bg-orange-500' },
+  { id: 'overdue', label: 'Overdue', color: 'bg-indigo-600 text-white border-indigo-700/40', badge: 'bg-indigo-600' },
 ];
 
 export default function CalendarView({ userRole = 'admin' }) {
@@ -71,7 +71,7 @@ export default function CalendarView({ userRole = 'admin' }) {
     setIsSubmitting(true);
     const newEvent = {
       id: uuidv4(),
-      title: modalTitle,
+      title: modalTitle.trim(),
       date: format(modalDate, 'yyyy-MM-dd'),
       type: modalType,
       isHidden: modalHidden
@@ -81,26 +81,28 @@ export default function CalendarView({ userRole = 'admin' }) {
     }
 
     try {
-      await fetch('/api/events', {
+      const res = await fetch('/api/events', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newEvent)
       });
-      setEvents([...events, newEvent]);
-      setShowModal(false);
+      if (res.ok) {
+        setEvents([...events, newEvent]);
+        setShowModal(false);
+        setModalTitle('');
+        setModalEndDate('');
+      }
     } catch (error) {
-      console.error("Error saving event:", error);
+      console.error("Error creating event:", error);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleDeleteEvent = async (id, e) => {
-    if (e) e.stopPropagation();
-    if (!confirm('Delete this event?')) return;
+  const handleDeleteEvent = async (eventId) => {
     try {
-      await fetch(`/api/events/${id}`, { method: 'DELETE' });
-      setEvents(events.filter(ev => ev.id !== id));
+      await fetch(`/api/events/${eventId}`, { method: 'DELETE' });
+      setEvents(events.filter(e => e.id !== eventId));
       setShowDetailsModal(false);
     } catch (error) {
       console.error("Error deleting event:", error);
@@ -109,12 +111,12 @@ export default function CalendarView({ userRole = 'admin' }) {
 
   const handleUpdateEvent = async (e) => {
     e.preventDefault();
-    if (!editTitle.trim() || !selectedEvent) return;
+    if (!editTitle.trim()) return;
 
     setIsSubmitting(true);
     const updatedEvent = {
       ...selectedEvent,
-      title: editTitle,
+      title: editTitle.trim(),
       date: editDate,
       type: editType,
       isHidden: editHidden
@@ -143,42 +145,60 @@ export default function CalendarView({ userRole = 'admin' }) {
     }
   };
 
+  const monthStart = startOfMonth(currentDate);
+  const monthEnd = endOfMonth(monthStart);
+  const startDate = startOfWeek(monthStart);
+  const endDate = endOfWeek(monthEnd);
+
+  // Count number of weeks in current view
+  let weekCount = 0;
+  let tempDay = startDate;
+  while (tempDay <= endDate) {
+    weekCount++;
+    tempDay = addDays(tempDay, 7);
+  }
+
   const renderHeader = () => {
     return (
-      <div className="flex flex-col mb-6 gap-4">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-0">
-          <div className="flex items-center gap-4 w-full sm:w-auto">
-            <div className="flex bg-card border border-border rounded-lg overflow-hidden shadow-sm shrink-0">
-              <button onClick={prevMonth} className="px-3 py-2 text-muted hover:bg-canvas transition-colors border-r border-border">
-                <ChevronLeft className="w-5 h-5" />
+      <div className="flex flex-col mb-4 gap-3">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+          <div className="flex items-center gap-3 sm:gap-4 flex-wrap">
+            <div className="flex bg-card border border-border rounded-xl overflow-hidden shadow-2xs shrink-0">
+              <button onClick={prevMonth} className="px-3 py-2 text-muted hover:bg-canvas hover:text-fg transition-colors border-r border-border">
+                <ChevronLeft className="w-4 h-4" />
               </button>
-              <button onClick={jumpToToday} className="px-4 py-2 text-sm font-semibold text-fg hover:bg-canvas transition-colors">
+              <button onClick={jumpToToday} className="px-3.5 py-2 text-xs sm:text-sm font-bold text-fg hover:bg-canvas transition-colors">
                 Today
               </button>
-              <button onClick={nextMonth} className="px-3 py-2 text-muted hover:bg-canvas transition-colors border-l border-border">
-                <ChevronRight className="w-5 h-5" />
+              <button onClick={nextMonth} className="px-3 py-2 text-muted hover:bg-canvas hover:text-fg transition-colors border-l border-border">
+                <ChevronRight className="w-4 h-4" />
               </button>
             </div>
-            <h2 className="text-xl font-bold text-fg tracking-tight">
+            <h2 className="text-xl sm:text-2xl font-black text-fg tracking-tight">
               {format(currentDate, 'MMMM yyyy')}
             </h2>
+            <span className="bg-primary/10 text-primary text-xs font-bold px-2.5 py-0.5 rounded-full border border-primary/20">
+              {events.length} Event{events.length === 1 ? '' : 's'}
+            </span>
           </div>
+
           {userRole === 'admin' && (
             <button 
               onClick={() => handleOpenModal(new Date())}
-              className="bg-primary hover:bg-primaryHover text-white px-4 py-2 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 transition-all shadow-sm w-full sm:w-auto"
+              className="bg-primary hover:bg-primaryHover text-white px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all shadow-sm shadow-primary/25 active:scale-95 w-full sm:w-auto shrink-0"
             >
-              <Plus className="w-4 h-4" /> New Event
+              <Plus className="w-4 h-4 stroke-[3]" />
+              <span>New Event</span>
             </button>
           )}
         </div>
 
         {/* Legend */}
-        <div className="flex flex-wrap items-center gap-5 text-[11px] font-semibold text-muted bg-card px-4 py-2 rounded-lg border border-border w-fit shadow-sm">
-          <span className="text-fg mr-1 uppercase tracking-wider text-[10px]">Legend:</span>
+        <div className="flex flex-wrap items-center gap-3 sm:gap-5 text-[11px] font-semibold text-muted bg-card px-3.5 py-2 rounded-xl border border-border w-fit shadow-2xs">
+          <span className="text-fg font-bold uppercase tracking-wider text-[10px]">Legend:</span>
           {EVENT_TYPES.map(type => (
             <div key={type.id} className="flex items-center gap-1.5 hover:text-fg transition-colors">
-              <div className={cn("w-2.5 h-2.5 rounded-full ring-1 ring-black/10", type.color.split(' ')[0])} />
+              <div className={cn("w-2.5 h-2.5 rounded-full ring-1 ring-black/10", type.badge)} />
               <span>{type.label}</span>
             </div>
           ))}
@@ -189,27 +209,22 @@ export default function CalendarView({ userRole = 'admin' }) {
 
   const renderDays = () => {
     const days = [];
-    let startDate = startOfWeek(currentDate);
+    let startDayOfWeek = startOfWeek(currentDate);
 
     for (let i = 0; i < 7; i++) {
-      const currentDay = addDays(startDate, i);
+      const currentDay = addDays(startDayOfWeek, i);
       days.push(
-        <div className="text-center font-semibold text-xs text-muted uppercase tracking-wider py-3" key={i}>
-          <span className="hidden md:inline">{format(currentDay, "EEEE")}</span>
-          <span className="md:hidden">{format(currentDay, "EEE")}</span>
+        <div className="text-center font-bold text-xs text-muted uppercase tracking-wider py-2.5" key={i}>
+          <span className="hidden sm:inline">{format(currentDay, "EEEE")}</span>
+          <span className="sm:hidden">{format(currentDay, "EEE")}</span>
         </div>
       );
     }
 
-    return <div className="grid grid-cols-7 border-b border-border w-full">{days}</div>;
+    return <div className="grid grid-cols-7 border-b border-border w-full bg-card/80 shrink-0">{days}</div>;
   };
 
   const renderCells = () => {
-    const monthStart = startOfMonth(currentDate);
-    const monthEnd = endOfMonth(monthStart);
-    const startDate = startOfWeek(monthStart);
-    const endDate = endOfWeek(monthEnd);
-
     const rows = [];
     let day = startDate;
 
@@ -230,20 +245,27 @@ export default function CalendarView({ userRole = 'admin' }) {
         bgCells.push(
           <div
             className={cn(
-              "border-r border-border transition-colors hover:bg-canvas/50 p-2",
-              !isCurrentMonth && "bg-canvas/40 opacity-60",
-              isToday && "bg-accentGreen/5",
+              "border-r border-border h-full transition-colors hover:bg-canvas/50 p-1.5 sm:p-2 flex flex-col justify-between",
+              !isCurrentMonth && "bg-canvas/40 opacity-55",
+              isToday && "bg-primary/5 ring-1 ring-inset ring-primary/20",
               userRole === 'admin' ? "cursor-pointer" : "cursor-default"
             )}
             key={cloneDay.toISOString()}
             onClick={() => { if (userRole === 'admin') handleOpenModal(cloneDay); }}
           >
-            <span className={cn(
-                "w-7 h-7 flex items-center justify-center text-sm font-semibold rounded-full",
-                isToday ? "bg-primary text-white" : (isCurrentMonth ? "text-fg" : "text-muted")
-              )}>
-                {formattedDate}
-            </span>
+            <div className="flex items-center justify-between">
+              <span className={cn(
+                  "w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center text-xs sm:text-sm font-bold rounded-full transition-all",
+                  isToday ? "bg-primary text-white shadow-xs" : (isCurrentMonth ? "text-fg" : "text-muted")
+                )}>
+                  {formattedDate}
+              </span>
+              {userRole === 'admin' && (
+                <span className="opacity-0 group-hover/row:opacity-40 hover:!opacity-100 text-[10px] text-primary font-bold">
+                  +
+                </span>
+              )}
+            </div>
           </div>
         );
       }
@@ -284,6 +306,7 @@ export default function CalendarView({ userRole = 'admin' }) {
         const typeStyle = EVENT_TYPES.find(t => t.id === evt.type) || EVENT_TYPES[0];
         const roundedLeft = eStart >= weekStartStr;
         const roundedRight = eEnd <= weekEndStr;
+        const isMultiDay = eStart !== eEnd;
 
         return (
           <div 
@@ -300,10 +323,10 @@ export default function CalendarView({ userRole = 'admin' }) {
               setShowDetailsModal(true); 
             }}
             className={cn(
-              "group flex items-center justify-start md:justify-between text-[9px] sm:text-[11.5px] font-semibold py-1 px-1.5 mx-1 cursor-pointer pointer-events-auto transition-transform hover:brightness-110 active:scale-[0.99] overflow-hidden",
+              "group flex items-center justify-start text-[10px] sm:text-[11.5px] font-bold py-1 px-2 mx-0.5 cursor-pointer pointer-events-auto transition-all hover:brightness-105 active:scale-[0.99] overflow-hidden border shadow-2xs",
               typeStyle.color,
-              roundedLeft ? "rounded-l-md ml-1" : "rounded-l-none ml-0 border-l border-white/20",
-              roundedRight ? "rounded-r-md mr-1" : "rounded-r-none mr-0 border-r border-white/20"
+              roundedLeft ? "rounded-l-lg ml-1" : "rounded-l-none ml-0 border-l-0",
+              roundedRight ? "rounded-r-lg mr-1" : "rounded-r-none mr-0 border-r-0"
             )}
             style={{ 
               gridColumnStart: startCol,
@@ -311,20 +334,21 @@ export default function CalendarView({ userRole = 'admin' }) {
             }}
             title={evt.title}
           >
+            {evt.isHidden && <EyeOff className="w-3 h-3 mr-1 shrink-0 opacity-75" />}
             <span className="truncate">{evt.title}</span>
           </div>
         );
       });
 
       rows.push(
-        <div className="relative min-h-[100px] sm:min-h-[120px] border-b border-border group/row" key={weekStartStr}>
+        <div className="relative flex-1 min-h-[95px] border-b border-border group/row overflow-hidden" key={weekStartStr}>
           {/* Background Grid */}
-          <div className="absolute inset-0 grid grid-cols-7">
+          <div className="absolute inset-0 grid grid-cols-7 h-full">
             {bgCells}
           </div>
 
           {/* Events Grid Layer */}
-          <div className="relative z-10 grid grid-cols-7 gap-y-1 grid-flow-row-dense pt-8 md:pt-10 pb-1 md:pb-2 pointer-events-none">
+          <div className="relative z-10 grid grid-cols-7 gap-y-1 grid-flow-row-dense pt-8 sm:pt-9 pb-1 pointer-events-none">
             {eventElements}
           </div>
         </div>
@@ -332,79 +356,86 @@ export default function CalendarView({ userRole = 'admin' }) {
 
       day = addDays(weekEnd, 1);
     }
-    return <div className="border-l border-border bg-card">{rows}</div>;
+    return (
+      <div 
+        className={cn(
+          "border-l border-border bg-card flex flex-col h-full w-full",
+          weekCount === 5 ? "grid grid-rows-5" : (weekCount === 6 ? "grid grid-rows-6" : "grid grid-rows-4")
+        )}
+      >
+        {rows}
+      </div>
+    );
   };
 
   return (
-    <div className="flex flex-col h-full w-full bg-canvas p-4 md:p-8 overflow-hidden">
+    <div className="flex flex-col h-full w-full bg-canvas p-3 sm:p-6 lg:p-8 overflow-hidden">
       {renderHeader()}
       
       <div className="bg-card border border-border rounded-2xl shadow-sm flex-1 flex flex-col overflow-hidden min-h-0">
-        <div className="flex-1 flex flex-col min-h-0">
-          <div className="w-full flex-1 flex flex-col min-h-0">
-            {renderDays()}
-            <div className="flex-1 overflow-y-auto no-scrollbar min-h-0 touch-pan-y">
-              {renderCells()}
-            </div>
-          </div>
+        {renderDays()}
+        <div className="flex-1 w-full h-full min-h-0 overflow-hidden">
+          {renderCells()}
         </div>
       </div>
 
       {/* Add Event Modal */}
       <AnimatePresence>
         {showModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-fg/40 backdrop-blur-sm p-4">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
             <motion.div 
               initial={{ opacity: 0, scale: 0.95, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              className="bg-card w-full max-w-md rounded-2xl shadow-xl overflow-hidden border border-border"
+              className="bg-card w-full max-w-md rounded-2xl shadow-2xl overflow-hidden border border-border"
             >
-              <div className="px-6 py-4 border-b border-border flex items-center justify-between">
-                <h3 className="text-lg font-bold text-fg">Add Event</h3>
+              <div className="px-5 py-4 border-b border-border flex items-center justify-between">
+                <h3 className="text-base font-bold text-fg flex items-center gap-2">
+                  <CalendarIcon className="w-4 h-4 text-primary" /> Add Calendar Event
+                </h3>
                 <button onClick={() => setShowModal(false)} className="text-muted hover:text-fg transition-colors">
                   <X className="w-5 h-5" />
                 </button>
               </div>
               
-              <form onSubmit={handleAddEvent} className="p-6">
+              <form onSubmit={handleAddEvent} className="p-5">
                 <div className="space-y-4">
                   
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-sm font-semibold text-fg mb-1.5">Start Date</label>
-                      <div className="w-full bg-canvas border border-border rounded-lg px-3 py-2.5 text-sm font-medium text-fg flex items-center gap-2 cursor-not-allowed opacity-80">
-                        <CalendarIcon className="w-4 h-4 text-muted" />
-                        {format(modalDate, 'MMMM d, yyyy')}
+                      <label className="block text-xs font-semibold text-fg mb-1">Start Date</label>
+                      <div className="w-full bg-canvas border border-border rounded-xl px-3 py-2 text-xs font-semibold text-fg flex items-center gap-2 cursor-not-allowed opacity-85">
+                        <CalendarIcon className="w-3.5 h-3.5 text-muted" />
+                        {format(modalDate, 'MMM d, yyyy')}
                       </div>
                     </div>
                     <div>
-                      <label className="block text-sm font-semibold text-fg mb-1.5">End Date (Optional)</label>
+                      <label className="block text-xs font-semibold text-fg mb-1">End Date (Optional)</label>
                       <input 
                         type="date"
                         value={modalEndDate}
                         min={format(modalDate, 'yyyy-MM-dd')}
                         onChange={(e) => setModalEndDate(e.target.value)}
-                        className="w-full bg-canvas border border-border rounded-lg px-3 py-2 text-sm font-medium text-fg focus:outline-none focus:border-primary transition-colors h-[42px]"
+                        className="w-full bg-canvas border border-border rounded-xl px-3 py-2 text-xs font-semibold text-fg focus:outline-none focus:border-primary transition-colors h-[38px]"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-semibold text-fg mb-1.5">Event Title</label>
+                    <label className="block text-xs font-semibold text-fg mb-1">Event Title</label>
                     <input 
                       type="text" 
                       autoFocus
                       required
                       value={modalTitle}
                       onChange={(e) => setModalTitle(e.target.value)}
-                      placeholder="e.g., Math Final Exam"
-                      className="w-full bg-canvas border border-border rounded-lg px-3 py-2.5 text-sm font-medium text-fg focus:outline-none focus:border-primary transition-colors"
+                      placeholder="e.g., General Assembly & Scholarship Shortlisting"
+                      className="w-full bg-canvas border border-border rounded-xl px-3.5 py-2 text-xs sm:text-sm font-semibold text-fg focus:outline-none focus:border-primary transition-colors"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-semibold text-fg mb-1.5">Event Type</label>
+                    <label className="block text-xs font-semibold text-fg mb-1.5">Event Category</label>
                     <div className="grid grid-cols-2 gap-2">
                       {EVENT_TYPES.map(type => (
                         <button
@@ -412,48 +443,48 @@ export default function CalendarView({ userRole = 'admin' }) {
                           type="button"
                           onClick={() => setModalType(type.id)}
                           className={cn(
-                            "px-3 py-2 border rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-all",
+                            "px-2.5 py-1.5 border rounded-xl text-xs font-bold flex items-center justify-start gap-2 transition-all",
                             modalType === type.id 
-                              ? "bg-card border-primary text-primary shadow-sm ring-1 ring-primary" 
+                              ? "bg-primary/10 border-primary text-primary shadow-xs" 
                               : "bg-canvas border-border text-muted hover:border-borderHover hover:text-fg"
                           )}
                         >
-                          <div className={cn("w-2 h-2 rounded-full", type.color.split(' ')[0])} />
-                          {type.label}
+                          <div className={cn("w-2 h-2 rounded-full", type.badge)} />
+                          <span>{type.label}</span>
                         </button>
                       ))}
                     </div>
                   </div>
-                  
-                  <div className="flex items-center gap-2 mt-4">
+
+                  <div className="flex items-center gap-2 pt-1">
                     <input 
-                      type="checkbox" 
-                      id="hideAdd" 
+                      type="checkbox"
+                      id="modalHidden"
                       checked={modalHidden}
                       onChange={(e) => setModalHidden(e.target.checked)}
-                      className="w-4 h-4 text-primary bg-canvas border-border rounded focus:ring-primary focus:ring-2"
+                      className="w-4 h-4 rounded text-primary border-border focus:ring-primary"
                     />
-                    <label htmlFor="hideAdd" className="text-sm font-medium text-fg cursor-pointer">
-                      Hide from Students
+                    <label htmlFor="modalHidden" className="text-xs font-medium text-fg cursor-pointer">
+                      Admin/Volunteer Only (Hidden from Students)
                     </label>
                   </div>
 
                 </div>
 
-                <div className="mt-8 flex gap-3">
-                  <button 
+                <div className="mt-6 flex items-center justify-end gap-2.5">
+                  <button
                     type="button"
                     onClick={() => setShowModal(false)}
-                    className="flex-1 bg-canvas hover:bg-border text-fg font-semibold py-2.5 rounded-lg transition-colors text-sm"
+                    className="px-4 py-2 text-xs font-bold text-muted hover:text-fg hover:bg-canvas rounded-xl transition-colors"
                   >
                     Cancel
                   </button>
-                  <button 
+                  <button
                     type="submit"
-                    disabled={isSubmitting || !modalTitle.trim()}
-                    className="flex-1 bg-primary hover:bg-primaryHover text-white font-semibold py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2 text-sm disabled:opacity-50"
+                    disabled={isSubmitting}
+                    className="bg-primary hover:bg-primaryHover text-white px-5 py-2 rounded-xl text-xs font-bold shadow-sm shadow-primary/25 active:scale-95 transition-all"
                   >
-                    {isSubmitting ? "Saving..." : "Save Event"}
+                    {isSubmitting ? 'Saving...' : 'Add Event'}
                   </button>
                 </div>
               </form>
@@ -461,104 +492,65 @@ export default function CalendarView({ userRole = 'admin' }) {
           </div>
         )}
       </AnimatePresence>
-      {/* Event Details Modal */}
+
+      {/* Event Details / Edit Modal */}
       <AnimatePresence>
         {showDetailsModal && selectedEvent && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-fg/40 backdrop-blur-sm p-4">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
             <motion.div 
               initial={{ opacity: 0, scale: 0.95, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              className="bg-card w-full max-w-sm rounded-2xl shadow-xl overflow-hidden border border-border"
+              className="bg-card w-full max-w-md rounded-2xl shadow-2xl overflow-hidden border border-border"
             >
-              <div className="px-6 py-4 border-b border-border flex items-start justify-between">
-                <div className="flex items-start gap-3">
-                  <div className={cn("w-3 h-3 rounded-full mt-1.5 flex-shrink-0", EVENT_TYPES.find(t => t.id === (isEditing ? editType : selectedEvent.type))?.color.split(' ')[0])} />
-                  <h3 className="text-lg font-bold text-fg pr-4 leading-snug">
-                    {isEditing ? "Edit Event" : selectedEvent.title}
-                  </h3>
-                </div>
-                <button onClick={() => setShowDetailsModal(false)} className="text-muted hover:text-fg transition-colors flex-shrink-0 mt-0.5">
+              <div className="px-5 py-4 border-b border-border flex items-center justify-between">
+                <h3 className="text-base font-bold text-fg">
+                  {isEditing ? 'Edit Event' : 'Event Details'}
+                </h3>
+                <button onClick={() => setShowDetailsModal(false)} className="text-muted hover:text-fg transition-colors">
                   <X className="w-5 h-5" />
                 </button>
               </div>
-              
-              <div className="p-6">
-                {!isEditing ? (
-                  <>
-                    <div className="space-y-3 mb-6">
-                      <div className="flex items-center gap-3 text-sm text-fg">
-                        <CalendarIcon className="w-4 h-4 text-muted" />
-                        <span className="font-medium">
-                          {format(parseISO(selectedEvent.date), 'MMM d, yyyy')}
-                          {selectedEvent.endDate && selectedEvent.endDate !== selectedEvent.date && ` - ${format(parseISO(selectedEvent.endDate), 'MMM d, yyyy')}`}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-3 text-sm text-fg">
-                        <div className="w-4 flex justify-center">
-                          <div className="w-2 h-2 rounded-full bg-muted" />
-                        </div>
-                        <span className="font-medium capitalize">
-                          {EVENT_TYPES.find(t => t.id === selectedEvent.type)?.label || 'Event'}
-                        </span>
-                      </div>
-                    </div>
 
-                    {userRole === 'admin' && (
-                      <div className="flex gap-3">
-                        <button 
-                          onClick={() => setIsEditing(true)}
-                          className="flex-1 bg-canvas hover:bg-border text-fg font-semibold py-2.5 rounded-lg transition-colors text-sm"
-                        >
-                          Edit
-                        </button>
-                        <button 
-                          onClick={(e) => handleDeleteEvent(selectedEvent.id, e)}
-                          className="flex-1 bg-red-500 hover:bg-red-600 text-white font-semibold py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2 text-sm"
-                        >
-                          <Trash2 className="w-4 h-4" /> Delete
-                        </button>
-                      </div>
-                    )}
-                  </>
-                ) : (
+              <div className="p-5">
+                {isEditing ? (
                   <form onSubmit={handleUpdateEvent} className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-semibold text-fg mb-1.5">Start Date</label>
-                        <input 
-                          type="date"
-                          required
-                          value={editDate}
-                          onChange={(e) => setEditDate(e.target.value)}
-                          className="w-full bg-canvas border border-border rounded-lg px-3 py-2 text-sm font-medium text-fg focus:outline-none focus:border-primary transition-colors h-[42px]"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-semibold text-fg mb-1.5">End Date</label>
-                        <input 
-                          type="date"
-                          value={editEndDate}
-                          min={editDate}
-                          onChange={(e) => setEditEndDate(e.target.value)}
-                          className="w-full bg-canvas border border-border rounded-lg px-3 py-2 text-sm font-medium text-fg focus:outline-none focus:border-primary transition-colors h-[42px]"
-                        />
-                      </div>
-                    </div>
-
                     <div>
-                      <label className="block text-sm font-semibold text-fg mb-1.5">Event Title</label>
+                      <label className="block text-xs font-semibold text-fg mb-1">Event Title</label>
                       <input 
                         type="text" 
                         required
                         value={editTitle}
                         onChange={(e) => setEditTitle(e.target.value)}
-                        className="w-full bg-canvas border border-border rounded-lg px-3 py-2.5 text-sm font-medium text-fg focus:outline-none focus:border-primary transition-colors"
+                        className="w-full bg-canvas border border-border rounded-xl px-3.5 py-2 text-xs sm:text-sm font-semibold text-fg focus:outline-none focus:border-primary"
                       />
                     </div>
 
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-semibold text-fg mb-1">Start Date</label>
+                        <input 
+                          type="date"
+                          required
+                          value={editDate}
+                          onChange={(e) => setEditDate(e.target.value)}
+                          className="w-full bg-canvas border border-border rounded-xl px-3 py-2 text-xs font-semibold text-fg focus:outline-none focus:border-primary h-[38px]"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-fg mb-1">End Date</label>
+                        <input 
+                          type="date"
+                          value={editEndDate}
+                          min={editDate}
+                          onChange={(e) => setEditEndDate(e.target.value)}
+                          className="w-full bg-canvas border border-border rounded-xl px-3 py-2 text-xs font-semibold text-fg focus:outline-none focus:border-primary h-[38px]"
+                        />
+                      </div>
+                    </div>
+
                     <div>
-                      <label className="block text-sm font-semibold text-fg mb-1.5">Event Type</label>
+                      <label className="block text-xs font-semibold text-fg mb-1.5">Event Category</label>
                       <div className="grid grid-cols-2 gap-2">
                         {EVENT_TYPES.map(type => (
                           <button
@@ -566,49 +558,102 @@ export default function CalendarView({ userRole = 'admin' }) {
                             type="button"
                             onClick={() => setEditType(type.id)}
                             className={cn(
-                              "px-3 py-2 border rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-all",
+                              "px-2.5 py-1.5 border rounded-xl text-xs font-bold flex items-center justify-start gap-2 transition-all",
                               editType === type.id 
-                                ? "bg-card border-primary text-primary shadow-sm ring-1 ring-primary" 
+                                ? "bg-primary/10 border-primary text-primary shadow-xs" 
                                 : "bg-canvas border-border text-muted hover:border-borderHover hover:text-fg"
                             )}
                           >
-                            <div className={cn("w-2 h-2 rounded-full", type.color.split(' ')[0])} />
-                            {type.label}
+                            <div className={cn("w-2 h-2 rounded-full", type.badge)} />
+                            <span>{type.label}</span>
                           </button>
                         ))}
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2 mt-4">
+                    <div className="flex items-center gap-2 pt-1">
                       <input 
-                        type="checkbox" 
-                        id="hideEdit" 
+                        type="checkbox"
+                        id="editHidden"
                         checked={editHidden}
                         onChange={(e) => setEditHidden(e.target.checked)}
-                        className="w-4 h-4 text-primary bg-canvas border-border rounded focus:ring-primary focus:ring-2"
+                        className="w-4 h-4 rounded text-primary border-border focus:ring-primary"
                       />
-                      <label htmlFor="hideEdit" className="text-sm font-medium text-fg cursor-pointer">
-                        Hide from Students
+                      <label htmlFor="editHidden" className="text-xs font-medium text-fg cursor-pointer">
+                        Admin/Volunteer Only (Hidden from Students)
                       </label>
                     </div>
 
-                    <div className="mt-6 flex gap-3">
-                      <button 
+                    <div className="mt-6 flex items-center justify-end gap-2.5">
+                      <button
                         type="button"
                         onClick={() => setIsEditing(false)}
-                        className="flex-1 bg-canvas hover:bg-border text-fg font-semibold py-2.5 rounded-lg transition-colors text-sm"
+                        className="px-4 py-2 text-xs font-bold text-muted hover:text-fg hover:bg-canvas rounded-xl transition-colors"
                       >
                         Cancel
                       </button>
-                      <button 
+                      <button
                         type="submit"
-                        disabled={isSubmitting || !editTitle.trim()}
-                        className="flex-1 bg-primary hover:bg-primaryHover text-white font-semibold py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2 text-sm disabled:opacity-50"
+                        disabled={isSubmitting}
+                        className="bg-primary hover:bg-primaryHover text-white px-5 py-2 rounded-xl text-xs font-bold shadow-sm shadow-primary/25 active:scale-95 transition-all"
                       >
-                        {isSubmitting ? "Saving..." : "Save"}
+                        Save Changes
                       </button>
                     </div>
                   </form>
+                ) : (
+                  <div className="space-y-4">
+                    <div>
+                      <span className="text-[11px] font-bold text-muted uppercase tracking-wider">Title</span>
+                      <h2 className="text-lg font-black text-fg mt-0.5">{selectedEvent.title}</h2>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <span className="text-[11px] font-bold text-muted uppercase tracking-wider">Date</span>
+                        <p className="text-xs font-bold text-fg mt-0.5">
+                          {selectedEvent.endDate 
+                            ? `${selectedEvent.date} → ${selectedEvent.endDate}`
+                            : selectedEvent.date}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-[11px] font-bold text-muted uppercase tracking-wider">Category</span>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <div className={cn("w-2.5 h-2.5 rounded-full", (EVENT_TYPES.find(t => t.id === selectedEvent.type) || EVENT_TYPES[0]).badge)} />
+                          <span className="text-xs font-bold capitalize text-fg">
+                            {(EVENT_TYPES.find(t => t.id === selectedEvent.type) || EVENT_TYPES[0]).label}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {selectedEvent.isHidden && (
+                      <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-800 text-xs font-semibold flex items-center gap-2">
+                        <EyeOff className="w-4 h-4 text-amber-600 shrink-0" />
+                        <span>Hidden from student accounts</span>
+                      </div>
+                    )}
+
+                    {userRole === 'admin' && (
+                      <div className="pt-4 border-t border-border flex items-center justify-between gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteEvent(selectedEvent.id)}
+                          className="text-rose-500 hover:text-rose-600 hover:bg-rose-50 px-3 py-1.5 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" /> Delete
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setIsEditing(true)}
+                          className="bg-primary hover:bg-primaryHover text-white px-4 py-1.5 rounded-xl text-xs font-bold transition-all shadow-sm active:scale-95"
+                        >
+                          Edit Event
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             </motion.div>

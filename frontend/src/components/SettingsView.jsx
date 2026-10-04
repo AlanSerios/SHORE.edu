@@ -63,6 +63,58 @@ export default function SettingsView({ userEmail, userRole, onUpdateUser }) {
     { key: 'residence_sketch', name: 'Barangay Sketch of Residence Map', category: 'Civil', note: 'Vicinity sketch map to family residence', accepts: 'image/*,.pdf' }
   ];
 
+  
+  // Change Password State
+  const [currentPasswordInput, setCurrentPasswordInput] = useState('');
+  const [newPasswordInput, setNewPasswordInput] = useState('');
+  const [confirmPasswordInput, setConfirmPasswordInput] = useState('');
+  const [showCurrentPw, setShowCurrentPw] = useState(false);
+  const [showNewPw, setShowNewPw] = useState(false);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    if (!currentPasswordInput) {
+      toast.error('Please enter your current password.');
+      return;
+    }
+    if (newPasswordInput.length < 6) {
+      toast.error('New password must be at least 6 characters long.');
+      return;
+    }
+    if (newPasswordInput !== confirmPasswordInput) {
+      toast.error('New passwords do not match.');
+      return;
+    }
+
+    setIsChangingPassword(true);
+    try {
+      const res = await fetch('/api/users/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: userEmail,
+          current_password: currentPasswordInput,
+          new_password: newPasswordInput
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        toast.success('Password updated successfully!');
+        setCurrentPasswordInput('');
+        setNewPasswordInput('');
+        setConfirmPasswordInput('');
+      } else {
+        toast.error(data.error || 'Failed to update password.');
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Network error updating password.');
+    } finally {
+      setIsChangingPassword(false);
+    }
+  };
+
   const [activeMainTab, setActiveMainTab] = useState('tracker'); // 'tracker' | 'vault'
   const [vaultDocs, setVaultDocs] = useState([]);
   const [customVaultDocs, setCustomVaultDocs] = useState(() => {
@@ -871,27 +923,108 @@ export default function SettingsView({ userEmail, userRole, onUpdateUser }) {
               </div>
             )}
           </div>
-        </div>
+        
+            {/* Security & Password Card */}
+            <div className="bg-card border border-border rounded-2xl p-4 sm:p-5 shadow-sm mt-4">
+              <div className="flex items-center gap-2.5 mb-3 pb-2.5 border-b border-border/60">
+                <div className="p-2 rounded-xl bg-primary/10 text-primary">
+                  <Lock className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-xs sm:text-sm font-bold text-fg">Security & Password</h3>
+                  <p className="text-[11px] text-muted">Update your SHORE account password</p>
+                </div>
+              </div>
+
+              <form onSubmit={handleChangePassword} className="space-y-3">
+                <div>
+                  <label className="block text-[11px] font-semibold text-fg mb-1">Current Password</label>
+                  <div className="relative">
+                    <input
+                      type={showCurrentPw ? 'text' : 'password'}
+                      value={currentPasswordInput}
+                      onChange={e => setCurrentPasswordInput(e.target.value)}
+                      placeholder="••••••••"
+                      required
+                      className="w-full bg-canvas border border-border rounded-xl px-3 py-1.5 text-xs font-medium text-fg focus:outline-none focus:border-primary pr-9"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowCurrentPw(!showCurrentPw)}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted hover:text-fg"
+                    >
+                      {showCurrentPw ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-fg mb-1">New Password (min. 6 chars)</label>
+                  <div className="relative">
+                    <input
+                      type={showNewPw ? 'text' : 'password'}
+                      value={newPasswordInput}
+                      onChange={e => setNewPasswordInput(e.target.value)}
+                      placeholder="••••••••"
+                      required
+                      minLength={6}
+                      className="w-full bg-canvas border border-border rounded-xl px-3 py-1.5 text-xs font-medium text-fg focus:outline-none focus:border-primary pr-9"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPw(!showNewPw)}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted hover:text-fg"
+                    >
+                      {showNewPw ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-fg mb-1">Confirm New Password</label>
+                  <input
+                    type="password"
+                    value={confirmPasswordInput}
+                    onChange={e => setConfirmPasswordInput(e.target.value)}
+                    placeholder="••••••••"
+                    required
+                    className="w-full bg-canvas border border-border rounded-xl px-3 py-1.5 text-xs font-medium text-fg focus:outline-none focus:border-primary"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isChangingPassword || !currentPasswordInput || !newPasswordInput}
+                  className="w-full bg-primary hover:bg-primaryHover disabled:opacity-50 text-white py-2 rounded-xl text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1.5 active:scale-95"
+                >
+                  {isChangingPassword && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                  <span>Update Password</span>
+                </button>
+              </form>
+            </div>
+
+          </div>
 
         {/* Right Column: Unified Panel with Seamless Header Navigation */}
         <div className="lg:col-span-8 xl:col-span-8 flex flex-col">
           <div className="bg-card border border-border rounded-2xl shadow-sm flex flex-col h-full overflow-hidden">
             
-            {/* Integrated Header with Modern Tab Bar */}
-            <div className="px-3.5 sm:px-5 pt-3 sm:pt-4 pb-3 border-b border-border bg-card/60 backdrop-blur-xs flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-2.5">
-              <div className="grid grid-cols-2 p-1 bg-canvas rounded-xl border border-border sm:flex sm:bg-transparent sm:p-0 sm:border-0 sm:gap-6">
+            {/* Integrated Header with Modern Tab Bar & Vault Toolbar */}
+            <div className="px-4 sm:px-6 py-3.5 border-b border-border bg-card/70 backdrop-blur-xs flex flex-col md:flex-row justify-between items-stretch md:items-center gap-3">
+              {/* Segmented Pill Tabs */}
+              <div className="grid grid-cols-2 p-1 bg-canvas rounded-xl border border-border sm:flex sm:bg-canvas sm:p-1 sm:rounded-xl sm:border sm:border-border sm:gap-1 shadow-2xs">
                 <button
                   type="button"
                   onClick={() => setActiveMainTab('tracker')}
-                  className={`py-2 px-3 text-xs sm:text-sm font-bold flex items-center justify-center sm:justify-start gap-1.5 sm:gap-2 rounded-lg sm:rounded-none sm:pb-3.5 sm:border-b-2 transition-all relative ${
+                  className={`py-1.5 px-3.5 text-xs sm:text-sm font-bold flex items-center justify-center gap-2 rounded-lg transition-all ${
                     activeMainTab === 'tracker'
-                      ? 'bg-card sm:bg-transparent text-primary sm:border-primary shadow-xs sm:shadow-none'
-                      : 'text-muted hover:text-fg sm:border-transparent'
+                      ? 'bg-card text-primary shadow-xs border border-border/60'
+                      : 'text-muted hover:text-fg'
                   }`}
                 >
-                  <Sparkles className="w-4 h-4 text-primary shrink-0" />
+                  <Sparkles className="w-3.5 h-3.5 text-primary shrink-0" />
                   <span className="truncate">Requirements Tracker</span>
-                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold shrink-0 ${
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold shrink-0 ${
                     activeMainTab === 'tracker' 
                       ? 'bg-primary/10 text-primary' 
                       : 'bg-muted/20 text-muted'
@@ -903,15 +1036,15 @@ export default function SettingsView({ userEmail, userRole, onUpdateUser }) {
                 <button
                   type="button"
                   onClick={() => setActiveMainTab('vault')}
-                  className={`py-2 px-3 text-xs sm:text-sm font-bold flex items-center justify-center sm:justify-start gap-1.5 sm:gap-2 rounded-lg sm:rounded-none sm:pb-3.5 sm:border-b-2 transition-all relative ${
+                  className={`py-1.5 px-3.5 text-xs sm:text-sm font-bold flex items-center justify-center gap-2 rounded-lg transition-all ${
                     activeMainTab === 'vault'
-                      ? 'bg-card sm:bg-transparent text-primary sm:border-primary shadow-xs sm:shadow-none'
-                      : 'text-muted hover:text-fg sm:border-transparent'
+                      ? 'bg-card text-emerald-700 shadow-xs border border-border/60'
+                      : 'text-muted hover:text-fg'
                   }`}
                 >
-                  <FolderArchive className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <FolderArchive className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                   <span className="truncate">Document Vault</span>
-                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold shrink-0 ${
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold shrink-0 ${
                     activeMainTab === 'vault' 
                       ? 'bg-emerald-500/10 text-emerald-700' 
                       : 'bg-muted/20 text-muted'
@@ -921,13 +1054,13 @@ export default function SettingsView({ userEmail, userRole, onUpdateUser }) {
                 </button>
               </div>
 
-              {/* Top Quick Actions per tab */}
+              {/* Top Quick Actions for Vault */}
               {activeMainTab === 'vault' && (
-                <div className="flex items-center gap-2 justify-end">
+                <div className="flex items-center gap-2 justify-end shrink-0">
                   <button
                     onClick={handleExportAllZip}
                     disabled={isExportingZip || vaultDocs.length === 0}
-                    className="flex-1 sm:flex-initial bg-primary hover:bg-primaryHover disabled:opacity-40 text-white px-3 py-1.5 rounded-xl font-bold flex items-center justify-center gap-1.5 transition-all text-xs shadow-sm shadow-primary/20 active:scale-95 shrink-0"
+                    className="bg-primary hover:bg-primaryHover disabled:opacity-40 text-white px-3.5 py-1.5 rounded-xl font-bold flex items-center justify-center gap-1.5 transition-all text-xs shadow-sm shadow-primary/20 active:scale-95 shrink-0"
                     title="Bundle and download all stored files as ZIP"
                   >
                     <Download className={`w-3.5 h-3.5 ${isExportingZip ? 'animate-bounce' : ''}`} />
