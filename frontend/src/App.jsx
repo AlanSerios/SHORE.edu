@@ -540,11 +540,27 @@ export default function App() {
   useEffect(() => {
     if (userEmail && globalUsers.length > 0) {
       const u = globalUsers.find(x => x.email === userEmail);
-      if (u && u.equippedBorder !== undefined && u.equippedBorder !== equippedBorder) {
-        setEquippedBorder(u.equippedBorder);
+      if (u && u.equippedBorder !== undefined) {
+        const border = u.equippedBorder || null;
+        setEquippedBorder(prev => (prev !== border ? border : prev));
       }
     }
   }, [globalUsers, userEmail]);
+
+  const handleUpdateUser = React.useCallback((user) => {
+    if (!user) return;
+    if (user.profilePicture !== undefined) {
+      setProfilePicture(user.profilePicture || null);
+    }
+    if (user.equippedBorder !== undefined) {
+      setEquippedBorder(user.equippedBorder || null);
+    }
+    try {
+      localStorage.setItem('shore_user', JSON.stringify(user));
+    } catch (e) {
+      console.error(e);
+    }
+  }, []);
 
   const fileInputRef = useRef(null);
 
@@ -1582,10 +1598,7 @@ export default function App() {
           <SettingsView 
             userEmail={userEmail} 
             userRole={userRole} 
-            onUpdateUser={(user) => { 
-              setProfilePicture(user.profilePicture || null); 
-              localStorage.setItem('shore_user', JSON.stringify(user)); 
-            }} 
+            onUpdateUser={handleUpdateUser} 
           />
         ) : currentView === 'accounts' && userRole === 'admin' ? (
           <AccountsView />

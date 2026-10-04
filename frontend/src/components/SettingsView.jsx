@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Camera, Save, Plus, Trash2, CheckCircle2, QrCode, X, User, ChevronDown, 
   Clock, AlertTriangle, Check, ExternalLink, Sparkles, AlertCircle, Info, 
@@ -421,9 +421,9 @@ export default function SettingsView({ userEmail, userRole, onUpdateUser }) {
     reader.readAsDataURL(file);
   };
 
-  const onCropComplete = (croppedArea, croppedAreaPixels) => {
+  const onCropComplete = useCallback((croppedArea, croppedAreaPixels) => {
     setCroppedAreaPixels(croppedAreaPixels);
-  };
+  }, []);
 
   const handleSaveCrop = async () => {
     try {
@@ -1009,22 +1009,22 @@ export default function SettingsView({ userEmail, userRole, onUpdateUser }) {
         <div className="lg:col-span-8 xl:col-span-8 flex flex-col">
           <div className="bg-card border border-border rounded-2xl shadow-sm flex flex-col h-full overflow-hidden">
             
-            {/* Integrated Header with Modern Tab Bar & Vault Toolbar */}
-            <div className="px-4 sm:px-6 py-3.5 border-b border-border bg-card/70 backdrop-blur-xs flex flex-col md:flex-row justify-between items-stretch md:items-center gap-3">
+            {/* Clean Unified Navigation Header */}
+            <div className="px-4 sm:px-6 py-3 border-b border-border bg-card/80 backdrop-blur-xs flex items-center justify-between">
               {/* Segmented Pill Tabs */}
-              <div className="grid grid-cols-2 p-1 bg-canvas rounded-xl border border-border sm:flex sm:bg-canvas sm:p-1 sm:rounded-xl sm:border sm:border-border sm:gap-1 shadow-2xs">
+              <div className="inline-flex p-1 bg-canvas rounded-xl border border-border/80 shadow-2xs w-full sm:w-auto">
                 <button
                   type="button"
                   onClick={() => setActiveMainTab('tracker')}
-                  className={`py-1.5 px-3.5 text-xs sm:text-sm font-bold flex items-center justify-center gap-2 rounded-lg transition-all ${
+                  className={`flex-1 sm:flex-initial py-2 px-3.5 sm:px-5 text-xs sm:text-sm font-bold flex items-center justify-center gap-2 rounded-lg transition-all ${
                     activeMainTab === 'tracker'
                       ? 'bg-card text-primary shadow-xs border border-border/60'
-                      : 'text-muted hover:text-fg'
+                      : 'text-muted hover:text-fg hover:bg-card/40'
                   }`}
                 >
                   <Sparkles className="w-3.5 h-3.5 text-primary shrink-0" />
                   <span className="truncate">Requirements Tracker</span>
-                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold shrink-0 ${
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold shrink-0 transition-colors ${
                     activeMainTab === 'tracker' 
                       ? 'bg-primary/10 text-primary' 
                       : 'bg-muted/20 text-muted'
@@ -1036,15 +1036,15 @@ export default function SettingsView({ userEmail, userRole, onUpdateUser }) {
                 <button
                   type="button"
                   onClick={() => setActiveMainTab('vault')}
-                  className={`py-1.5 px-3.5 text-xs sm:text-sm font-bold flex items-center justify-center gap-2 rounded-lg transition-all ${
+                  className={`flex-1 sm:flex-initial py-2 px-3.5 sm:px-5 text-xs sm:text-sm font-bold flex items-center justify-center gap-2 rounded-lg transition-all ${
                     activeMainTab === 'vault'
                       ? 'bg-card text-emerald-700 shadow-xs border border-border/60'
-                      : 'text-muted hover:text-fg'
+                      : 'text-muted hover:text-fg hover:bg-card/40'
                   }`}
                 >
                   <FolderArchive className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                   <span className="truncate">Document Vault</span>
-                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold shrink-0 ${
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold shrink-0 transition-colors ${
                     activeMainTab === 'vault' 
                       ? 'bg-emerald-500/10 text-emerald-700' 
                       : 'bg-muted/20 text-muted'
@@ -1054,28 +1054,10 @@ export default function SettingsView({ userEmail, userRole, onUpdateUser }) {
                 </button>
               </div>
 
-              {/* Top Quick Actions for Vault */}
-              {activeMainTab === 'vault' && (
-                <div className="flex items-center gap-2 justify-end shrink-0">
-                  <button
-                    onClick={handleExportAllZip}
-                    disabled={isExportingZip || vaultDocs.length === 0}
-                    className="bg-primary hover:bg-primaryHover disabled:opacity-40 text-white px-3.5 py-1.5 rounded-xl font-bold flex items-center justify-center gap-1.5 transition-all text-xs shadow-sm shadow-primary/20 active:scale-95 shrink-0"
-                    title="Bundle and download all stored files as ZIP"
-                  >
-                    <Download className={`w-3.5 h-3.5 ${isExportingZip ? 'animate-bounce' : ''}`} />
-                    <span>{isExportingZip ? 'Exporting...' : 'Download All (.ZIP)'}</span>
-                  </button>
-
-                  <button
-                    onClick={() => setIsAddCustomDocModalOpen(true)}
-                    className="bg-canvas border border-border hover:bg-slate-100 text-fg px-3 py-1.5 rounded-xl font-semibold flex items-center justify-center gap-1 transition-all text-xs active:scale-95 shrink-0"
-                  >
-                    <Plus className="w-3.5 h-3.5 stroke-[3]" />
-                    <span>Add Slot</span>
-                  </button>
-                </div>
-              )}
+              <div className="hidden md:flex items-center gap-2 text-xs text-muted font-semibold">
+                <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                <span>Client-Side AES-256 Encrypted</span>
+              </div>
             </div>
 
             {/* Tab Body */}
@@ -1447,26 +1429,49 @@ export default function SettingsView({ userEmail, userRole, onUpdateUser }) {
               ) : (
                 /* Document Vault — Clean 2-Column Bento Grid */
                 <div className="flex flex-col h-full">
-                  {/* Vault Subheader / Progress bar */}
-                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-3.5 pb-2.5 border-b border-border/60">
-                    <div>
-                      <h2 className="text-sm font-bold text-fg">Universal Master Requirements</h2>
-                      <p className="text-[11px] text-muted">Upload standard student papers once to quickly attach to scholarship applications.</p>
+                  {/* Vault Subheader / Toolbar with Progress and Actions */}
+                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 mb-4 pb-3.5 border-b border-border/70">
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-2.5 flex-wrap">
+                        <h2 className="text-sm sm:text-base font-bold text-fg">Universal Master Requirements</h2>
+                        <div className="flex items-center gap-2 bg-canvas px-2.5 py-0.5 rounded-full border border-border/60">
+                          <span className="text-xs font-bold text-fg">
+                            <span className="text-primary font-black">{vaultDocs.length}</span>
+                            <span className="text-muted"> / {defaultMasterDocs.length + customVaultDocs.length} Ready</span>
+                          </span>
+                          <div className="w-16 sm:w-20 bg-muted/20 h-1.5 rounded-full overflow-hidden">
+                            <div 
+                              className="h-full bg-primary rounded-full transition-all duration-500"
+                              style={{ 
+                                width: `${Math.round((vaultDocs.length / Math.max(1, defaultMasterDocs.length + customVaultDocs.length)) * 100)}%` 
+                              }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                      <p className="text-[11px] sm:text-xs text-muted">Upload standard student papers once to quickly attach to scholarship applications.</p>
                     </div>
 
-                    <div className="flex items-center gap-2 shrink-0">
-                      <div className="text-[11px] font-bold text-fg">
-                        <span className="text-primary font-extrabold">{vaultDocs.length}</span>
-                        <span className="text-muted"> / {defaultMasterDocs.length + customVaultDocs.length} Ready</span>
-                      </div>
-                      <div className="w-20 bg-muted/20 h-2 rounded-full overflow-hidden border border-border/40">
-                        <div 
-                          className="h-full bg-primary rounded-full transition-all duration-500"
-                          style={{ 
-                            width: `${Math.round((vaultDocs.length / Math.max(1, defaultMasterDocs.length + customVaultDocs.length)) * 100)}%` 
-                          }}
-                        />
-                      </div>
+                    {/* Action Buttons Toolbar */}
+                    <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-start md:justify-end">
+                      <button
+                        onClick={handleExportAllZip}
+                        disabled={isExportingZip || vaultDocs.length === 0}
+                        className="flex-1 sm:flex-initial bg-primary hover:bg-primaryHover disabled:opacity-40 text-white px-3.5 sm:px-4 py-2 rounded-xl font-bold flex items-center justify-center gap-2 transition-all text-xs shadow-sm shadow-primary/20 active:scale-95 shrink-0 cursor-pointer"
+                        title="Bundle and download all stored files as a single ZIP archive"
+                      >
+                        <Download className={`w-3.5 h-3.5 ${isExportingZip ? 'animate-bounce' : ''}`} />
+                        <span>{isExportingZip ? 'Exporting...' : 'Download All (.ZIP)'}</span>
+                      </button>
+
+                      <button
+                        onClick={() => setIsAddCustomDocModalOpen(true)}
+                        className="bg-canvas border border-border hover:bg-slate-100 text-fg px-3.5 py-2 rounded-xl font-semibold flex items-center justify-center gap-1.5 transition-all text-xs active:scale-95 shrink-0 cursor-pointer"
+                        title="Add a custom document slot to your vault"
+                      >
+                        <Plus className="w-3.5 h-3.5 stroke-[3]" />
+                        <span>Add Slot</span>
+                      </button>
                     </div>
                   </div>
 
