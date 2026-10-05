@@ -1,5 +1,6 @@
 import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { toast } from 'sonner';
 import { requestFirebaseNotificationPermission } from './firebase';
 import { downloadBlob } from './utils';
 import { loadStoredUser, saveUser, clearUser } from './utils/userStorage';
@@ -27,6 +28,8 @@ import { MobileBottomNav, MobileMenuSheet } from './components/mobile/MobileNav'
 const DashboardView = React.lazy(() => import('./components/dashboard/DashboardView'));
 import PWAInstallBanner from './components/PWAInstallBanner';
 import OfflineIndicator from './components/OfflineIndicator';
+
+const CLASS_TOOL_IDS = ['attendance', 'shop', 'recitations', 'scholarships', 'reports', 'manageclass', 'manageteam', 'accounts'];
 
 export default function App() {
   // ── Data state ──────────────────────────────────────────────
@@ -64,6 +67,9 @@ export default function App() {
   const setCurrentView = (view) => {
     _setCurrentView(view);
     window.location.hash = view;
+    if (CLASS_TOOL_IDS.includes(view)) {
+      setClassToolsOpen(true);
+    }
   };
 
   // ── Auth handlers ────────────────────────────────────────────
@@ -107,7 +113,13 @@ export default function App() {
   // ── Effects ──────────────────────────────────────────────────
   // Hash-based routing
   useEffect(() => {
-    const onHash = () => _setCurrentView(window.location.hash.replace('#', '') || 'dashboard');
+    const onHash = () => {
+      const view = window.location.hash.replace('#', '') || 'dashboard';
+      _setCurrentView(view);
+      if (CLASS_TOOL_IDS.includes(view)) {
+        setClassToolsOpen(true);
+      }
+    };
     window.addEventListener('hashchange', onHash);
     onHash();
     return () => window.removeEventListener('hashchange', onHash);
@@ -186,7 +198,9 @@ export default function App() {
       const data = trackerResult.value;
       if (data?.pre && data?.post) {
         setParsedData(data);
-        setStudents(Array.from(new Set([...Object.keys(data.pre), ...Object.keys(data.post)])).sort());
+        const list = Array.from(new Set([...Object.keys(data.pre), ...Object.keys(data.post)])).sort();
+        setStudents(list);
+        setSelectedStudent(prev => prev || list[0] || '');
       }
     }
     if (attendanceResult.status === 'fulfilled') setGlobalAttendance(attendanceResult.value.attendance || []);
@@ -229,8 +243,8 @@ export default function App() {
 
   // ── File upload (Excel) ──────────────────────────────────────
   const handleFileUpload = async (e) => {
-    const uploadedFile = e.target.files[0];
-    if (!uploadedFile) return;
+    const uploadedFile = e?.target?.files ? e.target.files[0] : e;
+    if (!uploadedFile) return null;
     setFile(uploadedFile);
     setStatus(null);
     setSelectedStudent('');
@@ -259,12 +273,19 @@ export default function App() {
       const sortedStudents = Array.from(studentNames).sort();
       setStudents(sortedStudents);
       setParsedData(newParsedData);
-      fetch('/api/allowed_students', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ students: sortedStudents }) }).catch(console.error);
-      fetch('/api/tracker_data', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newParsedData) }).catch(console.error);
-      setStatus({ type: 'success', msg: sortedStudents.length > 0 ? `Loaded ${sortedStudents.length} records.` : 'No names found.' });
+      await Promise.all([
+        fetch('/api/allowed_students', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ students: sortedStudents }) }).catch(console.error),
+        fetch('/api/tracker_data', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newParsedData) }).catch(console.error),
+      ]);
+      const msg = sortedStudents.length > 0 ? `Loaded tracker with ${sortedStudents.length} students.` : 'No student names found in tracker file.';
+      setStatus({ type: 'success', msg });
+      toast.success(msg);
+      return { success: true, count: sortedStudents.length, students: sortedStudents };
     } catch (err) {
       console.error(err);
-      setStatus({ type: 'error', msg: 'Failed to parse Excel.' });
+      setStatus({ type: 'error', msg: 'Failed to parse Excel tracker file.' });
+      toast.error('Failed to parse Excel tracker file.');
+      return { success: false, error: err };
     }
   };
 
@@ -322,6 +343,7 @@ export default function App() {
               {...sharedProps}
               sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen}
               currentView={currentView} setCurrentView={setCurrentView}
+              userRole={userRole} userEmail={userEmail} userName={userName}
               unreadAnnouncements={unreadAnnouncements}
               classToolsOpen={classToolsOpen} setClassToolsOpen={setClassToolsOpen}
               isProfileMenuOpen={isProfileMenuOpen} setIsProfileMenuOpen={setIsProfileMenuOpen}
@@ -349,6 +371,8 @@ export default function App() {
                     handleLogout={handleLogout}
                     dataLoadState={dataLoadState} dataLoadError={dataLoadError}
                     onRetryData={loadCoreData}
+                    onUploadTracker={() => fileInputRef.current?.click()}
+                    trackerFile={file}
                   />
                 ) : currentView === 'calendar' ? (
                   <CalendarView userRole={userRole} />
@@ -359,7 +383,7 @@ export default function App() {
                 ) : currentView === 'accounts' && userRole === 'admin' ? (
                   <AccountsView />
                 ) : currentView === 'manageclass' && userRole === 'admin' ? (
-                  <ManageClassView />
+                  <ManageClassView onUploadTracker={handleFileUpload} trackerFile={file} />
                 ) : currentView === 'manageteam' && userRole === 'admin' ? (
                   <ManageTeamView />
                 ) : currentView === 'attendance' ? (

@@ -45,8 +45,9 @@ export function computeStats(selectedStudent, reportType, parsedData) {
   }
 
   const radarData = ALL_SUBJ.map(subj => ({
-    subject: subj.length > 8 ? subj.substring(0, 8) + '...' : subj,
+    subject: subj,
     score: studentData.subjects[subj] || 0,
+    cohort: Math.round(cohortAverages[subj] || 0),
   }));
 
   const vsCohortData = ALL_SUBJ.map(subj => ({

@@ -1,19 +1,21 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Trash2, Edit2, Check, X, Users, GraduationCap, Search } from 'lucide-react';
+import { Plus, Trash2, Edit2, Check, X, Users, GraduationCap, Search, Upload } from 'lucide-react';
 import { cn } from '../utils';
 import { toast } from 'sonner';
 import { PageHeader, PageShell } from './ui/page';
 
-const ManageClassView = () => {
+const ManageClassView = ({ onUploadTracker, trackerFile }) => {
   const [roster, setRoster] = useState([]);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isUploading, setIsUploading] = useState(false);
   const [activeTab, setActiveTab] = useState('roster');
   const [newName, setNewName] = useState('');
   const [editingIdx, setEditingIdx] = useState(null);
   const [editValue, setEditValue] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const fileInputRef = useRef(null);
 
   const fetchData = async () => {
     try {
@@ -26,6 +28,25 @@ const ManageClassView = () => {
       setLoading(false);
     } catch {
       setLoading(false);
+    }
+  };
+
+  const handleImportTracker = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploading(true);
+    try {
+      if (onUploadTracker) {
+        const result = await onUploadTracker(e);
+        if (result?.success && result?.students) {
+          setRoster(result.students);
+        } else {
+          await fetchData();
+        }
+      }
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
@@ -84,6 +105,27 @@ const ManageClassView = () => {
         <PageHeader
           title="Manage Class"
           description="Manage the student roster allowed to register and review all registered accounts."
+          actions={
+            <div className="flex items-center gap-2">
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleImportTracker}
+                accept=".xlsx,.xls"
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploading}
+                aria-label="Import student tracker Excel file"
+                className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-border bg-white px-3.5 py-2 text-xs font-semibold text-fg shadow-sm transition-all hover:bg-slate-50 hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary active:scale-[0.98] disabled:opacity-50"
+              >
+                <Upload className="w-3.5 h-3.5 text-primary" />
+                <span>{isUploading ? 'Importing…' : trackerFile ? 'Update Tracker (Excel)' : 'Import Tracker (Excel)'}</span>
+              </button>
+            </div>
+          }
         />
 
         {/* SUMMARY CARDS */}
