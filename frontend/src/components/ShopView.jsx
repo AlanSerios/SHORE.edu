@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ShoppingBag, CheckCircle, Info, Edit, Plus, Trash2, Save, X, Banknote, Pizza, PenTool, CupSoda, Smartphone, StickyNote, Candy, Cookie, Soup, Gift, Flame, Hexagon, Crown, Shield } from 'lucide-react';
 import { toast } from 'sonner';
+import { PageHeader } from './ui/page';
 
 // Map icon strings to actual Lucide components
 const IconMap = {
@@ -136,7 +137,7 @@ export default function ShopView({ userEmail, userRole }) {
       const data = await res.json();
       if (res.ok) {
         setEquippedBorder(borderId);
-        toast.success("Avatar border equipped! Reload the page to see it everywhere.");
+        toast.success("Avatar border equipped!");
       } else {
         toast.error(data.error || "Failed to equip border.");
       }
@@ -281,14 +282,43 @@ export default function ShopView({ userEmail, userRole }) {
   if (loading) return <div className="p-8">Loading Rewards Shop...</div>;
 
   return (
-    <div className="h-full overflow-y-auto bg-canvas pb-20 relative">
+    <div className="h-full overflow-y-auto bg-canvas pb-28 sm:pb-20 relative">
       {/* Success Popup */}
       {showSuccess && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none bg-black/20 backdrop-blur-sm">
-          <div className="w-[400px] h-[400px] bg-white rounded-3xl shadow-2xl flex flex-col items-center justify-center p-8 border border-border/50 animate-in zoom-in-95 duration-300">
-            <CheckCircle className="w-24 h-24 text-green-500 mb-4" />
-            <h2 className="text-2xl font-black text-fg mt-4">Purchase Successful!</h2>
-            <p className="text-muted text-center mt-2 font-medium">You have redeemed your coins for the {purchasingItem?.name}. Please claim it at the admin desk.</p>
+        <div
+          onClick={() => {
+            setShowSuccess(false);
+            setPurchasingItem(null);
+          }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm cursor-pointer p-4 animate-in fade-in duration-200"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-sm bg-white rounded-3xl shadow-2xl flex flex-col items-center justify-center p-8 border border-border/50 animate-in zoom-in-95 duration-200 text-center relative"
+          >
+            <button
+              onClick={() => {
+                setShowSuccess(false);
+                setPurchasingItem(null);
+              }}
+              className="absolute top-4 right-4 p-1.5 text-muted hover:text-fg rounded-full hover:bg-slate-100 transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+            <CheckCircle className="w-16 h-16 text-emerald-500 mb-3" />
+            <h2 className="text-xl font-black text-fg">Purchase Successful!</h2>
+            <p className="text-xs text-muted text-center mt-2 font-medium leading-relaxed">
+              You have redeemed your coins for <strong className="text-fg">{purchasingItem?.name}</strong>. Please claim it at the admin desk.
+            </p>
+            <button
+              onClick={() => {
+                setShowSuccess(false);
+                setPurchasingItem(null);
+              }}
+              className="mt-5 px-6 py-2 rounded-xl bg-primary text-white font-bold text-xs shadow-sm hover:bg-primaryHover transition-all active:scale-95"
+            >
+              Done
+            </button>
           </div>
         </div>
       )}
@@ -342,38 +372,27 @@ export default function ShopView({ userEmail, userRole }) {
         </div>
       )}
 
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-12 space-y-8">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-6 sm:pt-8 space-y-6">
         
         {/* Header & Balance */}
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 bg-white p-6 sm:p-8 rounded-[2rem] border border-border/60 shadow-sm relative overflow-hidden">
-          <div className="absolute -right-20 -top-20 w-64 h-64 bg-primary/5 rounded-full blur-3xl pointer-events-none"></div>
-          
-          <div className="w-full">
-            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-blue-50 border border-blue-100 text-[10px] font-bold tracking-[0.2em] uppercase text-primary mb-4 shadow-sm">
-              <ShoppingBag className="w-3 h-3" />
-              Rewards Shop
-            </div>
-            <h1 className="text-3xl sm:text-4xl font-black tracking-tighter text-fg mb-2">Spend Your SHORE Coins</h1>
-            <p className="text-sm text-muted max-w-md leading-relaxed">Redeem the coins you've earned from attending sessions and actively participating in recitations.</p>
-            
-            {userRole === 'admin' && (
-              <button onClick={startEditing} className="mt-4 px-4 py-2 bg-slate-800 text-white text-xs font-bold rounded-lg flex items-center gap-2 hover:bg-slate-700 transition-colors">
-                <Edit className="w-4 h-4" /> Manage Inventory
-              </button>
-            )}
-          </div>
-
-          <div id="balance-container" className="flex items-center justify-center gap-4 bg-canvas px-6 sm:px-8 py-5 rounded-3xl border border-border/60 shadow-sm relative shrink-0 w-full md:w-auto">
-            <img src="/shore-coin.png" alt="SHORE Coin" className="w-10 h-10 sm:w-12 sm:h-12 drop-shadow-md" />
-            <div>
-              <p className="text-[10px] sm:text-xs font-bold text-muted uppercase tracking-wider mb-1">Your Balance</p>
-              <div className="flex items-baseline gap-1">
-                <span className="text-3xl sm:text-4xl font-black text-fg tracking-tight leading-none">{balance}</span>
-                <span className="text-xs sm:text-sm font-bold text-muted ml-1">Coins</span>
+        <PageHeader
+          title="Rewards Shop"
+          description="Redeem the coins you earn from attendance and recitation participation."
+          actions={(
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+              <div id="balance-container" className="flex min-h-11 items-center justify-center gap-3 rounded-xl border border-border bg-white px-4 shadow-sm">
+                <img src="/shore-coin.png" alt="" className="h-7 w-7" />
+                <span className="text-sm font-semibold text-muted">Balance</span>
+                <span className="text-lg font-bold tabular-nums text-fg">{balance}</span>
               </div>
+              {userRole === 'admin' && (
+                <button type="button" onClick={startEditing} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-border bg-white px-4 text-sm font-bold text-fg shadow-sm transition-colors hover:bg-canvas focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+                  <Edit className="w-4 h-4" /> Manage Inventory
+                </button>
+              )}
             </div>
-          </div>
-        </div>
+          )}
+        />
 
         {/* Info Banner */}
         <div className="bg-blue-50/50 border border-blue-100 rounded-2xl p-4 flex items-start gap-3">

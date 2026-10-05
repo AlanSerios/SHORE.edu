@@ -1,28 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { QRCodeSVG } from 'qrcode.react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Clock, AlertTriangle, CheckCircle2, QrCode, X } from 'lucide-react';
-import anime from 'animejs';
+import { motion } from 'framer-motion';
+import { Clock, AlertTriangle, CheckCircle2, QrCode } from 'lucide-react';
 import { cn } from '../utils';
+import QRPassModal from './settings/QRPassModal';
+import { PageHeader } from './ui/page';
 
 const AttendanceStudentView = ({ userEmail }) => {
   const [attendance, setAttendance] = useState([]);
   const [globalEvents, setGlobalEvents] = useState(new Set());
   const [loading, setLoading] = useState(true);
   const [showQRPopout, setShowQRPopout] = useState(false);
-  const qrModalRef = React.useRef(null);
-
-  useEffect(() => {
-    if (showQRPopout && qrModalRef.current) {
-      anime({
-        targets: qrModalRef.current,
-        scale: [0.5, 1],
-        opacity: [0, 1],
-        duration: 400,
-        easing: 'easeOutElastic(1, .8)'
-      });
-    }
-  }, [showQRPopout]);
 
   useEffect(() => {
     fetch('/api/attendance')
@@ -56,23 +43,16 @@ const AttendanceStudentView = ({ userEmail }) => {
   const absences = mandatoryEvents.filter(ev => globalEvents.has(ev) && !attendedEvents.has(ev)).length;
 
   return (
-    <div className="h-full overflow-y-auto">
-      <div className="max-w-[1400px] mx-auto pb-32 px-4 sm:px-6 lg:px-8">
+    <div className="h-full overflow-y-auto bg-canvas">
+      <div className="max-w-7xl mx-auto pb-28 md:pb-10 px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8">
       
-      {/* MACRO-WHITESPACE HEADER */}
-      <div className="pt-16 pb-8 text-center flex flex-col items-center">
-        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-canvas border border-border/50 text-[10px] font-bold tracking-[0.2em] uppercase text-muted mb-6">
-          <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
-          Digital Pass
-        </div>
-        <h1 className="text-4xl lg:text-5xl font-black tracking-tighter text-fg mb-4">My Attendance</h1>
-        <p className="text-base text-muted font-medium leading-relaxed max-w-lg mx-auto">
-          Present your digital pass at mandatory events. Your personal check-in history is securely logged below.
-        </p>
-      </div>
+      <PageHeader
+        title="My Attendance"
+        description="Present your digital pass at mandatory events and review your check-in history."
+      />
 
       {/* MAIN GRID LAYOUT */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 mt-12">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 mt-6">
         
         {/* LEFT COLUMN: DIGITAL PASS */}
         <div className="lg:col-span-5 xl:col-span-4 flex flex-col gap-8">
@@ -209,47 +189,12 @@ const AttendanceStudentView = ({ userEmail }) => {
       </div>
 
       {/* QR Code Popout Modal */}
-      <AnimatePresence>
-        {showQRPopout && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-fg/60 backdrop-blur-sm p-4">
-            <div 
-              className="absolute inset-0"
-              onClick={() => setShowQRPopout(false)}
-            />
-            <div 
-              ref={qrModalRef}
-              className="relative bg-white rounded-3xl p-8 shadow-2xl flex flex-col items-center max-w-sm w-full"
-            >
-              <button 
-                onClick={() => setShowQRPopout(false)}
-                className="absolute top-4 right-4 p-2 bg-canvas text-muted hover:text-fg rounded-full transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-              
-              <div className="bg-canvas p-4 rounded-2xl mb-6 shadow-inner border border-border/50">
-                <QRCodeSVG 
-                  value={userEmail} 
-                  size={250} 
-                  bgColor="transparent"
-                  fgColor="#000000"
-                  level="H"
-                  includeMargin={false}
-                />
-              </div>
-              
-              <h2 className="text-2xl font-black text-fg text-center mb-1 tracking-tight">
-                {userEmail.split('@')[0]}
-              </h2>
-              <div className="flex items-center gap-1.5 justify-center">
-                <span className="text-xs font-bold text-primary uppercase tracking-[0.15em] bg-primary/10 px-3 py-1 rounded-full">
-                  SHORE 5.0 Student
-                </span>
-              </div>
-            </div>
-          </div>
-        )}
-      </AnimatePresence>
+        <QRPassModal
+          isOpen={showQRPopout}
+          onClose={() => setShowQRPopout(false)}
+          userEmail={userEmail}
+          userRole="student"
+        />
       </div>
     </div>
   );

@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Megaphone, MessageSquare, Eye, Send, Bold, Italic, Link2, Image as ImageIcon, CheckCircle2, Trash2, X } from 'lucide-react';
-import { cn } from '../utils';
+import { Megaphone, MessageSquare, Eye, Send, Bold, Italic, Link2, Image as ImageIcon, Trash2, X, Loader2, RefreshCw, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import AvatarBorder from './AvatarBorder';
+import { PageHeader } from './ui/page';
 
 
 // A simple utility to parse basic markdown for rendering
@@ -25,7 +25,7 @@ const parseMarkdown = (text) => {
   return html;
 };
 
-const AnnouncementItem = ({ post, userRole, userEmail, userName, profilePicture, userEquippedBorder, renderAvatar, handleMarkAsRead, handleComment, commentText, setCommentText, handleDeleteAnnouncement, onImageClick }) => {
+const AnnouncementItem = ({ post, userRole, userEmail, profilePicture, userEquippedBorder, renderAvatar, handleMarkAsRead, handleComment, commentText, setCommentText, handleDeleteAnnouncement, onImageClick }) => {
   const hasRead = post.read_by?.includes(userEmail);
   const postRef = useRef(null);
 
@@ -66,6 +66,8 @@ const AnnouncementItem = ({ post, userRole, userEmail, userName, profilePicture,
           </div>
           {userRole === 'admin' && (
             <button 
+              type="button"
+              aria-label={`Delete announcement: ${post.title}`}
               onClick={() => handleDeleteAnnouncement(post.id)}
               className="p-2 text-muted hover:text-red-500 hover:bg-red-50 rounded-full transition-colors"
               title="Delete Announcement"
@@ -101,7 +103,7 @@ const AnnouncementItem = ({ post, userRole, userEmail, userName, profilePicture,
             {post.read_by && post.read_by.length > 0 && (
               <div className="flex flex-wrap gap-1.5">
                 {post.read_by.map(email => (
-                   <span key={email} className="px-2 py-1 bg-canvas rounded-md text-[10px] font-bold text-fg border border-border">
+                   <span key={email} className="px-2 py-1 bg-canvas rounded-md text-xs font-bold text-fg border border-border">
                      {email.split('@')[0]}
                    </span>
                 ))}
@@ -127,7 +129,7 @@ const AnnouncementItem = ({ post, userRole, userEmail, userName, profilePicture,
               <div className="bg-white p-3 rounded-2xl rounded-tl-none border border-border/50 shadow-sm flex-1">
                 <div className="flex justify-between items-baseline mb-1">
                   <span className="text-xs font-bold text-fg">{comment.author}</span>
-                  <span className="text-[10px] text-muted">{new Date(comment.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                  <span className="text-xs text-muted">{new Date(comment.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                 </div>
                 <p className="text-sm text-fg/80">{comment.text}</p>
               </div>
@@ -151,6 +153,7 @@ const AnnouncementItem = ({ post, userRole, userEmail, userName, profilePicture,
           <div className="flex-1 relative">
             <input
               type="text"
+              aria-label={`Comment on ${post.title}`}
               placeholder="Ask a question or leave a comment..."
               value={commentText[post.id] || ''}
               onChange={(e) => setCommentText({ ...commentText, [post.id]: e.target.value })}
@@ -158,6 +161,8 @@ const AnnouncementItem = ({ post, userRole, userEmail, userName, profilePicture,
               className="w-full pl-4 pr-12 py-2.5 rounded-full border border-border/60 bg-white text-sm outline-none focus:border-primary/50 shadow-sm"
             />
             <button 
+              type="button"
+              aria-label={`Post comment on ${post.title}`}
               onClick={() => handleComment(post.id)}
               className="absolute right-1.5 top-1/2 -translate-y-1/2 p-1.5 bg-primary text-white rounded-full hover:bg-primary/90 transition-colors"
             >
@@ -174,6 +179,7 @@ export default function AnnouncementsView({ userEmail, userName, userRole, profi
   const [announcements, setAnnouncements] = useState([]);
   const [allUsers, setAllUsers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
 
   // Admin New Post State
   const [isComposing, setIsComposing] = useState(false);
@@ -197,7 +203,7 @@ export default function AnnouncementsView({ userEmail, userName, userRole, profi
   }, [newContent]);
 
   useEffect(() => {
-    fetchAnnouncements();
+    fetchAnnouncements({ showLoading: true });
     fetchAllUsers();
   }, []);
 
@@ -211,14 +217,18 @@ export default function AnnouncementsView({ userEmail, userName, userRole, profi
     }
   };
 
-  const fetchAnnouncements = async () => {
+  const fetchAnnouncements = async ({ showLoading = false } = {}) => {
+    if (showLoading) setLoading(true);
+    setLoadError('');
     try {
       const res = await fetch('/api/announcements');
+      if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
       const data = await res.json();
       // Sort newest first
       setAnnouncements((data.announcements || []).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)));
     } catch (e) {
       console.error('Failed to load announcements', e);
+      setLoadError('We could not load announcements. Check your connection and try again.');
     } finally {
       setLoading(false);
       if (onRead) onRead();
@@ -345,33 +355,47 @@ export default function AnnouncementsView({ userEmail, userName, userRole, profi
     }
   };
 
-  if (loading) return <div className="p-8">Loading announcements...</div>;
+  if (loading) return (
+    <div className="h-full grid place-items-center p-8 text-center" role="status" aria-live="polite">
+      <div>
+        <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto mb-3" />
+        <p className="font-semibold text-fg">Loading announcements…</p>
+      </div>
+    </div>
+  );
+
+  if (loadError) return (
+    <div className="h-full grid place-items-center p-8 text-center" role="alert">
+      <div className="max-w-sm">
+        <AlertTriangle className="w-9 h-9 text-accentRedFg mx-auto mb-3" />
+        <h1 className="text-xl font-bold text-fg mb-2">Announcements are unavailable</h1>
+        <p className="text-sm text-muted mb-5">{loadError}</p>
+        <button type="button" onClick={() => fetchAnnouncements({ showLoading: true })} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-white hover:bg-primaryHover transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2">
+          <RefreshCw className="w-4 h-4" /> Try again
+        </button>
+      </div>
+    </div>
+  );
 
   return (
-    <div className="h-full overflow-y-auto bg-canvas pb-20">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 pt-12 space-y-8">
+    <div className="h-full overflow-y-auto bg-canvas">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 pt-6 sm:pt-8 pb-28 md:pb-10 space-y-6">
         
         {/* Header */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
-          <div>
-            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white border border-border/50 text-[10px] font-bold tracking-[0.2em] uppercase text-primary mb-5 shadow-sm">
-              <Megaphone className="w-3 h-3" />
-              Notice Board
-            </div>
-            <h1 className="text-4xl font-black tracking-tighter text-fg mb-2">Announcements</h1>
-            <p className="text-sm text-muted">Stay up to date with the latest news and updates from the team.</p>
-          </div>
-          
-          {userRole === 'admin' && !isComposing && (
+        <PageHeader
+          title="Announcements"
+          description="Stay up to date with the latest news and updates from the team."
+          actions={userRole === 'admin' && !isComposing ? (
             <button 
+              type="button"
               onClick={() => setIsComposing(true)}
-              className="w-full sm:w-auto justify-center px-6 py-2.5 bg-primary text-white text-sm font-bold rounded-xl hover:bg-primary/90 shadow-lg shadow-primary/20 transition-all flex items-center gap-2"
+              className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-primaryHover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 sm:w-auto"
             >
               <Megaphone className="w-4 h-4" />
               Post Update
             </button>
-          )}
-        </div>
+          ) : null}
+        />
 
         {/* Composer (Admin Only) */}
         <AnimatePresence>
@@ -419,7 +443,12 @@ export default function AnnouncementsView({ userEmail, userName, userRole, profi
                     <div 
                       ref={textareaRef}
                       contentEditable
-                      className="min-h-[150px] p-4 text-sm outline-none resize-y overflow-y-auto"
+                      role="textbox"
+                      aria-label="Announcement content"
+                      aria-multiline="true"
+                      tabIndex={0}
+                      suppressContentEditableWarning
+                      className="min-h-[150px] p-4 text-sm outline-none resize-y overflow-y-auto focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
                       onInput={(e) => setNewContent(e.currentTarget.innerHTML)}
                       onBlur={(e) => setNewContent(e.currentTarget.innerHTML)}
                     />
@@ -432,11 +461,12 @@ export default function AnnouncementsView({ userEmail, userName, userRole, profi
                       <div key={i} className="relative w-24 h-24 rounded-lg overflow-hidden border border-border">
                         <img src={img} alt="Attached" className="w-full h-full object-cover" />
                         <button 
+                          type="button"
+                          aria-label={`Remove attachment ${i + 1}`}
                           onClick={() => setAttachedImages(attachedImages.filter((_, idx) => idx !== i))}
                           className="absolute top-1 right-1 bg-black/50 text-white rounded-full p-1 hover:bg-red-500 transition-colors"
                         >
-                          <Megaphone className="w-3 h-3 hidden" /> {/* Just for spacing, using text instead */}
-                          <span className="text-[10px] font-bold leading-none px-1">X</span>
+                          <X className="w-3 h-3" />
                         </button>
                       </div>
                     ))}
@@ -444,8 +474,8 @@ export default function AnnouncementsView({ userEmail, userName, userRole, profi
                 )}
 
                 <div className="flex justify-end gap-3 pt-4 border-t border-border/40">
-                  <button onClick={() => setIsComposing(false)} className="px-5 py-2 text-sm font-bold text-muted hover:text-fg transition-colors">Cancel</button>
-                  <button onClick={handlePostAnnouncement} className="px-6 py-2 bg-primary text-white text-sm font-bold rounded-xl hover:bg-primary/90 transition-colors flex items-center gap-2">
+                  <button type="button" onClick={() => setIsComposing(false)} className="px-5 py-2 text-sm font-bold text-muted hover:text-fg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">Cancel</button>
+                  <button type="button" onClick={handlePostAnnouncement} className="px-6 py-2 bg-primary text-white text-sm font-bold rounded-xl hover:bg-primaryHover transition-colors flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2">
                     <Send className="w-4 h-4" /> Publish
                   </button>
                 </div>
@@ -461,7 +491,15 @@ export default function AnnouncementsView({ userEmail, userName, userRole, profi
             if (!post.audience || post.audience === 'All') return true;
             return post.audience === `${userRole}s`;
           }).length === 0 ? (
-            <div className="text-center py-20 text-muted">No announcements yet.</div>
+            <div className="flex min-h-72 flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-white px-6 py-14 text-center">
+              <div className="mb-4 grid h-12 w-12 place-items-center rounded-xl bg-accentBlue text-primary">
+                <Megaphone className="h-5 w-5" />
+              </div>
+              <h2 className="text-base font-bold text-fg">No announcements yet</h2>
+              <p className="mt-1 max-w-sm text-sm leading-6 text-muted">
+                New updates from the SHORE team will appear here.
+              </p>
+            </div>
           ) : (
             announcements.filter(post => {
               if (userRole === 'admin') return true;
@@ -473,7 +511,6 @@ export default function AnnouncementsView({ userEmail, userName, userRole, profi
                 post={post}
                 userRole={userRole}
                 userEmail={userEmail}
-                userName={userName}
                 profilePicture={profilePicture}
                 userEquippedBorder={allUsers.find(u => u.email === userEmail)?.equippedBorder}
                 renderAvatar={renderAvatar}
@@ -493,6 +530,9 @@ export default function AnnouncementsView({ userEmail, userName, userRole, profi
       <AnimatePresence>
         {expandedImage && (
           <motion.div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Expanded announcement image"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -500,6 +540,8 @@ export default function AnnouncementsView({ userEmail, userName, userRole, profi
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 sm:p-8"
           >
             <button 
+              type="button"
+              aria-label="Close image preview"
               className="absolute top-6 right-6 text-white/70 hover:text-white p-2 transition-colors rounded-full hover:bg-white/10"
               onClick={() => setExpandedImage(null)}
             >

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Award, Plus, Trash2, Search, Target, UserCheck } from 'lucide-react';
+import { Plus, Trash2, Search, Target, UserCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '../utils';
+import { PageHeader } from './ui/page';
 
 export default function RecitationsAdminView() {
   const [recitations, setRecitations] = useState([]);
@@ -93,28 +94,22 @@ export default function RecitationsAdminView() {
   if (loading) return <div className="p-8">Loading recitations...</div>;
 
   return (
-    <div className="h-full overflow-y-auto bg-canvas pb-20">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-12 space-y-8">
-        
+    <div className="h-full overflow-y-auto bg-canvas">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-6 sm:pt-8 pb-28 md:pb-10 space-y-6">
+
         {/* Header */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
-          <div>
-            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white border border-border/50 text-[10px] font-bold tracking-[0.2em] uppercase text-primary mb-5 shadow-sm">
-              <Award className="w-3 h-3" />
-              Teacher Interface
-            </div>
-            <h1 className="text-4xl font-black tracking-tighter text-fg mb-2">Oral Recitations</h1>
-            <p className="text-sm text-muted">Grade and record student performance in oral recitations.</p>
-          </div>
-          
-          <button 
+        <PageHeader
+          title="Oral Recitations"
+          description="Grade and record student performance in oral recitations."
+          actions={<button
+            type="button"
             onClick={() => setIsAdding(!isAdding)}
-            className="w-full sm:w-auto justify-center px-6 py-2.5 bg-primary text-white text-sm font-bold rounded-xl hover:bg-primary/90 shadow-lg shadow-primary/20 transition-all flex items-center gap-2"
+            className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-primaryHover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 sm:w-auto"
           >
             <Plus className={cn("w-4 h-4 transition-transform", isAdding && "rotate-45")} />
             {isAdding ? "Cancel" : "Record Score"}
-          </button>
-        </div>
+          </button>}
+        />
 
         {/* Add Form */}
         {isAdding && (

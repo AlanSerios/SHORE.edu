@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LifeBuoy, Plus, CheckCircle2, MessageSquare, Trash2, Send, Clock, User as UserIcon } from 'lucide-react';
+import { Plus, CheckCircle2, MessageSquare, Trash2, Send, Clock, User as UserIcon } from 'lucide-react';
 import { toast } from 'sonner';
+import { PageHeader } from './ui/page';
 
 export default function TicketsView({ userEmail, userName, userRole }) {
   const [tickets, setTickets] = useState([]);
@@ -60,7 +61,7 @@ export default function TicketsView({ userEmail, userName, userRole }) {
       } else {
         toast.error('Failed to submit ticket');
       }
-    } catch (err) {
+    } catch {
       toast.error('Network error');
     }
     setIsSubmitting(false);
@@ -80,7 +81,7 @@ export default function TicketsView({ userEmail, userName, userRole }) {
         setReplyText('');
         fetchTickets();
       }
-    } catch (err) {
+    } catch {
       toast.error('Failed to resolve ticket');
     }
   };
@@ -93,7 +94,7 @@ export default function TicketsView({ userEmail, userName, userRole }) {
         toast.success('Ticket deleted');
         fetchTickets();
       }
-    } catch (err) {
+    } catch {
       toast.error('Failed to delete ticket');
     }
   };
@@ -103,30 +104,24 @@ export default function TicketsView({ userEmail, userName, userRole }) {
   const resolvedTickets = myTickets.filter(t => t.status === 'resolved');
 
   return (
-    <div className="h-full overflow-y-auto">
-      <div className="max-w-4xl mx-auto p-4 md:p-8 space-y-8">
+    <div className="h-full overflow-y-auto bg-canvas">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 pt-6 sm:pt-8 pb-28 md:pb-10 space-y-6">
         
         {/* Header */}
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-canvas p-6 rounded-3xl border border-border shadow-sm">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight text-fg flex items-center gap-2">
-              <LifeBuoy className="w-6 h-6 text-primary" />
-              Support & Ticketing
-            </h1>
-            <p className="text-sm text-muted mt-1">
-              {userRole === 'admin' ? 'Manage and resolve user feedback and bug reports.' : 'Report bugs or submit feedback to the admins.'}
-            </p>
-          </div>
-          {userRole !== 'admin' && (
+        <PageHeader
+          title="Support Tickets"
+          description={userRole === 'admin' ? 'Manage and resolve user feedback and bug reports.' : 'Report bugs or submit feedback to the administrators.'}
+          actions={userRole !== 'admin' ? (
             <button
+              type="button"
               onClick={() => setShowForm(!showForm)}
-              className="flex items-center gap-2 px-6 py-3 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition-all shadow-md active:scale-95"
+              className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-primaryHover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 sm:w-auto"
             >
               <Plus className="w-4 h-4" />
               New Ticket
             </button>
-          )}
-        </div>
+          ) : null}
+        />
 
         {/* Create Ticket Form (Students) */}
         <AnimatePresence>

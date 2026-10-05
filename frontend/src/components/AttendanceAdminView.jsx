@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Camera, CheckCircle2, Clock, ChevronDown, Activity, ScanLine, CameraOff, Trash2,
+  Camera, ChevronDown, Activity, ScanLine, CameraOff, Trash2,
   TrendingUp, TrendingDown, Minus, BarChart3, Users, ClipboardList,
-  Download, Search, Filter, Lightbulb
+  Download, Search, Lightbulb, RefreshCw, AlertCircle
 } from 'lucide-react';
-import { cn } from '../utils';
+import { cn, downloadCsv } from '../utils';
 import { toast } from 'sonner';
 import jsQR from 'jsqr';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
@@ -59,11 +59,15 @@ const AttendanceAdminView = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [roleFilter, setRoleFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState("All");
+  const [loadError, setLoadError] = useState('');
+  const [manualEmail, setManualEmail] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
 
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const streamRef = useRef(null);
   const animFrameRef = useRef(null);
+  const cameraReadyTimeoutRef = useRef(null);
   const processingRef = useRef(false);
   const selectedEventRef = useRef(selectedEvent);
   const selectedSessionRef = useRef(selectedSession);
@@ -74,18 +78,26 @@ const AttendanceAdminView = () => {
   useEffect(() => { selectedSessionRef.current = selectedSession; }, [selectedSession]);
   useEffect(() => { selectedTypeRef.current = selectedType; }, [selectedType]);
 
-  const fetchAll = () => {
-    Promise.all([
-      fetch('/api/attendance').then(r => r.json()),
-      fetch('/api/users').then(r => r.json())
-    ]).then(([attData, usrData]) => {
+  const fetchAll = useCallback(async () => {
+    setLoading(true);
+    setLoadError('');
+    try {
+      const [attendanceResponse, usersResponse] = await Promise.all([
+        fetch('/api/attendance'),
+        fetch('/api/users'),
+      ]);
+      if (!attendanceResponse.ok || !usersResponse.ok) throw new Error('Attendance data request failed.');
+      const [attData, usrData] = await Promise.all([attendanceResponse.json(), usersResponse.json()]);
       setAttendance((attData.attendance || []).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)));
       setUsers(usrData.users || []);
+    } catch {
+      setLoadError('Attendance data could not be loaded. Check your connection and try again.');
+    } finally {
       setLoading(false);
-    }).catch(() => setLoading(false));
-  };
+    }
+  }, []);
 
-  useEffect(() => { fetchAll(); }, []);
+  useEffect(() => { fetchAll(); }, [fetchAll]);
 
   const getUserInfo = useCallback((email) => {
     const u = users.find(u => u.email === email);
@@ -112,12 +124,18 @@ const AttendanceAdminView = () => {
       const entry = byEmail[log.email];
       if (log.id) entry.logIds.push(log.id);
       const sess = log.session || 'Morning';
+      const assignTime = (key, timestamp, keepEarliest) => {
+        if (!entry[key]) { entry[key] = timestamp; return; }
+        const next = new Date(timestamp).getTime();
+        const current = new Date(entry[key]).getTime();
+        if ((keepEarliest && next < current) || (!keepEarliest && next > current)) entry[key] = timestamp;
+      };
       if (sess === 'Morning') {
-        if (log.type === 'Time In' && !entry.morning_in) entry.morning_in = log.timestamp;
-        if (log.type === 'Time Out' && !entry.morning_out) entry.morning_out = log.timestamp;
+        if (log.type === 'Time In') assignTime('morning_in', log.timestamp, true);
+        if (log.type === 'Time Out') assignTime('morning_out', log.timestamp, false);
       } else {
-        if (log.type === 'Time In' && !entry.afternoon_in) entry.afternoon_in = log.timestamp;
-        if (log.type === 'Time Out' && !entry.afternoon_out) entry.afternoon_out = log.timestamp;
+        if (log.type === 'Time In') assignTime('afternoon_in', log.timestamp, true);
+        if (log.type === 'Time Out') assignTime('afternoon_out', log.timestamp, false);
       }
     });
     return Object.values(byEmail).map(e => ({
@@ -175,23 +193,17 @@ const AttendanceAdminView = () => {
       toast.error("No data to download");
       return;
     }
-    const headers = ["Name,Email,Role,Morning In,Morning Out,Afternoon In,Afternoon Out,Status"];
+    const header = "Name,Email,Role,Morning In,Morning Out,Afternoon In,Afternoon Out,Status";
     const rows = filteredTrackerData.map(r => 
       `"${r.name}","${r.email}","${r.role}","${fmtTime(r.morning_in)}","${fmtTime(r.morning_out)}","${fmtTime(r.afternoon_in)}","${fmtTime(r.afternoon_out)}","${r.status}"`
     );
-    const csvContent = "data:text/csv;charset=utf-8," + [headers, ...rows].join("\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `${selectedEvent}_Attendance.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    downloadCsv(`${selectedEvent}_Attendance.csv`, rows, header);
   };
 
   // ── CAMERA LOGIC ──────────────────────────────────────────
   const stopCamera = useCallback(() => {
     if (animFrameRef.current) { cancelAnimationFrame(animFrameRef.current); animFrameRef.current = null; }
+    if (cameraReadyTimeoutRef.current) { clearTimeout(cameraReadyTimeoutRef.current); cameraReadyTimeoutRef.current = null; }
     if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
     if (videoRef.current) videoRef.current.srcObject = null;
   }, []);
@@ -201,15 +213,18 @@ const AttendanceAdminView = () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } } });
       streamRef.current = stream;
-      if (videoRef.current) { videoRef.current.srcObject = stream; videoRef.current.play(); }
+      if (videoRef.current) { videoRef.current.srcObject = stream; await videoRef.current.play(); }
+      return true;
     } catch (err) {
       const msg = err.name === 'NotAllowedError' ? "Camera access denied. Please allow permissions."
                 : err.name === 'NotFoundError'    ? "No camera found on your device."
                 : "Could not start the camera. Please try again.";
       setCameraError(msg);
       setIsScannerActive(false);
+      stopCamera();
+      return false;
     }
-  }, []);
+  }, [stopCamera]);
 
   const scanLoop = useCallback(() => {
     const video = videoRef.current;
@@ -239,66 +254,63 @@ const AttendanceAdminView = () => {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
     if (isScannerActive && activeTab === 'scanner') {
-      startCamera().then(() => {
+      startCamera().then(started => {
+        if (!started || cancelled) return;
         const check = () => {
+          if (cancelled || !streamRef.current) return;
           if (videoRef.current?.readyState >= 2) animFrameRef.current = requestAnimationFrame(scanLoop);
-          else setTimeout(check, 100);
+          else cameraReadyTimeoutRef.current = setTimeout(check, 100);
         };
         check();
       });
     } else {
       stopCamera();
     }
-    return () => stopCamera();
-  }, [isScannerActive, activeTab]);
+    return () => { cancelled = true; stopCamera(); };
+  }, [isScannerActive, activeTab, scanLoop, startCamera, stopCamera]);
 
   const handleScanSuccess = async (email, event, session, type) => {
-    if (!email?.includes('@')) { toast.error(`Invalid QR: ${email}`); return; }
-    const payload = { email, event, session, type, timestamp: new Date().toISOString() };
+    const normalizedEmail = email?.trim().toLowerCase();
+    if (!normalizedEmail || !/^\S+@\S+\.\S+$/.test(normalizedEmail)) { toast.error('Enter a valid email address.'); return false; }
+    const payload = { email: normalizedEmail, event, session, type, timestamp: new Date().toISOString() };
+    setIsSaving(true);
     try {
       const res = await fetch('/api/attendance', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      const data = await res.json();
-      if (data.success) {
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
         toast.success(
           <div className="flex flex-col gap-0.5">
             <span className="font-bold text-sm">Attendance Logged ✓</span>
-            <span className="text-xs opacity-80">{session} · {type} · {email.split('@')[0]}</span>
+            <span className="text-xs opacity-80">{session} · {type} · {normalizedEmail.split('@')[0]}</span>
           </div>
         );
-        fetchAll();
+        await fetchAll();
+        return true;
       } else {
         toast.error(data.error || "Failed to record.");
+        return false;
       }
-    } catch { toast.error("Network error."); }
+    } catch { toast.error("Network error."); return false; }
+    finally { setIsSaving(false); }
   };
 
   handleScanSuccessRef.current = handleScanSuccess;
-
-  const handleDelete = async (logId) => {
-    if (!logId) { toast.error("Cannot delete: missing ID."); return; }
-    try {
-      const res = await fetch(`/api/attendance/${logId}`, { method: 'DELETE' });
-      const data = await res.json();
-      if (data.success) { toast.success("Record deleted."); fetchAll(); }
-      else toast.error(data.error || "Failed to delete.");
-    } catch (err) { toast.error("Error deleting."); }
-  };
 
   const handleDeleteAll = async (logIds) => {
     if (!logIds || logIds.length === 0) return;
     if (!window.confirm(`Delete ${logIds.length} records?`)) return;
     try {
-      for (const logId of logIds) {
-        await fetch(`/api/attendance/${logId}`, { method: 'DELETE' });
-      }
+      const results = await Promise.all(logIds.map(logId => fetch(`/api/attendance/${logId}`, { method: 'DELETE' })));
+      if (results.some(response => !response.ok)) throw new Error('Some records could not be deleted.');
       toast.success("Records deleted.");
-      fetchAll();
-    } catch (err) { toast.error("Error deleting multiple records."); }
+      await fetchAll();
+    } catch { toast.error("Error deleting multiple records."); }
   };
 
   const TABS = [
@@ -332,68 +344,76 @@ const AttendanceAdminView = () => {
   const showControls = activeTab === 'scanner' || activeTab === 'sheet';
 
   return (
-    <div className="h-full overflow-y-auto">
-      <div className="max-w-6xl mx-auto pb-32 px-4 sm:px-6 space-y-8">
+    <div className="h-full overflow-y-auto bg-canvas">
+      <div className="max-w-7xl mx-auto pb-32 px-4 sm:px-6 lg:px-8 space-y-5">
 
         {/* HEADER */}
-        <div className="pt-12 pb-4 text-center">
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-canvas border border-border/50 text-[10px] font-bold tracking-[0.2em] uppercase text-muted mb-5">
-            <span className="w-1.5 h-1.5 rounded-full bg-primary/60"></span>
-            Administration Mode
-          </div>
-          <h1 className="text-4xl font-black tracking-tighter text-fg mb-2">Event Attendance</h1>
-          <p className="text-sm text-muted max-w-lg mx-auto">Track, review, and analyze attendance across all sessions and events.</p>
-        </div>
+        <header className="pt-6 sm:pt-8 pb-1">
+          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-fg">Event Attendance</h1>
+          <p className="mt-1 text-sm text-muted">Scan attendees, review sessions, and track participation.</p>
+        </header>
 
-        {/* CONTROLS */}
-        {showControls && (
-          <div className="bg-white rounded-2xl border border-border/60 p-4 shadow-sm flex flex-wrap gap-4">
-            {/* Event */}
-            <div className="relative flex-1 min-w-[160px]">
-              <div className="absolute -top-2 left-3 px-1 bg-white text-[10px] font-bold tracking-wider text-muted uppercase">Event</div>
-              <select value={selectedEvent} onChange={e => setSelectedEvent(e.target.value)}
-                className="w-full appearance-none bg-canvas/30 border border-border/60 hover:border-border rounded-xl pl-4 pr-10 py-3 text-sm font-bold text-fg focus:outline-none focus:border-primary transition-all cursor-pointer">
-                {EVENTS.map(ev => <option key={ev} value={ev}>{ev}</option>)}
-              </select>
-              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted pointer-events-none" />
+        {loadError && (
+          <div role="alert" className="flex flex-col gap-3 rounded-xl border border-accentRedFg/20 bg-accentRed px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3 text-accentRedFg">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span className="font-semibold">{loadError}</span>
             </div>
-            {/* Session */}
-            <div className="relative flex-1 min-w-[140px]">
-              <div className="absolute -top-2 left-3 px-1 bg-white text-[10px] font-bold tracking-wider text-muted uppercase">Session</div>
-              <select value={selectedSession} onChange={e => setSelectedSession(e.target.value)}
-                className="w-full appearance-none bg-canvas/30 border border-border/60 hover:border-border rounded-xl pl-4 pr-10 py-3 text-sm font-bold text-fg focus:outline-none focus:border-primary transition-all cursor-pointer">
-                <option value="Morning">Morning</option>
-                <option value="Afternoon">Afternoon</option>
-              </select>
-              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted pointer-events-none" />
-            </div>
-            {/* Action */}
-            <div className="relative flex-1 min-w-[140px]">
-              <div className="absolute -top-2 left-3 px-1 bg-white text-[10px] font-bold tracking-wider text-muted uppercase">Action</div>
-              <select value={selectedType} onChange={e => setSelectedType(e.target.value)}
-                className="w-full appearance-none bg-canvas/30 border border-border/60 hover:border-border rounded-xl pl-4 pr-10 py-3 text-sm font-bold text-fg focus:outline-none focus:border-primary transition-all cursor-pointer">
-                <option value="Time In">Time In</option>
-                <option value="Time Out">Time Out</option>
-              </select>
-              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted pointer-events-none" />
-            </div>
+            <button type="button" onClick={fetchAll} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-white px-4 font-bold text-fg shadow-sm hover:bg-canvas focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+              <RefreshCw className="h-4 w-4" /> Retry
+            </button>
           </div>
         )}
 
+        {/* CONTROLS */}
+        {showControls && (
+          <section aria-label="Attendance setup" className="bg-white rounded-2xl border border-border p-3 sm:p-4 shadow-sm grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {/* Event */}
+            <label className="relative block">
+              <span className="mb-1.5 block text-[11px] font-bold tracking-wider text-muted uppercase">Event</span>
+              <select value={selectedEvent} onChange={e => setSelectedEvent(e.target.value)}
+                className="min-h-11 w-full appearance-none bg-white border border-border hover:border-borderHover rounded-xl pl-3.5 pr-10 text-sm font-bold text-fg focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/15 transition-colors cursor-pointer">
+                {EVENTS.map(ev => <option key={ev} value={ev}>{ev}</option>)}
+              </select>
+              <ChevronDown className="absolute right-3 bottom-3.5 w-4 h-4 text-muted pointer-events-none" />
+            </label>
+            {/* Session */}
+            <label className="relative block">
+              <span className="mb-1.5 block text-[11px] font-bold tracking-wider text-muted uppercase">Session</span>
+              <select value={selectedSession} onChange={e => setSelectedSession(e.target.value)}
+                className="min-h-11 w-full appearance-none bg-white border border-border hover:border-borderHover rounded-xl pl-3.5 pr-10 text-sm font-bold text-fg focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/15 transition-colors cursor-pointer">
+                <option value="Morning">Morning</option>
+                <option value="Afternoon">Afternoon</option>
+              </select>
+              <ChevronDown className="absolute right-3 bottom-3.5 w-4 h-4 text-muted pointer-events-none" />
+            </label>
+            {/* Action */}
+            <label className="relative block">
+              <span className="mb-1.5 block text-[11px] font-bold tracking-wider text-muted uppercase">Action</span>
+              <select value={selectedType} onChange={e => setSelectedType(e.target.value)}
+                className="min-h-11 w-full appearance-none bg-white border border-border hover:border-borderHover rounded-xl pl-3.5 pr-10 text-sm font-bold text-fg focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/15 transition-colors cursor-pointer">
+                <option value="Time In">Time In</option>
+                <option value="Time Out">Time Out</option>
+              </select>
+              <ChevronDown className="absolute right-3 bottom-3.5 w-4 h-4 text-muted pointer-events-none" />
+            </label>
+          </section>
+        )}
+
         {/* TAB BAR */}
-        <div className="flex gap-1 p-1.5 bg-canvas border border-border/50 rounded-full w-fit mx-auto shadow-sm flex-wrap justify-center">
+        <div role="tablist" aria-label="Attendance views" className="grid grid-cols-4 gap-1 p-1 bg-white border border-border rounded-xl shadow-sm">
           {TABS.map(({ id, label, icon: Icon }) => (
-            <button key={id} onClick={() => setActiveTab(id)}
-              className={cn("relative flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-full transition-colors duration-200",
-                activeTab === id ? "text-fg" : "text-muted hover:text-fg/80")}>
+            <button key={id} role="tab" aria-label={label} aria-selected={activeTab === id} aria-controls={`attendance-panel-${id}`} onClick={() => setActiveTab(id)}
+              className={cn("relative min-h-11 flex items-center justify-center gap-2 px-2 sm:px-4 text-xs sm:text-sm font-bold rounded-lg transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                activeTab === id ? "text-primary" : "text-muted hover:bg-canvas hover:text-fg")}>
               {activeTab === id && (
                 <motion.div layoutId="adminTabPill"
-                  className="absolute inset-0 bg-white rounded-full shadow-sm border border-black/5"
+                  className="absolute inset-0 bg-primary/10 rounded-lg"
                   transition={{ type: 'spring', stiffness: 400, damping: 30 }}
                   style={{ zIndex: -1 }} />
               )}
-              <Icon className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">{label}</span>
+              <Icon aria-hidden="true" className="w-4 h-4" />
+              <span className="hidden min-[520px]:inline">{label}</span>
             </button>
           ))}
         </div>
@@ -403,10 +423,9 @@ const AttendanceAdminView = () => {
 
           {/* ══════════════ SCANNER TAB ══════════════ */}
           {activeTab === 'scanner' && (
-            <motion.div key="scanner" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.25 }}>
-              <div className="bg-canvas p-2.5 rounded-[2rem] border border-border/50 shadow-xl mx-auto max-w-2xl">
-                <div className="bg-white rounded-[1.75rem] p-8 min-h-[400px] flex flex-col">
-                  <div className="flex items-center justify-between mb-6">
+            <motion.div id="attendance-panel-scanner" role="tabpanel" key="scanner" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.18 }}>
+              <div className="bg-white rounded-2xl border border-border shadow-sm mx-auto max-w-3xl overflow-hidden">
+                  <div className="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-border">
                     <h3 className="text-base font-bold text-fg flex items-center gap-2">
                       <ScanLine className="w-5 h-5 text-primary" /> Viewfinder
                     </h3>
@@ -421,26 +440,28 @@ const AttendanceAdminView = () => {
                     )}
                   </div>
 
-                  <div className="flex-1 flex flex-col items-center justify-center">
+                  <div className="min-h-[300px] p-5 sm:p-6 flex flex-col items-center justify-center">
                     {cameraError ? (
                       <div className="text-center flex flex-col items-center gap-4">
                         <CameraOff className="w-12 h-12 text-muted opacity-50" />
                         <p className="text-sm text-muted max-w-xs">{cameraError}</p>
                         <button onClick={() => { setCameraError(null); setIsScannerActive(true); }}
-                          className="px-6 py-2.5 bg-primary text-white text-sm font-bold rounded-full hover:bg-primary/90 transition-colors">
+                          className="min-h-11 px-5 bg-primary text-white text-sm font-bold rounded-xl hover:bg-primaryHover transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2">
                           Try Again
                         </button>
                       </div>
                     ) : !isScannerActive ? (
-                      <div className="flex flex-col items-center gap-6">
+                      <div className="flex flex-col items-center gap-4 text-center">
                         <button onClick={() => setIsScannerActive(true)}
-                          className="group w-36 h-36 rounded-[2rem] bg-canvas border-2 border-dashed border-border hover:border-primary/50 hover:bg-primary/5 transition-all flex flex-col items-center justify-center gap-3">
-                          <div className="w-12 h-12 rounded-2xl bg-white shadow-sm border border-black/5 flex items-center justify-center group-hover:scale-110 transition-transform">
-                            <Camera className="w-5 h-5 text-primary" />
-                          </div>
-                          <span className="text-sm font-bold text-fg group-hover:text-primary transition-colors">Start Scanner</span>
+                          className="group min-h-12 inline-flex items-center gap-2.5 rounded-xl bg-primary px-5 text-sm font-bold text-white shadow-sm hover:bg-primaryHover transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2">
+                          <Camera className="w-5 h-5" />
+                          Start scanner
                         </button>
-                        <p className="text-[11px] text-muted uppercase tracking-widest font-bold">Requires Camera Permission</p>
+                        <div>
+                          <p className="text-sm font-semibold text-fg">Ready to scan QR attendance</p>
+                          <p className="mt-1 text-xs text-muted">Camera permission is requested only after you start.</p>
+                        </div>
+                        <p className="text-xs font-medium text-muted">{selectedEvent} · {selectedSession} · {selectedType}</p>
                       </div>
                     ) : (
                       <div className="w-full flex flex-col items-center gap-5">
@@ -458,20 +479,44 @@ const AttendanceAdminView = () => {
                             </p>
                           </div>
                         <button onClick={() => setIsScannerActive(false)}
-                          className="px-8 py-3 bg-canvas hover:bg-border/50 text-fg text-sm font-bold rounded-full transition-colors">
+                          className="min-h-11 px-5 bg-canvas hover:bg-border/50 text-fg text-sm font-bold rounded-xl transition-colors">
                           Deactivate
                         </button>
                       </div>
                     )}
                   </div>
-                </div>
+                  <form
+                    onSubmit={async event => {
+                      event.preventDefault();
+                      const saved = await handleScanSuccess(manualEmail, selectedEvent, selectedSession, selectedType);
+                      if (saved) setManualEmail('');
+                    }}
+                    className="border-t border-border bg-canvas/50 px-5 py-4 sm:px-6"
+                  >
+                    <label htmlFor="manual-attendance-email" className="mb-1.5 block text-xs font-bold text-fg">Camera unavailable? Record manually</label>
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <input
+                        id="manual-attendance-email"
+                        type="email"
+                        autoComplete="off"
+                        value={manualEmail}
+                        onChange={event => setManualEmail(event.target.value)}
+                        placeholder="student@example.com"
+                        className="min-h-11 min-w-0 flex-1 rounded-xl border border-border bg-white px-3.5 text-sm text-fg outline-none transition-colors placeholder:text-slate-400 focus:border-primary focus:ring-2 focus:ring-primary/15"
+                      />
+                      <button type="submit" disabled={isSaving || !manualEmail.trim()} className="min-h-11 rounded-xl bg-primary px-4 text-sm font-bold text-white transition-colors hover:bg-primaryHover disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2">
+                        {isSaving ? 'Recording…' : `Record ${selectedType}`}
+                      </button>
+                    </div>
+                    <p className="mt-2 text-xs text-muted">Uses {selectedEvent} · {selectedSession} · {selectedType}.</p>
+                  </form>
               </div>
             </motion.div>
           )}
 
           {/* ══════════════ SESSION SHEET TAB ══════════════ */}
           {activeTab === 'sheet' && (
-            <motion.div key="sheet" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.25 }}>
+            <motion.div id="attendance-panel-sheet" role="tabpanel" key="sheet" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.18 }}>
               <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
                 <div className="px-6 py-5 border-b border-border flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between bg-white">
                   <div>
@@ -482,10 +527,11 @@ const AttendanceAdminView = () => {
                   </div>
 
                   <div className="flex flex-wrap items-center gap-3">
-                    <div className="relative bg-canvas border border-border rounded-lg px-3 py-2 flex items-center hover:border-borderHover transition-colors">
+                    <div className="relative min-h-11 bg-canvas border border-border rounded-xl px-3 flex items-center hover:border-borderHover transition-colors focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/15">
                       <Search className="w-4 h-4 text-muted mr-2" />
                       <input 
                         type="text" 
+                        aria-label="Search attendance"
                         placeholder="Search name or email..." 
                         className="bg-transparent border-none outline-none text-sm text-fg placeholder-muted w-32 md:w-48"
                         value={searchTerm}
@@ -495,9 +541,10 @@ const AttendanceAdminView = () => {
                     
                     <div className="relative">
                       <select 
+                        aria-label="Filter by role"
                         value={roleFilter} 
                         onChange={e => setRoleFilter(e.target.value)}
-                        className="appearance-none bg-canvas border border-border hover:border-borderHover rounded-lg pl-3 pr-8 py-2 text-sm font-medium text-fg focus:outline-none focus:border-primary transition-colors cursor-pointer"
+                        className="min-h-11 appearance-none bg-canvas border border-border hover:border-borderHover rounded-xl pl-3 pr-8 text-sm font-medium text-fg focus:outline-none focus:border-primary transition-colors cursor-pointer"
                       >
                         <option value="All">All Roles</option>
                         <option value="Student">Student</option>
@@ -509,9 +556,10 @@ const AttendanceAdminView = () => {
 
                     <div className="relative">
                       <select 
+                        aria-label="Filter by status"
                         value={statusFilter} 
                         onChange={e => setStatusFilter(e.target.value)}
-                        className="appearance-none bg-canvas border border-border hover:border-borderHover rounded-lg pl-3 pr-8 py-2 text-sm font-medium text-fg focus:outline-none focus:border-primary transition-colors cursor-pointer"
+                        className="min-h-11 appearance-none bg-canvas border border-border hover:border-borderHover rounded-xl pl-3 pr-8 text-sm font-medium text-fg focus:outline-none focus:border-primary transition-colors cursor-pointer"
                       >
                         <option value="All">All Status</option>
                         <option value="Full Day">Full Day</option>
@@ -524,7 +572,7 @@ const AttendanceAdminView = () => {
 
                     <button 
                       onClick={downloadCSV}
-                      className="flex items-center gap-2 bg-primary hover:bg-primaryHover text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm"
+                      className="min-h-11 flex items-center gap-2 bg-primary hover:bg-primaryHover text-white px-4 rounded-xl text-sm font-bold transition-colors shadow-sm"
                     >
                       <Download className="w-4 h-4" /> Export CSV
                     </button>
@@ -544,53 +592,46 @@ const AttendanceAdminView = () => {
                 ) : (
                   <div className="w-full">
                     {/* Desktop Table View */}
-                    <div className="hidden md:block overflow-x-auto">
-                      <table className="w-full text-left border-collapse">
+                    <div className="hidden xl:block overflow-x-auto">
+                      <table className="w-full min-w-[900px] table-fixed text-left border-collapse">
                         <thead>
                           <tr className="bg-canvas/50">
-                            <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider">Name / Email</th>
-                            <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider">Role</th>
-                            <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider text-center">Morning In</th>
-                            <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider text-center">Morning Out</th>
-                            <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider text-center">Afternoon In</th>
-                            <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider text-center">Afternoon Out</th>
-                            <th className="px-6 py-4 text-xs font-semibold text-muted uppercase tracking-wider text-center">Status</th>
-                            <th className="px-4 py-4 w-12"></th>
+                            <th className="w-[26%] px-5 py-3.5 text-xs font-semibold text-muted uppercase tracking-wider">Attendee</th>
+                            <th className="w-[11%] px-4 py-3.5 text-xs font-semibold text-muted uppercase tracking-wider">Role</th>
+                            <th className="w-[17%] px-4 py-3.5 text-xs font-semibold text-muted uppercase tracking-wider text-center">Morning</th>
+                            <th className="w-[17%] px-4 py-3.5 text-xs font-semibold text-muted uppercase tracking-wider text-center">Afternoon</th>
+                            <th className="w-[17%] px-4 py-3.5 text-xs font-semibold text-muted uppercase tracking-wider text-center">Status</th>
+                            <th className="sticky right-0 z-10 w-[12%] border-l border-border bg-canvas px-4 py-3.5 text-center text-xs font-semibold uppercase tracking-wider text-muted">Actions</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-border bg-white">
                           {filteredTrackerData.map(row => (
-                            <tr key={row.email} className="hover:bg-canvas/30 transition-colors group">
-                              <td className="px-6 py-4">
+                            <tr key={row.email} className="group hover:bg-canvas/30 transition-colors">
+                              <td className="px-5 py-4">
                                 <div className="text-sm font-semibold text-fg">{row.name}</div>
-                                <div className="text-xs text-muted mt-0.5">{row.email}</div>
+                                <div className="mt-0.5 truncate text-xs text-muted" title={row.email}>{row.email}</div>
                               </td>
-                              <td className="px-6 py-4">
+                              <td className="px-4 py-4">
                                 <RoleBadge role={row.role} />
                               </td>
-                              <td className="px-6 py-4 text-center text-sm font-medium text-fg">
-                                {fmtTime(row.morning_in)}
-                              </td>
-                              <td className="px-6 py-4 text-center text-sm font-medium text-fg">
-                                {fmtTime(row.morning_out)}
-                              </td>
-                              <td className="px-6 py-4 text-center text-sm font-medium text-fg">
-                                {fmtTime(row.afternoon_in)}
-                              </td>
-                              <td className="px-6 py-4 text-center text-sm font-medium text-fg">
-                                {fmtTime(row.afternoon_out)}
-                              </td>
-                              <td className="px-6 py-4 text-center">
-                                <StatusBadge status={row.status} />
+                              <td className="px-4 py-4 text-center">
+                                <div className="text-sm font-semibold text-fg">{fmtTime(row.morning_in)} – {fmtTime(row.morning_out)}</div>
+                                <div className="mt-0.5 text-[11px] font-medium uppercase tracking-wide text-muted">In · Out</div>
                               </td>
                               <td className="px-4 py-4 text-center">
-                                <div className="opacity-0 group-hover:opacity-100 transition-opacity flex justify-center">
-                                  <button onClick={() => handleDeleteAll(row.logIds)}
-                                    className="p-1.5 text-muted hover:text-accentRedFg hover:bg-accentRed/10 rounded-md transition-colors"
-                                    title="Delete Record">
-                                    <Trash2 className="w-4 h-4" />
-                                  </button>
-                                </div>
+                                <div className="text-sm font-semibold text-fg">{fmtTime(row.afternoon_in)} – {fmtTime(row.afternoon_out)}</div>
+                                <div className="mt-0.5 text-[11px] font-medium uppercase tracking-wide text-muted">In · Out</div>
+                              </td>
+                              <td className="px-4 py-4 text-center">
+                                <StatusBadge status={row.status} />
+                              </td>
+                              <td className="sticky right-0 z-[1] border-l border-border bg-white px-3 py-4 text-center group-hover:bg-canvas">
+                                <button onClick={() => handleDeleteAll(row.logIds)}
+                                  className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg px-3 text-xs font-bold text-accentRedFg transition-colors hover:bg-accentRed/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                                  title="Delete records" aria-label={`Delete attendance records for ${row.name}`}>
+                                  <Trash2 className="h-4 w-4" />
+                                  Delete
+                                </button>
                               </td>
                             </tr>
                           ))}
@@ -598,7 +639,7 @@ const AttendanceAdminView = () => {
                       </table>
                     </div>
                     {/* Mobile Card View */}
-                    <div className="block md:hidden divide-y divide-border bg-white">
+                    <div className="block divide-y divide-border bg-white xl:hidden">
                       {filteredTrackerData.map(row => (
                         <div key={row.email} className="p-4 flex flex-col gap-3">
                           <div className="flex items-start justify-between">
@@ -622,15 +663,11 @@ const AttendanceAdminView = () => {
 
                           <div className="flex items-center justify-between mt-1">
                             <StatusBadge status={row.status} />
-                            <div className="flex gap-2">
-                              {row.logIds.map(id => (
-                                <button key={id} onClick={() => handleDelete(id)}
-                                  className="p-1.5 bg-accentRed/10 text-accentRedFg hover:bg-accentRed/20 rounded-md transition-colors"
-                                  title="Delete Record">
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
-                              ))}
-                            </div>
+                            <button onClick={() => handleDeleteAll(row.logIds)}
+                              className="inline-flex min-h-11 items-center gap-2 rounded-lg px-3 text-xs font-bold text-accentRedFg transition-colors hover:bg-accentRed/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                              aria-label={`Delete attendance records for ${row.name}`}>
+                              <Trash2 className="h-4 w-4" /> Delete
+                            </button>
                           </div>
                         </div>
                       ))}
@@ -643,7 +680,7 @@ const AttendanceAdminView = () => {
 
           {/* ══════════════ GENERAL REPORT TAB ══════════════ */}
           {activeTab === 'general' && (
-            <motion.div key="general" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.25 }}>
+            <motion.div id="attendance-panel-general" role="tabpanel" key="general" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.18 }}>
               <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
                 <div className="px-6 py-5 border-b border-border bg-white flex items-center justify-between">
                   <div>
@@ -760,7 +797,7 @@ const AttendanceAdminView = () => {
 
           {/* ══════════════ STATISTICS TAB ══════════════ */}
           {activeTab === 'stats' && (
-            <motion.div key="stats" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.25 }} className="space-y-6">
+            <motion.div id="attendance-panel-stats" role="tabpanel" key="stats" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.18 }} className="space-y-6">
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 {[

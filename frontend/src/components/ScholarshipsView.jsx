@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Edit2, Trash2, ExternalLink, GraduationCap, MapPin, CheckCircle2, Sparkles, RefreshCw, Clock, ShieldCheck, BookmarkPlus, Check, ChevronDown, Calendar, FileText, AlertCircle, Search, Filter, X } from 'lucide-react';
+import { Plus, Edit2, Trash2, ExternalLink, GraduationCap, MapPin, CheckCircle2, Sparkles, RefreshCw, Clock, ShieldCheck, BookmarkPlus, Check, Calendar, FileText, AlertCircle, Search, X } from 'lucide-react';
 import { cn } from '../utils';
 import { toast } from 'sonner';
 import anime from 'animejs';
 import { getAllVaultDocuments, findVaultDocForReq } from '../utils/vaultStorage';
+import { PageHeader, PageShell } from './ui/page';
 
 export default function ScholarshipsView({ userEmail, userRole }) {
   const [scholarships, setScholarships] = useState([]);
@@ -15,18 +16,13 @@ export default function ScholarshipsView({ userEmail, userRole }) {
   const [activeModalTab, setActiveModalTab] = useState('manual'); // 'manual' | 'bot'
   const [botInput, setBotInput] = useState('');
   const [isParsingBot, setIsParsingBot] = useState(false);
+  const [parseError, setParseError] = useState('');
+  const [autoFillSummary, setAutoFillSummary] = useState(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [expandedCardIds, setExpandedCardIds] = useState({});
   const [activeFilter, setActiveFilter] = useState('all'); // 'all' | 'verified' | 'closing'
-  const [isChecklistOpen, setIsChecklistOpen] = useState(true);
-
-  const toggleCardExpanded = (id) => {
-    setExpandedCardIds(prev => ({
-      ...prev,
-      [id]: !prev[id]
-    }));
-  };
+  const [isLoadingScholarships, setIsLoadingScholarships] = useState(true);
+  const [scholarshipLoadError, setScholarshipLoadError] = useState('');
 
   const [currentScholarship, setCurrentScholarship] = useState({
     id: '',
@@ -49,24 +45,20 @@ export default function ScholarshipsView({ userEmail, userRole }) {
     }
   }, [userEmail]);
 
-  useEffect(() => {
-    anime({
-      targets: '.scholarship-card-anim',
-      translateY: [14, 0],
-      opacity: [0, 1],
-      delay: anime.stagger(35),
-      easing: 'easeOutCubic',
-      duration: 350
-    });
-  }, [activeFilter, searchQuery, scholarships.length]);
+
 
   const fetchScholarships = async () => {
+    setIsLoadingScholarships(true);
+    setScholarshipLoadError('');
     try {
       const res = await fetch('/api/scholarships');
+      if (!res.ok) throw new Error('Request failed');
       const data = await res.json();
       setScholarships(data.scholarships || []);
-    } catch (error) {
-      toast.error('Failed to load scholarships');
+    } catch {
+      setScholarshipLoadError('Scholarships could not be loaded. Check your connection and try again.');
+    } finally {
+      setIsLoadingScholarships(false);
     }
   };
 
@@ -115,11 +107,12 @@ export default function ScholarshipsView({ userEmail, userRole }) {
 
   const handleAutoParseBot = async () => {
     if (!botInput.trim()) {
-      toast.warning("Please paste a scholarship URL or announcement text!");
+      setParseError('Paste an official URL or announcement text first.');
       return;
     }
 
     setIsParsingBot(true);
+    setParseError('');
     try {
       const res = await fetch('/api/scholarships/auto-parse', {
         method: 'POST',
@@ -135,35 +128,35 @@ export default function ScholarshipsView({ userEmail, userRole }) {
           location: data.parsed.location || currentScholarship.location,
           deadline: data.parsed.deadline || currentScholarship.deadline,
           applyLink: data.parsed.applyLink || currentScholarship.applyLink,
+          description: data.parsed.description || currentScholarship.description,
+          benefits: data.parsed.benefits || currentScholarship.benefits,
+          officialDomain: data.parsed.officialDomain || currentScholarship.officialDomain,
           requirements: data.parsed.requirements?.length ? data.parsed.requirements : [''],
-          verified: data.parsed.verified ?? true
+          verified: data.parsed.verified ?? false
+        });
+        setAutoFillSummary({
+          fields: data.meta?.fieldsDetected || [],
+          warnings: data.meta?.warnings || [],
         });
         setActiveModalTab('manual');
-        toast.success("Bot successfully extracted scholarship details and requirements checklist!");
+        toast.success('Details extracted. Review them before publishing.');
       } else {
-        toast.error(data.error || "Failed to extract details");
+        setParseError(data.error || 'Could not extract scholarship details.');
       }
     } catch {
-      toast.error("Bot extraction network error");
+      setParseError('Could not reach the parser. Check your connection and try again.');
     } finally {
       setIsParsingBot(false);
     }
   };
 
-  const handleTrackScholarship = async (scholarship, e) => {
+  const handleTrackScholarship = async (scholarship) => {
     if (!userEmail) {
       toast.error("Please log in to track scholarships!");
       return;
     }
 
-    if (e) {
-      anime({
-        targets: e.currentTarget,
-        scale: [0.9, 1.1, 1],
-        duration: 350,
-        easing: 'easeOutElastic(1, .7)'
-      });
-    }
+
 
     const isAlreadyTracked = trackedScholarships.some(item => {
       const title = typeof item === 'string' ? item : item.title;
@@ -222,6 +215,8 @@ export default function ScholarshipsView({ userEmail, userRole }) {
       });
       setIsEditing(true);
       setActiveModalTab('manual');
+      setAutoFillSummary(null);
+      setParseError('');
     } else {
       setCurrentScholarship({
         id: crypto.randomUUID(),
@@ -239,6 +234,8 @@ export default function ScholarshipsView({ userEmail, userRole }) {
       setIsEditing(false);
       setActiveModalTab('manual');
       setBotInput('');
+      setAutoFillSummary(null);
+      setParseError('');
     }
     setIsModalOpen(true);
   };
@@ -289,7 +286,7 @@ export default function ScholarshipsView({ userEmail, userRole }) {
       } else {
         toast.error('Failed to save scholarship');
       }
-    } catch (error) {
+    } catch {
       toast.error('An error occurred');
     }
   };
@@ -302,7 +299,7 @@ export default function ScholarshipsView({ userEmail, userRole }) {
         toast.success('Scholarship deleted');
         fetchScholarships();
       }
-    } catch (error) {
+    } catch {
       toast.error('Failed to delete');
     }
   };
@@ -363,106 +360,127 @@ export default function ScholarshipsView({ userEmail, userRole }) {
     return true;
   });
 
+  const verifiedCount = scholarships.filter(s => s.verified === true).length;
+  const closingSoonCount = scholarships.filter(s => {
+    const badge = getDeadlineBadge(s.deadline);
+    return badge && badge.days >= 0 && badge.days <= 14;
+  }).length;
+
+  const formatDeadline = (deadline) => {
+    if (!deadline) return '';
+    const parsed = new Date(`${deadline}T00:00:00`);
+    if (Number.isNaN(parsed.getTime())) return deadline;
+    return parsed.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+
   return (
-    <div className="p-4 sm:p-6 lg:p-8 h-full flex flex-col overflow-y-auto max-w-7xl mx-auto w-full">
-      {/* Header Section */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-        <div>
-          <div className="flex items-center gap-3 mb-1 flex-wrap">
-            <h1 className="text-2xl sm:text-3xl font-black text-fg tracking-tight">Available Scholarships</h1>
-            <span className="bg-primary/10 text-primary text-xs font-bold px-2.5 py-0.5 rounded-full border border-primary/20">
-              {scholarships.length} Verified
-            </span>
-          </div>
-          <p className="text-muted text-xs sm:text-sm max-w-2xl">
-            Verified financial aid programs and grant opportunities for Filipino students.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2.5 w-full sm:w-auto flex-wrap">
-          <button
-            onClick={() => setIsChecklistModalOpen(true)}
-            className="flex-1 sm:flex-initial bg-canvas border border-border hover:bg-slate-100 text-fg px-3.5 py-2 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all shadow-sm text-xs sm:text-sm active:scale-95"
-            title="View standard documents needed across most scholarships"
-          >
-            <ShieldCheck className="w-4 h-4 text-emerald-600" />
-            <span>Standard Document Kit</span>
-          </button>
-
-          {userRole === 'admin' && (
+    <PageShell width="wide">
+      <PageHeader
+        title="Scholarships"
+        description="Compare verified programs, prepare your documents, and track every application in one place."
+        actions={(
+          <>
             <button
-              onClick={handleSyncOfficialPortals}
-              disabled={isSyncing}
-              className="bg-canvas border border-border hover:bg-slate-100 text-fg px-3.5 py-2 rounded-xl font-semibold flex items-center justify-center gap-1.5 transition-all shadow-sm text-xs sm:text-sm active:scale-95"
-              title="Re-synchronize official government listings"
+              onClick={() => setIsChecklistModalOpen(true)}
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-border bg-card px-3.5 text-sm font-semibold text-fg shadow-sm transition-colors hover:bg-slate-50"
             >
-              <RefreshCw className={`w-3.5 h-3.5 text-primary ${isSyncing ? 'animate-spin' : ''}`} />
-              <span className="hidden sm:inline">Sync</span>
+              <ShieldCheck className="h-4 w-4 text-emerald-600" />
+              Document kit
             </button>
-          )}
+            {userRole === 'admin' && (
+              <button
+                onClick={handleSyncOfficialPortals}
+                disabled={isSyncing}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-border bg-card px-3.5 text-sm font-semibold text-fg shadow-sm transition-colors hover:bg-slate-50 disabled:opacity-60"
+              >
+                <RefreshCw className={`h-4 w-4 text-primary ${isSyncing ? 'animate-spin' : ''}`} />
+                Sync
+              </button>
+            )}
+            {userRole === 'admin' && (
+              <button
+                onClick={() => openModal()}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-bold text-white shadow-sm transition-colors hover:bg-primaryHover"
+              >
+                <Plus className="h-4 w-4" />
+                Add scholarship
+              </button>
+            )}
+          </>
+        )}
+      />
 
-          {userRole === 'admin' && (
-            <button 
-              onClick={() => openModal()}
-              className="bg-primary hover:bg-primaryHover text-white px-4 py-2 rounded-xl font-bold flex items-center justify-center gap-1.5 transition-all shadow-md shadow-primary/20 text-xs sm:text-sm active:scale-95 shrink-0"
-            >
-              <Plus className="w-4 h-4 stroke-[3]" />
-              <span>Add Program</span>
-            </button>
-          )}
+      <section className="mt-7 overflow-hidden rounded-2xl border border-border bg-card shadow-sm" aria-label="Scholarship search and filters">
+        <div className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center">
+          <label className="relative min-w-0 flex-1">
+            <span className="sr-only">Search scholarships</span>
+            <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Search programs, providers, or locations"
+              className="h-11 w-full rounded-xl border border-border bg-canvas pl-10 pr-4 text-sm text-fg outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15"
+            />
+          </label>
+          <div className="flex overflow-x-auto rounded-xl bg-canvas p-1" role="tablist" aria-label="Scholarship filters">
+            {[
+              { id: 'all', label: 'All', count: scholarships.length },
+              { id: 'verified', label: 'Verified', count: verifiedCount },
+              { id: 'closing', label: 'Closing soon', count: closingSoonCount },
+            ].map(filter => (
+              <button
+                key={filter.id}
+                type="button"
+                role="tab"
+                aria-selected={activeFilter === filter.id}
+                onClick={() => setActiveFilter(filter.id)}
+                className={cn(
+                  'h-9 shrink-0 rounded-lg px-3 text-xs font-semibold transition-colors sm:text-sm',
+                  activeFilter === filter.id
+                    ? 'bg-card text-primary shadow-sm ring-1 ring-border'
+                    : 'text-muted hover:text-fg'
+                )}
+              >
+                {filter.label} <span className="ml-1 text-[11px] opacity-70">{filter.count}</span>
+              </button>
+            ))}
+          </div>
         </div>
+      </section>
+
+      <div className="mb-4 mt-5 flex items-center justify-between gap-3">
+        <p className="text-sm text-muted">
+          <span className="font-semibold text-fg">{filteredScholarships.length}</span>{' '}
+          {filteredScholarships.length === 1 ? 'program' : 'programs'} available
+        </p>
+        <p className="hidden text-xs text-muted sm:block">Deadlines use Philippine time</p>
       </div>
 
-      {/* Clean Search & Filter Toolbar */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 mb-6 bg-card border border-border p-2 sm:p-2.5 rounded-2xl shadow-sm">
-        <div className="relative flex-1">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Search by name, provider, or region (e.g. DOST, CHED, SM, Davao)..."
-            className="w-full pl-9 pr-3 py-1.5 rounded-xl text-xs sm:text-sm bg-transparent focus:outline-none placeholder:text-muted"
-          />
+      {isLoadingScholarships && (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3" aria-label="Loading scholarships">
+          {[0, 1, 2, 3, 4, 5].map(item => (
+            <div key={item} className="h-80 animate-pulse rounded-2xl border border-border bg-card p-5">
+              <div className="h-4 w-24 rounded bg-slate-200" />
+              <div className="mt-6 h-6 w-4/5 rounded bg-slate-200" />
+              <div className="mt-3 h-4 w-full rounded bg-slate-100" />
+              <div className="mt-2 h-4 w-2/3 rounded bg-slate-100" />
+            </div>
+          ))}
         </div>
+      )}
 
-        {/* Filter Chips */}
-        <div className="flex items-center gap-1.5 border-t sm:border-t-0 pt-2 sm:pt-0 border-border">
-          <button
-            onClick={() => setActiveFilter('all')}
-            className={`px-3 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
-              activeFilter === 'all'
-                ? 'bg-primary text-white shadow-xs'
-                : 'text-muted hover:text-fg hover:bg-canvas'
-            }`}
-          >
-            All ({scholarships.length})
-          </button>
-          <button
-            onClick={() => setActiveFilter('verified')}
-            className={`px-3 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
-              activeFilter === 'verified'
-                ? 'bg-primary text-white shadow-xs'
-                : 'text-muted hover:text-fg hover:bg-canvas'
-            }`}
-          >
-            Verified Only
-          </button>
-          <button
-            onClick={() => setActiveFilter('closing')}
-            className={`px-3 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
-              activeFilter === 'closing'
-                ? 'bg-primary text-white shadow-xs'
-                : 'text-muted hover:text-fg hover:bg-canvas'
-            }`}
-          >
-            Closing Soon
-          </button>
+      {!isLoadingScholarships && scholarshipLoadError && (
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-center">
+          <AlertCircle className="mx-auto h-6 w-6 text-red-600" />
+          <h2 className="mt-3 font-bold text-fg">Unable to load scholarships</h2>
+          <p className="mt-1 text-sm text-muted">{scholarshipLoadError}</p>
+          <button onClick={fetchScholarships} className="mt-4 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-white hover:bg-primaryHover">Try again</button>
         </div>
-      </div>
+      )}
 
-      {/* Scholarships Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 items-start">
+      {!isLoadingScholarships && !scholarshipLoadError && (
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 items-stretch">
         {filteredScholarships.map((scholarship) => {
           const deadlineBadge = getDeadlineBadge(scholarship.deadline);
           const isTracked = trackedScholarships.some(item => {
@@ -472,114 +490,113 @@ export default function ScholarshipsView({ userEmail, userRole }) {
           const reqCount = scholarship.requirements?.length || 0;
 
           return (
-            <div 
+            <article
               key={scholarship.id} 
-              className="scholarship-card-anim bg-card border border-border hover:border-primary/40 rounded-2xl p-5 flex flex-col shadow-sm hover:shadow-md transition-all h-full"
+              className="group flex h-full flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-sm transition hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md"
             >
-              {/* Card Header: Provider & Badges */}
-              <div className="flex items-start justify-between gap-2 mb-3">
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="text-[11px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-md truncate max-w-[160px]">
-                    {scholarship.provider}
-                  </span>
+              <div className="flex flex-1 flex-col p-5">
+                <div className="flex min-h-8 items-start justify-between gap-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {scholarship.verified && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-bold text-emerald-700 ring-1 ring-inset ring-emerald-200">
+                        <ShieldCheck className="h-3 w-3" /> Verified
+                      </span>
+                    )}
                   {deadlineBadge && (
-                    <span className={`text-[10px] px-2 py-0.5 rounded-md border flex items-center gap-1 ${deadlineBadge.color}`}>
-                      <Clock className="w-2.5 h-2.5" />
+                    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[11px] ${deadlineBadge.color}`}>
+                      <Clock className="h-3 w-3" />
                       {deadlineBadge.label}
                     </span>
                   )}
-                </div>
+                  </div>
 
                 {userRole === 'admin' && (
-                  <div className="flex items-center gap-0.5 shrink-0 -mr-1 -mt-1">
+                  <div className="flex shrink-0 items-center gap-1">
                     <button 
                       onClick={() => openModal(scholarship)} 
-                      className="text-muted hover:text-fg p-1.5 rounded-lg hover:bg-canvas transition-colors"
-                      title="Edit"
+                      className="rounded-lg p-2 text-muted transition-colors hover:bg-canvas hover:text-fg"
+                      aria-label={`Edit ${scholarship.title}`}
                     >
-                      <Edit2 className="w-3.5 h-3.5" />
+                      <Edit2 className="h-4 w-4" />
                     </button>
                     <button 
                       onClick={() => handleDelete(scholarship.id)} 
-                      className="text-muted hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 transition-colors"
-                      title="Delete"
+                      className="rounded-lg p-2 text-muted transition-colors hover:bg-red-50 hover:text-red-600"
+                      aria-label={`Delete ${scholarship.title}`}
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <Trash2 className="h-4 w-4" />
                     </button>
                   </div>
                 )}
               </div>
 
-              {/* Title & Description */}
-              <h3 className="text-base font-bold text-fg leading-snug mb-1.5 line-clamp-2">
+                <p className="mt-4 line-clamp-2 text-sm font-semibold leading-5 text-primary">{scholarship.provider}</p>
+              <h3 className="mt-2 line-clamp-2 text-lg font-bold leading-snug text-fg">
                 {scholarship.title}
               </h3>
               
               {scholarship.description && (
-                <p className="text-xs text-muted mb-3 line-clamp-2 leading-relaxed">
+                  <p className="mt-2 line-clamp-3 text-sm leading-6 text-muted">
                   {scholarship.description}
                 </p>
               )}
 
-              {/* Meta tags (Location & Deadline) */}
-              <div className="flex flex-wrap gap-2 text-[11px] text-muted mb-3.5">
-                <div className="flex items-center gap-1 bg-canvas border border-border/60 px-2 py-0.5 rounded-md">
-                  <MapPin className="w-3 h-3 text-primary/70 shrink-0" />
-                  <span className="truncate max-w-[130px]">{scholarship.location}</span>
-                </div>
+                <dl className="mt-5 grid grid-cols-1 gap-2 text-sm text-muted sm:grid-cols-2">
+                  {scholarship.location && (
+                    <div className="flex min-w-0 items-center gap-2">
+                      <MapPin className="h-4 w-4 shrink-0 text-primary" />
+                      <dd className="truncate">{scholarship.location}</dd>
+                    </div>
+                  )}
                 {scholarship.deadline && (
-                  <div className="flex items-center gap-1 bg-canvas border border-border/60 px-2 py-0.5 rounded-md">
-                    <Calendar className="w-3 h-3 text-primary/70 shrink-0" />
-                    <span>Due: {scholarship.deadline}</span>
+                    <div className="flex items-center gap-2">
+                      <Calendar className="h-4 w-4 shrink-0 text-primary" />
+                      <dd>{formatDeadline(scholarship.deadline)}</dd>
                   </div>
                 )}
-              </div>
+                </dl>
 
-              {/* Benefits Highlight */}
               {scholarship.benefits && (
-                <div className="bg-canvas/80 border border-border/70 rounded-xl p-2.5 mb-3 text-xs">
-                  <div className="text-[10px] font-bold text-muted uppercase tracking-wider mb-0.5">Benefits & Coverage</div>
-                  <p className="text-fg text-xs line-clamp-2 leading-relaxed font-medium">
+                  <div className="mt-5 border-t border-border pt-4">
+                    <p className="text-xs font-bold text-muted">Benefits and coverage</p>
+                    <p className="mt-1 line-clamp-2 text-sm font-medium leading-6 text-fg">
                     {scholarship.benefits}
                   </p>
                 </div>
               )}
 
-              {/* Requirements summary trigger button */}
               <button
                 type="button"
                 onClick={() => setSelectedScholarshipDetail(scholarship)}
-                className="text-xs font-semibold text-primary hover:text-primaryHover flex items-center justify-between p-2 rounded-xl bg-primary/5 hover:bg-primary/10 border border-primary/10 transition-colors mb-4"
+                  className="mt-4 flex w-full items-center justify-between rounded-xl bg-primary/5 px-3 py-2.5 text-sm font-semibold text-primary transition-colors hover:bg-primary/10"
               >
-                <span className="flex items-center gap-1.5">
-                  <FileText className="w-3.5 h-3.5" />
-                  <span>View Required Documents</span>
+                  <span className="flex items-center gap-2">
+                    <FileText className="h-4 w-4" />
+                    Required documents
                 </span>
-                <span className="text-[10px] font-bold bg-white/80 dark:bg-card px-1.5 py-0.5 rounded border border-primary/20">
-                  {reqCount} items
-                </span>
+                  <span>{reqCount}</span>
               </button>
+              </div>
 
-              {/* Actions Footer */}
-              <div className="mt-auto pt-3 border-t border-border flex items-center gap-2">
+              <div className="flex items-center gap-2 border-t border-border bg-canvas/50 p-4">
                 <button
-                  onClick={(e) => handleTrackScholarship(scholarship, e)}
+                  onClick={() => handleTrackScholarship(scholarship)}
                   disabled={isTracked}
-                  className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
+                  className={`inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl px-3 text-sm font-bold transition-colors ${
                     isTracked 
                       ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 cursor-default'
-                      : 'bg-primary text-white hover:bg-primaryHover active:scale-95 shadow-sm shadow-primary/20'
+                      : 'bg-primary text-white hover:bg-primaryHover shadow-sm'
                   }`}
                 >
                   {isTracked ? (
                     <>
-                      <Check className="w-3.5 h-3.5 stroke-[3]" />
+                      <Check className="h-4 w-4" />
                       <span>Tracked</span>
                     </>
                   ) : (
                     <>
-                      <BookmarkPlus className="w-3.5 h-3.5" />
-                      <span>Track Checklist</span>
+                      <BookmarkPlus className="h-4 w-4" />
+                      <span>Track</span>
                     </>
                   )}
                 </button>
@@ -588,13 +605,13 @@ export default function ScholarshipsView({ userEmail, userRole }) {
                   href={scholarship.applyLink} 
                   target="_blank" 
                   rel="noopener noreferrer"
-                  className="p-2 bg-canvas hover:bg-slate-100 border border-border text-fg rounded-xl font-semibold text-xs flex items-center justify-center gap-1 transition-all active:scale-95"
-                  title="Open Official Application Portal"
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-border bg-card px-3 text-sm font-bold text-fg transition-colors hover:bg-slate-50"
+                  aria-label={`Open official application for ${scholarship.title}`}
                 >
-                  <ExternalLink className="w-4 h-4 text-muted hover:text-fg" />
+                  Apply <ExternalLink className="h-4 w-4" />
                 </a>
               </div>
-            </div>
+            </article>
           );
         })}
 
@@ -616,6 +633,7 @@ export default function ScholarshipsView({ userEmail, userRole }) {
           </div>
         )}
       </div>
+      )}
 
       {/* Universal Standard Document Kit Modal */}
       <AnimatePresence>
@@ -782,8 +800,8 @@ export default function ScholarshipsView({ userEmail, userRole }) {
 
               <div className="flex items-center gap-3 pt-3 border-t border-border shrink-0 mt-3">
                 <button
-                  onClick={(e) => {
-                    handleTrackScholarship(selectedScholarshipDetail, e);
+                  onClick={() => {
+                    handleTrackScholarship(selectedScholarshipDetail);
                     setSelectedScholarshipDetail(null);
                   }}
                   className="flex-1 py-2.5 px-4 rounded-xl bg-primary text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm hover:bg-primaryHover transition-colors"
@@ -845,6 +863,7 @@ export default function ScholarshipsView({ userEmail, userRole }) {
                   onClick={() => setIsModalOpen(false)} 
                   className="w-8 h-8 rounded-xl flex items-center justify-center text-muted hover:text-fg hover:bg-canvas transition-colors shrink-0"
                   title="Close modal"
+                  aria-label="Close scholarship editor"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -853,9 +872,11 @@ export default function ScholarshipsView({ userEmail, userRole }) {
               {/* Segmented Tab Switcher */}
               {!isEditing && (
                 <div className="pt-4 pb-1 shrink-0">
-                  <div className="bg-canvas p-1 rounded-xl border border-border/70 flex gap-1">
+                  <div role="tablist" aria-label="Scholarship entry method" className="bg-canvas p-1 rounded-xl border border-border/70 flex gap-1">
                     <button
                       type="button"
+                      role="tab"
+                      aria-selected={activeModalTab === 'manual'}
                       onClick={() => setActiveModalTab('manual')}
                       className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
                         activeModalTab === 'manual'
@@ -868,6 +889,8 @@ export default function ScholarshipsView({ userEmail, userRole }) {
                     </button>
                     <button
                       type="button"
+                      role="tab"
+                      aria-selected={activeModalTab === 'bot'}
                       onClick={() => setActiveModalTab('bot')}
                       className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
                         activeModalTab === 'bot'
@@ -891,21 +914,21 @@ export default function ScholarshipsView({ userEmail, userRole }) {
                       <div className="flex items-center justify-between gap-2 mb-1">
                         <div className="flex items-center gap-1.5 font-bold text-primary text-xs sm:text-sm">
                           <Sparkles className="w-4 h-4 text-primary" />
-                          <span>AI Scholarship Auto-Fill</span>
+                          <span>Scholarship Auto-Fill</span>
                         </div>
                         <span className="text-[10px] font-bold bg-primary/10 text-primary px-2 py-0.5 rounded-full">
-                          Instant Parser
+                          Review required
                         </span>
                       </div>
                       <p className="text-muted text-[11px] sm:text-xs leading-relaxed">
-                        Paste any official scholarship link or raw announcement text below. Our parser automatically fills out the title, provider, deadline, coverage, and required documents.
+                        Paste an official link or announcement. We will extract available details, then take you to a review form before anything is published.
                       </p>
                     </div>
 
                     {/* Quick Preset Chips */}
                     <div>
                       <span className="text-[10px] font-bold text-muted uppercase tracking-wider block mb-1.5">
-                        Quick Example Portals (Click to test):
+                        Try an official source
                       </span>
                       <div className="flex items-center gap-1.5 flex-wrap">
                         {[
@@ -919,7 +942,6 @@ export default function ScholarshipsView({ userEmail, userRole }) {
                             type="button"
                             onClick={() => {
                               setBotInput(preset.url);
-                              toast.info(`Loaded ${preset.label} URL`);
                             }}
                             className="text-[11px] px-2.5 py-1 bg-canvas hover:bg-primary/10 hover:border-primary/30 border border-border rounded-lg text-fg font-medium transition-all flex items-center gap-1 active:scale-95"
                           >
@@ -936,11 +958,11 @@ export default function ScholarshipsView({ userEmail, userRole }) {
                         <label className="block text-xs font-semibold text-fg">
                           Official URL or Announcement Text <span className="text-primary">*</span>
                         </label>
-                        {botInput && (
+                        {botInput && !isParsingBot && (
                           <button
                             type="button"
-                            onClick={() => setBotInput('')}
-                            className="text-[10px] font-bold text-muted hover:text-red-500"
+                            onClick={() => { setBotInput(''); setParseError(''); }}
+                            className="min-h-8 px-2 text-[10px] font-bold text-muted hover:text-accentRedFg"
                           >
                             Clear
                           </button>
@@ -949,47 +971,40 @@ export default function ScholarshipsView({ userEmail, userRole }) {
                       <textarea
                         rows={4}
                         value={botInput}
-                        onChange={e => setBotInput(e.target.value)}
+                        onChange={e => { setBotInput(e.target.value); setParseError(''); }}
                         placeholder="Paste link (https://...) or paste memo text / guidelines here..."
+                        aria-describedby="autofill-help"
                         className="w-full px-3.5 py-2.5 rounded-xl border border-border/80 bg-canvas/60 text-xs sm:text-sm text-fg placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary/15 focus:border-primary transition-all resize-none font-sans"
                       />
-                    </div>
-
-                    {/* What AI Detects Badge Bar */}
-                    <div className="bg-canvas p-2.5 rounded-xl border border-border/60">
-                      <span className="text-[10px] font-bold text-muted uppercase tracking-wider block mb-1.5">
-                        Fields Extracted Automatically:
-                      </span>
-                      <div className="flex flex-wrap gap-1.5 text-[10px] font-medium text-muted">
-                        <span className="bg-card border border-border px-2 py-0.5 rounded-md text-fg">✓ Program Title</span>
-                        <span className="bg-card border border-border px-2 py-0.5 rounded-md text-fg">✓ Provider Agency</span>
-                        <span className="bg-card border border-border px-2 py-0.5 rounded-md text-fg">✓ Application Deadline</span>
-                        <span className="bg-card border border-border px-2 py-0.5 rounded-md text-fg">✓ Benefits & Stipends</span>
-                        <span className="bg-card border border-border px-2 py-0.5 rounded-md text-fg">✓ Complete Checklist</span>
+                      <div id="autofill-help" className="mt-1.5 flex items-center justify-between gap-3 text-[11px] text-muted">
+                        <span>{botInput.trim().startsWith('http') ? 'Official link detected' : 'Announcement text'}</span>
+                        <span>{botInput.length.toLocaleString()} characters</span>
                       </div>
+                      {parseError && (
+                        <div role="alert" className="mt-2 flex items-start gap-2 rounded-lg border border-accentRedFg/20 bg-accentRed px-3 py-2 text-xs font-semibold text-accentRedFg">
+                          <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                          <span>{parseError}</span>
+                        </div>
+                      )}
                     </div>
 
-                    {/* Extract Action Button */}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        anime({
-                          targets: e.currentTarget,
-                          scale: [0.97, 1.02, 1],
-                          duration: 300,
-                          easing: 'easeOutElastic(1, .8)'
-                        });
-                        handleAutoParseBot();
-                      }}
-                      disabled={isParsingBot}
-                      className="w-full bg-primary hover:bg-primaryHover text-white py-2.5 px-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-md shadow-primary/20 text-xs sm:text-sm active:scale-98"
-                    >
-                      <Sparkles className={`w-4 h-4 ${isParsingBot ? 'animate-spin' : ''}`} />
-                      <span>{isParsingBot ? 'Parsing and Extracting Details...' : 'Extract & Auto-Fill Scholarship Form'}</span>
-                    </button>
+                    <p className="text-xs leading-relaxed text-muted">
+                      Auto-fill only uses details found in the source. Missing fields stay blank instead of being guessed.
+                    </p>
                   </div>
                 ) : (
                   <div className="space-y-4">
+                    {autoFillSummary && !isEditing && (
+                      <div className="rounded-xl border border-accentGreenFg/20 bg-accentGreen px-3.5 py-3 text-xs text-accentGreenFg">
+                        <div className="flex items-center gap-2 font-bold">
+                          <CheckCircle2 className="h-4 w-4" /> Auto-fill complete — review before publishing
+                        </div>
+                        <p className="mt-1 text-[11px] leading-relaxed">
+                          {autoFillSummary.fields.length} fields found.
+                          {autoFillSummary.warnings.length > 0 && ` ${autoFillSummary.warnings.join(' ')}`}
+                        </p>
+                      </div>
+                    )}
                     {/* Title */}
                     <div>
                       <label className="block text-xs font-semibold text-fg mb-1.5">
@@ -1075,6 +1090,19 @@ export default function ScholarshipsView({ userEmail, userRole }) {
                       />
                     </div>
 
+                    <div>
+                      <label className="block text-xs font-semibold text-fg mb-1.5">
+                        Program Description
+                      </label>
+                      <textarea
+                        rows={3}
+                        value={currentScholarship.description || ''}
+                        onChange={e => setCurrentScholarship({ ...currentScholarship, description: e.target.value })}
+                        placeholder="Who is eligible and what the scholarship supports"
+                        className="w-full resize-none rounded-xl border border-border/80 bg-canvas/60 px-3.5 py-2 text-xs text-fg placeholder:text-muted focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 sm:text-sm"
+                      />
+                    </div>
+
                     {/* Requirements Checklist */}
                     <div>
                       <div className="flex justify-between items-center mb-2">
@@ -1131,18 +1159,21 @@ export default function ScholarshipsView({ userEmail, userRole }) {
                 >
                   Cancel
                 </button>
-                <button 
+                <button
                   type="button" 
-                  onClick={handleSave}
-                  className="px-5 py-2 rounded-xl bg-primary hover:bg-primaryHover text-white font-bold text-xs transition-all shadow-sm shadow-primary/20 active:scale-98"
+                  onClick={activeModalTab === 'bot' && !isEditing ? handleAutoParseBot : handleSave}
+                  disabled={isParsingBot || (activeModalTab === 'bot' && !botInput.trim())}
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-primary px-5 text-xs font-bold text-white shadow-sm transition-colors hover:bg-primaryHover disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {isEditing ? 'Save Changes' : 'Publish Scholarship'}
+                  {activeModalTab === 'bot' && !isEditing ? (
+                    <><Sparkles className={cn('h-4 w-4', isParsingBot && 'animate-spin')} />{isParsingBot ? 'Extracting details…' : 'Extract details'}</>
+                  ) : (isEditing ? 'Save Changes' : 'Publish Scholarship')}
                 </button>
               </div>
             </motion.div>
           </div>
         )}
       </AnimatePresence>
-    </div>
+    </PageShell>
   );
 }

@@ -14,6 +14,7 @@ from concurrent.futures import ThreadPoolExecutor
 from flask import Flask, request, send_file, jsonify
 from flask_cors import CORS
 from pdf_generator import generate_pdf_bytes
+from calendar_events import audience_allows, normalize_event, notification_allows, validate_event_payload
 
 # Serve from frontend/dist — uses pathlib so this works from any CWD
 import pathlib
@@ -555,37 +556,93 @@ def update_tracker_data():
 def index():
     return app.send_static_file('index.html')
 
+@app.route('/launch/<nonce>')
+def fresh_launch(nonce):
+    """Serve the app from a unique path to bypass stale local service workers."""
+    return app.send_static_file('index.html')
+
+def _send_event_push(event, action, actor_email=''):
+    """Best-effort event notification; calendar writes never depend on FCM."""
+    try:
+        from firebase_admin import messaging
+        audience = event.get('audience', 'all')
+        tokens = []
+        for user in load_json(USERS_FILE):
+            token = user.get('fcm_token')
+            email = (user.get('email') or '').strip().lower()
+            if token and email != actor_email and notification_allows(user.get('role', 'student'), audience):
+                tokens.append(token)
+        if not tokens:
+            return
+        action_title = {'created': 'New calendar event', 'updated': 'Calendar event updated', 'deleted': 'Calendar event cancelled'}[action]
+        date_label = event.get('date', '')
+        body = f"{event.get('title', 'Calendar event')} · {date_label}".strip(' ·')
+        messaging.send_each_for_multicast(messaging.MulticastMessage(
+            notification=messaging.Notification(title=action_title, body=body[:120]),
+            tokens=list(dict.fromkeys(tokens)),
+        ))
+    except Exception as exc:
+        print('Calendar FCM Push Error:', exc)
+
+
 @app.route('/api/events', methods=['GET'])
+@token_required()
 def get_events():
-    return {"events": load_events()}
+    role = request.current_user.get('role', 'student')
+    events = [normalize_event(event) for event in load_events()]
+    return {"events": [event for event in events if audience_allows(role, event.get('audience', 'all'))]}
 
 @app.route('/api/events', methods=['POST'])
 @require_role('admin', 'volunteer')
 def add_event():
     events = load_events()
-    new_event = request.json
+    new_event, error = validate_event_payload(request.json or {})
+    if error:
+        return {"error": error}, 400
+    import uuid
+    import datetime
+    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    actor = request.current_user
+    new_event['id'] = str(uuid.uuid4())
+    new_event['createdBy'] = actor.get('email', '')
+    new_event['createdAt'] = now
+    new_event['updatedAt'] = now
     events.append(new_event)
     save_events(events)
+    _send_event_push(new_event, 'created', actor.get('email', '').strip().lower())
     return {"success": True, "event": new_event}
 
 @app.route('/api/events/<event_id>', methods=['DELETE'])
 @require_role('admin', 'volunteer')
 def delete_event(event_id):
     events = load_events()
-    events = [e for e in events if e.get('id') != event_id]
+    deleted_event = next((normalize_event(event) for event in events if str(event.get('id')) == str(event_id)), None)
+    if not deleted_event:
+        return {"error": "Event not found"}, 404
+    events = [e for e in events if str(e.get('id')) != str(event_id)]
     save_events(events)
+    _send_event_push(deleted_event, 'deleted', request.current_user.get('email', '').strip().lower())
     return {"success": True}
 
 @app.route('/api/events/<event_id>', methods=['PUT'])
 @require_role('admin', 'volunteer')
 def update_event(event_id):
     events = load_events()
-    updated_data = request.json
+    updated_data = request.json or {}
     for i, e in enumerate(events):
-        if e.get('id') == event_id:
-            events[i].update(updated_data)
+        if str(e.get('id')) == str(event_id):
+            updated_event, error = validate_event_payload(updated_data, existing=e)
+            if error:
+                return {"error": error}, 400
+            import datetime
+            updated_event['id'] = e.get('id', event_id)
+            updated_event['createdBy'] = e.get('createdBy', '')
+            updated_event['createdAt'] = e.get('createdAt')
+            updated_event['updatedAt'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+            events[i] = updated_event
             save_events(events)
-            return {"success": True, "event": events[i]}
+            _send_event_push(updated_event, 'updated', request.current_user.get('email', '').strip().lower())
+            return {"success": True, "event": updated_event}
     return {"error": "Event not found"}, 404
 
 SCHOLARSHIPS_FILE = 'scholarships'
@@ -735,6 +792,7 @@ def seed_scholarships():
     return {"success": True, "scholarships": OFFICIAL_SEEDED_SCHOLARSHIPS}
 
 @app.route('/api/scholarships/auto-parse', methods=['POST'])
+@require_role('admin')
 def auto_parse_scholarship():
     try:
         import urllib.request, uuid, datetime
@@ -750,6 +808,7 @@ def auto_parse_scholarship():
         
         extracted_text = raw_input
         apply_url = raw_input if raw_input.startswith(('http://', 'https://')) else ''
+        fetch_warning = ''
         
         if raw_input.startswith(('http://', 'https://')):
             # SSRF Security Validation
@@ -774,15 +833,24 @@ def auto_parse_scholarship():
             except Exception as fetch_err:
                 print("URL fetch warning:", fetch_err)
                 extracted_text = raw_input
+                fetch_warning = "The page could not be read; only details recognizable from the official URL were used."
         
         title = "New Scholarship Opportunity"
         provider = "Scholarship Provider"
         deadline = ""
-        location = "Mindanao, Philippines"
+        location = ""
         requirements = []
+        description = ""
+        benefits = ""
+        official_domain = ""
+        matched_id = None
+        warnings = []
+        if fetch_warning:
+            warnings.append(fetch_warning)
         
         lower_text = extracted_text.lower()
         if "dost" in lower_text or "science and technology" in lower_text:
+            matched_id = "dost-sei-undergrad"
             title = "DOST-SEI Science & Technology Scholarship"
             provider = "Department of Science and Technology (DOST)"
             requirements = [
@@ -794,6 +862,7 @@ def auto_parse_scholarship():
                 "2x2 Recent ID Photo"
             ]
         elif "ched" in lower_text or "higher education" in lower_text:
+            matched_id = "ched-merit-program"
             title = "CHED Merit Scholarship Program"
             provider = "Commission on Higher Education (CHED)"
             requirements = [
@@ -804,6 +873,7 @@ def auto_parse_scholarship():
                 "Certificate of Good Moral Character"
             ]
         elif "sm foundation" in lower_text or "sm scholarship" in lower_text:
+            matched_id = "sm-college-scholarship"
             title = "SM Foundation College Scholarship Program"
             provider = "SM Foundation"
             requirements = [
@@ -814,6 +884,7 @@ def auto_parse_scholarship():
                 "2x2 ID Picture"
             ]
         elif "aboitiz" in lower_text:
+            matched_id = "aboitiz-future-leaders"
             title = "Aboitiz College Scholarship"
             provider = "Aboitiz Foundation"
             requirements = [
@@ -824,6 +895,7 @@ def auto_parse_scholarship():
                 "Leadership Essay"
             ]
         elif "owwa" in lower_text:
+            matched_id = "owwa-edsp-odsp"
             title = "OWWA Educational Assistance (EDSP/ODSP)"
             provider = "Overseas Workers Welfare Administration (OWWA)"
             requirements = [
@@ -835,7 +907,7 @@ def auto_parse_scholarship():
             ]
         else:
             lines = [l.strip() for l in re.split(r'[\n\r]+', extracted_text) if len(l.strip()) > 5]
-            if lines:
+            if lines and not apply_url:
                 title = lines[0][:80]
             req_candidates = []
             keywords = ["birth certificate", "report card", "form 137", "form 138", "good moral", "itr", "income tax", "tax exemption", "indigency", "residency", "2x2", "id photo", "recommendation", "transcript", "grades", "application form"]
@@ -853,14 +925,18 @@ def auto_parse_scholarship():
             if req_candidates:
                 requirements = list(dict.fromkeys(req_candidates))
             else:
-                requirements = [
-                    "Accomplished Application Form",
-                    "Grade 12 Report Card / Transcript of Records",
-                    "PSA Birth Certificate",
-                    "Certificate of Good Moral Character",
-                    "Parents' Proof of Income or Certificate of Indigency",
-                    "2x2 ID Picture"
-                ]
+                requirements = []
+
+        matched_program = next((item for item in OFFICIAL_SEEDED_SCHOLARSHIPS if item.get('id') == matched_id), None)
+        if matched_program:
+            title = matched_program['title']
+            provider = matched_program['provider']
+            location = matched_program['location']
+            requirements = list(matched_program['requirements'])
+            description = matched_program.get('description', '')
+            benefits = matched_program.get('benefits', '')
+            official_domain = matched_program.get('officialDomain', '')
+            deadline = matched_program.get('deadline', '')
 
         date_match = re.search(r'(?:deadline|due|until|closes on)[:\s]*([A-Za-z]+ \d{1,2},? \d{4}|\d{4}-\d{2}-\d{2})', extracted_text, re.IGNORECASE)
         if date_match:
@@ -871,20 +947,43 @@ def auto_parse_scholarship():
             except:
                 deadline = date_match.group(1)
         if not deadline:
-            deadline = (datetime.date.today() + datetime.timedelta(days=30)).strftime('%Y-%m-%d')
+            warnings.append("No deadline was found; add it manually.")
+        if not requirements:
+            warnings.append("No document requirements were found; add them manually.")
+
+        parsed_fields = {
+            "title": title if title != "New Scholarship Opportunity" else "",
+            "provider": provider if provider != "Scholarship Provider" else "",
+            "location": location,
+            "deadline": deadline,
+            "applyLink": apply_url,
+            "description": description,
+            "benefits": benefits,
+            "officialDomain": official_domain,
+            "requirements": requirements,
+        }
+        if not parsed_fields["title"]:
+            warnings.append("Program title needs review.")
+        if not parsed_fields["provider"]:
+            warnings.append("Provider needs review.")
+
+        verified = False
+        if apply_url and official_domain:
+            parsed_host = (urllib.parse.urlparse(apply_url).hostname or '').lower()
+            verified = parsed_host == official_domain or parsed_host.endswith(f'.{official_domain}')
 
         return {
             "success": True,
             "parsed": {
                 "id": str(uuid.uuid4())[:8],
-                "title": title,
-                "provider": provider,
-                "location": location,
-                "deadline": deadline,
-                "applyLink": apply_url or "https://",
-                "requirements": requirements,
-                "verified": bool(any(dom in apply_url for dom in ["gov.ph", "sm-foundation.org", "aboitizfoundation.com", "science-community.net", "landbank.com"]))
-            }
+                **parsed_fields,
+                "verified": verified,
+            },
+            "meta": {
+                "fieldsDetected": [key for key, value in parsed_fields.items() if value],
+                "warnings": warnings,
+                "sourceType": "url" if apply_url else "text",
+            },
         }
     except Exception as e:
         return {"error": str(e)}, 500
@@ -918,25 +1017,55 @@ def update_scholarship(item_id):
             return {"success": True, "scholarship": items[i]}
     return {"error": "Scholarship not found"}, 404
 @app.route('/api/attendance', methods=['GET'])
+@token_required()
 def get_attendance():
-    return {"attendance": load_json(ATTENDANCE_FILE)}
+    logs = load_json(ATTENDANCE_FILE)
+    current_user = request.current_user or {}
+    if current_user.get('role') == 'student':
+        email = (current_user.get('email') or '').strip().lower()
+        logs = [log for log in logs if (log.get('email') or '').strip().lower() == email]
+    return {"attendance": logs}
 
 @app.route('/api/attendance', methods=['POST'])
+@require_role('admin', 'volunteer')
 def add_attendance():
     logs = load_json(ATTENDANCE_FILE)
     new_log = request.json or {}
 
-    email = new_log.get('email', '').strip()
+    email = new_log.get('email', '').strip().lower()
     event = new_log.get('event', '').strip()
     log_type = new_log.get('type', 'Time In')
-    session = new_log.get('session')  # 'Morning' | 'Afternoon' | None (legacy)
+    session = new_log.get('session', 'Morning')
 
     if not email or not event:
         return {"success": False, "error": "Email and event name are required."}, 400
 
+    if log_type not in {'Time In', 'Time Out'}:
+        return {"success": False, "error": "Attendance type must be Time In or Time Out."}, 400
+
+    if session not in {'Morning', 'Afternoon'}:
+        return {"success": False, "error": "Session must be Morning or Afternoon."}, 400
+
+    users = load_json(USERS_FILE)
+    if not any((user.get('email') or '').strip().lower() == email for user in users):
+        return {"success": False, "error": "No registered account matches this QR code or email."}, 404
+
+    duplicate = any(
+        (log.get('email') or '').strip().lower() == email and
+        log.get('event') == event and
+        (log.get('session') or 'Morning') == session and
+        log.get('type') == log_type
+        for log in logs
+    )
+    if duplicate:
+        return {"success": False, "error": f"{log_type} is already recorded for {event} ({session})."}, 409
+
     import datetime
-    if not new_log.get('timestamp'):
-        new_log['timestamp'] = datetime.datetime.now().isoformat()
+    new_log['email'] = email
+    new_log['event'] = event
+    new_log['type'] = log_type
+    new_log['session'] = session
+    new_log['timestamp'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
 
     # Validate: cannot Time Out without a prior Time In for the same event (and session if provided)
     if log_type == 'Time Out':
@@ -958,6 +1087,7 @@ def add_attendance():
     return {"success": True, "log": new_log}
 
 @app.route('/api/attendance/<log_id>', methods=['DELETE'])
+@require_role('admin', 'volunteer')
 def delete_attendance(log_id):
     logs = load_json(ATTENDANCE_FILE)
     new_logs = [l for l in logs if l.get('id') != log_id]

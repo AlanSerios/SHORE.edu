@@ -1,51 +1,58 @@
 @echo off
 echo ========================================================
-echo        SHORE 5.0 - Backend Startup
+echo        SHORE 5.0 - App Startup
 echo ========================================================
 echo.
 
 :: Check if Python is installed
 python --version >nul 2>&1
-IF %ERRORLEVEL% NEQ 0 (
+IF ERRORLEVEL 1 (
     echo [ERROR] Python is not installed or not in your PATH.
     echo Please install Python from python.org and try again.
     pause
     exit /b
 )
 
-:: Check if virtual environment exists inside backend/
-IF NOT EXIST "backend\venv\Scripts\activate.bat" (
-    echo [1/3] Creating Python virtual environment in backend\...
+:: Use the environment's Python directly. Its copied activate.bat contains a stale absolute path.
+set "VENV_PYTHON=backend\venv\Scripts\python.exe"
+IF NOT EXIST "%VENV_PYTHON%" (
+    echo [1/4] Creating Python virtual environment in backend\...
     python -m venv backend\venv
 )
 
-:: Activate virtual environment
-call backend\venv\Scripts\activate.bat
-
 :: Install requirements from backend/requirements.txt
-echo [2/3] Installing/Verifying required dependencies...
-pip install -r backend\requirements.txt --quiet --disable-pip-version-check
-IF %ERRORLEVEL% NEQ 0 (
+echo [2/4] Installing/Verifying required dependencies...
+"%VENV_PYTHON%" -m pip install -r backend\requirements.txt --quiet --disable-pip-version-check
+IF ERRORLEVEL 1 (
     echo [ERROR] Failed to install dependencies.
     pause
     exit /b
 )
 
-:: Start Flask server from the backend folder
-echo [3/3] Starting Backend Server...
+:: Build the current frontend so port 5000 serves the same UI as Vite.
+echo [3/4] Building current frontend...
+pushd frontend
+IF NOT EXIST "node_modules" call npm install
+call npm run build
+IF ERRORLEVEL 1 (
+    popd
+    echo [ERROR] Frontend build failed.
+    pause
+    exit /b
+)
+popd
+
+:: Start the root server; it serves frontend/dist and the API together.
+echo [4/4] Starting SHORE...
 echo.
-echo  The backend API is now running at: http://127.0.0.1:5000
-echo  For the frontend, open a new terminal and run:
-echo    cd frontend
-echo    npm install
-echo    npm run dev
+echo  SHORE is running at: http://localhost:5000
 echo.
 echo  Do not close this window while using the app!
 echo.
 
-:: Open browser after a 2 second delay (gives server time to start)
-start "" "http://127.0.0.1:5000"
+:: Use a unique path so an older service worker cannot match cached HTML.
+start "" /b powershell -NoProfile -WindowStyle Hidden -Command "Start-Sleep -Seconds 2; Start-Process 'http://localhost:5000/launch/%RANDOM%%RANDOM%'"
 
-:: Run the Flask app (CWD stays at SHORE_Web_App root, server.py uses pathlib for relative paths)
-python backend\server.py
+:: Run from the project root so Flask resolves frontend/dist correctly.
+"%VENV_PYTHON%" server.py
 pause

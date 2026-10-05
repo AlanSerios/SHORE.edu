@@ -1,11 +1,9 @@
 import React, { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Trophy, TrendingUp, AlertTriangle, Target, Medal, Star, Award, BookOpen, Brain, FlaskConical } from 'lucide-react';
+import { Trophy, TrendingUp, AlertTriangle, Target, Medal, Star, BookOpen, Brain, FlaskConical } from 'lucide-react';
 import { cn } from '../utils';
-
-const ALL_SUBJ = ["Arithmetic", "Algebra", "Geometry", "Calculus", "Trigonometry", "Logic", "Chemistry", "Biology", "Earth Science", "Physics", "English"];
-const MATH_SUBJ = ["Arithmetic", "Algebra", "Geometry", "Calculus", "Trigonometry"];
-const SCI_SUBJ = ["Chemistry", "Biology", "Earth Science", "Physics"];
+import { ALL_SUBJ, MATH_SUBJ, SCI_SUBJ } from '../utils/analytics';
+import { PageHeader, PageShell } from './ui/page';
 
 const MAX_PER_SUBJ = 100;
 const MAX_TOTAL = ALL_SUBJ.length * MAX_PER_SUBJ;
@@ -112,15 +110,21 @@ export default function ReportsView({ parsedData, students }) {
 
   if (!analytics) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center text-center opacity-70 h-full p-10">
-        <div className="w-20 h-20 bg-card border border-border rounded-3xl flex items-center justify-center mb-6 shadow-sm">
-          <Trophy className="w-10 h-10 text-muted" />
+      <PageShell width="wide" contentClassName="flex min-h-full flex-col gap-6">
+        <PageHeader
+          title="Cohort Analytics"
+          description="Review performance, rankings, and learning trends across the cohort."
+        />
+        <div className="flex flex-1 flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-white px-6 py-16 text-center">
+          <div className="w-14 h-14 bg-accentBlue rounded-2xl flex items-center justify-center mb-4">
+            <Trophy className="w-7 h-7 text-primary" />
+          </div>
+          <h2 className="text-lg font-bold text-fg mb-2">No cohort data yet</h2>
+          <p className="text-muted text-sm leading-relaxed max-w-md">
+            Upload an Excel tracker to view cohort analytics, rankings, and awardees.
+          </p>
         </div>
-        <h2 className="text-2xl font-bold text-fg mb-3">No Cohort Data</h2>
-        <p className="text-muted text-sm leading-relaxed max-w-md">
-          Upload an Excel tracker to view cohort-wide analytics, leaderboards, and awardees.
-        </p>
-      </div>
+      </PageShell>
     );
   }
 
@@ -134,14 +138,14 @@ export default function ReportsView({ parsedData, students }) {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto p-4 sm:p-10 pb-24 md:pb-10 bg-canvas">
-      <motion.div variants={containerVariants} initial="hidden" animate="show" className="max-w-7xl mx-auto space-y-8 min-h-full">
+    <PageShell width="wide">
+      <motion.div variants={containerVariants} initial="hidden" animate="show" className="space-y-6 min-h-full">
         
         {/* HEADER */}
-        <div>
-          <h1 className="text-2xl font-bold text-fg tracking-tight">Cohort Analytics</h1>
-          <p className="text-muted text-sm mt-1">Analyzing {analytics.totalStudents} students across the entire cohort.</p>
-        </div>
+        <PageHeader
+          title="Cohort Analytics"
+          description={`Analyzing ${analytics.totalStudents} students across the entire cohort.`}
+        />
 
         {/* TOP AWARDS ROW */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -346,6 +350,6 @@ export default function ReportsView({ parsedData, students }) {
         </div>
 
       </motion.div>
-    </div>
+    </PageShell>
   );
 }

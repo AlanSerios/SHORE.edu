@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Trash2, Edit2, Check, X, Users, GraduationCap, Search } from 'lucide-react';
 import { cn } from '../utils';
 import { toast } from 'sonner';
+import { PageHeader, PageShell } from './ui/page';
 
 const ManageClassView = () => {
   const [roster, setRoster] = useState([]);
@@ -79,20 +80,11 @@ const ManageClassView = () => {
   ];
 
   return (
-    <div className="h-full overflow-y-auto">
-      <div className="max-w-4xl mx-auto pb-32 px-4 sm:px-6 space-y-8">
-
-        {/* HEADER */}
-        <div className="pt-12 pb-4">
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-canvas border border-border/50 text-[10px] font-bold tracking-[0.2em] uppercase text-muted mb-5">
-            <span className="w-1.5 h-1.5 rounded-full bg-primary/60"></span>
-            Administration Mode
-          </div>
-          <h1 className="text-4xl font-black tracking-tighter text-fg mb-2">Manage Class</h1>
-          <p className="text-sm text-muted max-w-lg">
-            Manage the class roster of students allowed to register, and view all registered accounts.
-          </p>
-        </div>
+    <PageShell width="narrow" contentClassName="space-y-6">
+        <PageHeader
+          title="Manage Class"
+          description="Manage the student roster allowed to register and review all registered accounts."
+        />
 
         {/* SUMMARY CARDS */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -111,14 +103,14 @@ const ManageClassView = () => {
         </div>
 
         {/* TABS */}
-        <div className="flex gap-1 p-1.5 bg-canvas border border-border/50 rounded-full w-fit shadow-sm">
+        <div role="tablist" aria-label="Class management views" className="flex w-full gap-1 rounded-xl border border-border bg-white p-1 shadow-sm sm:w-fit">
           {TABS.map(({ id, label, icon: Icon }) => (
-            <button key={id} onClick={() => { setActiveTab(id); setSearchQuery(''); setEditingIdx(null); }}
-              className={cn("relative flex items-center gap-2 px-5 py-2 text-xs font-bold rounded-full transition-colors",
+            <button key={id} role="tab" aria-selected={activeTab === id} onClick={() => { setActiveTab(id); setSearchQuery(''); setEditingIdx(null); }}
+              className={cn("relative min-h-11 flex flex-1 items-center justify-center gap-2 rounded-lg px-5 py-2 text-xs font-bold transition-colors sm:flex-initial",
                 activeTab === id ? "text-fg" : "text-muted hover:text-fg/80")}>
               {activeTab === id && (
                 <motion.div layoutId="classTabPill"
-                  className="absolute inset-0 bg-white rounded-full shadow-sm border border-black/5"
+                  className="absolute inset-0 bg-primary/10 rounded-lg"
                   transition={{ type: 'spring', stiffness: 400, damping: 30 }}
                   style={{ zIndex: -1 }} />
               )}
@@ -294,8 +286,7 @@ const ManageClassView = () => {
             </motion.div>
           )}
         </AnimatePresence>
-      </div>
-    </div>
+    </PageShell>
   );
 };
 

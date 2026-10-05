@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Edit2, Trash2, Check, X, Loader2, Shield } from 'lucide-react';
-import { cn } from '../utils';
+import { Edit2, Trash2, Check, X, Loader2, Shield } from 'lucide-react';
+import { PageHeader, PageShell } from './ui/page';
 
 export default function AccountsView() {
   const [users, setUsers] = useState([]);
@@ -15,7 +15,7 @@ export default function AccountsView() {
       const res = await fetch('/api/users');
       const data = await res.json();
       setUsers(data.users || []);
-    } catch (err) {
+    } catch {
       console.error(err);
       setError('Failed to fetch users.');
     } finally {
@@ -39,7 +39,7 @@ export default function AccountsView() {
         const data = await res.json();
         setError(data.error || 'Failed to delete user.');
       }
-    } catch (err) {
+    } catch {
       setError('Failed to delete user.');
     }
   };
@@ -65,27 +65,17 @@ export default function AccountsView() {
       } else {
         setError(data.error || 'Failed to update user.');
       }
-    } catch (err) {
+    } catch {
       setError('Failed to update user.');
     }
   };
 
   return (
-    <div className="flex-1 overflow-y-auto p-10 bg-canvas h-full relative">
-      <div className="max-w-5xl mx-auto space-y-8">
-        
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-fg tracking-tight flex items-center gap-3">
-              <Users className="w-8 h-8 text-primary" />
-              Account Management
-            </h1>
-            <p className="text-muted mt-2 text-sm">
-              View, modify, or remove student accounts registered in the system.
-            </p>
-          </div>
-        </div>
+    <PageShell contentClassName="space-y-6">
+        <PageHeader
+          title="Account Management"
+          description="View, modify, or remove student accounts registered in the system."
+        />
 
         {error && (
           <div className="bg-accentRed/20 text-accentRedFg px-4 py-3 rounded-lg text-sm font-medium border border-accentRed/30">
@@ -314,7 +304,6 @@ export default function AccountsView() {
             </div>
           </div>
         </div>
-      </div>
-    </div>
+    </PageShell>
   );
 }

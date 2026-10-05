@@ -1,4 +1,4 @@
-const CACHE_NAME = 'shore-skwela-v1.0';
+const CACHE_NAME = 'shore-skwela-v1.1';
 const OFFLINE_URL = '/';
 
 const PRECACHE_ASSETS = [
@@ -72,13 +72,28 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 2. Static Assets & App Shell: Stale-While-Revalidate
+  // 2. Navigations: network-first so a newly built UI appears immediately.
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      fetch(request)
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const responseClone = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(OFFLINE_URL, responseClone));
+          }
+          return networkResponse;
+        })
+        .catch(() => caches.match(OFFLINE_URL))
+    );
+    return;
+  }
+
+  // 3. Static assets: stale-while-revalidate.
   if (
     request.destination === 'style' ||
     request.destination === 'script' ||
     request.destination === 'image' ||
-    request.destination === 'font' ||
-    request.mode === 'navigate'
+    request.destination === 'font'
   ) {
     event.respondWith(
       caches.match(request).then((cachedResponse) => {
@@ -92,11 +107,7 @@ self.addEventListener('fetch', (event) => {
             }
             return networkResponse;
           })
-          .catch(() => {
-            if (request.mode === 'navigate') {
-              return caches.match(OFFLINE_URL);
-            }
-          });
+          .catch(() => undefined);
 
         return cachedResponse || fetchPromise;
       })

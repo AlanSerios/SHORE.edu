@@ -12,17 +12,17 @@
     <meta name="apple-mobile-web-app-title" content="SHORE Skwela" />
     <title>SHORE Skwela Hub</title>
 
-    <!-- Google Fonts: Inter, Outfit, Geist -->
+    <!-- One consolidated font request avoids duplicate render-blocking imports. -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500;600&family=Inter:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap" rel="stylesheet" />
 
     <script>
       window.addEventListener('error', function(e) {
-        document.body.innerHTML += '<div style="color:red;z-index:9999;position:fixed;top:0;">Global Error: ' + e.message + '<br>' + e.filename + ':' + e.lineno + '</div>';
+        console.error('Global Error:', e.message, e.filename + ':' + e.lineno);
       });
       window.addEventListener('unhandledrejection', function(e) {
-        document.body.innerHTML += '<div style="color:red;z-index:9999;position:fixed;top:50px;">Unhandled Rejection: ' + e.reason + '</div>';
+        console.error('Unhandled Rejection:', e.reason);
       });
     </script>
   </head>

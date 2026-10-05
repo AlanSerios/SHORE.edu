@@ -1,70 +1,62 @@
-import { StrictMode } from 'react'
-import React from 'react'
-import ReactDOM from 'react-dom/client'
-import { createRoot } from 'react-dom/client'
-import { Toaster } from 'sonner'
-import App from './App.jsx'
-import './index.css'
+import React from 'react';
+import { createRoot } from 'react-dom/client';
+import { Toaster } from 'sonner';
+import App from './App.jsx';
+import './index.css';
 
-// -------------------------------------------------------------
-// JWT AUTH INTERCEPTOR: Attaches Authorization Bearer token to /api/ requests
-// -------------------------------------------------------------
+// JWT AUTH INTERCEPTOR: attaches Authorization header to /api/ requests
 const originalFetch = window.fetch;
-window.fetch = async function (url, options = {}) {
+window.fetch = async (url, options = {}) => {
   const token = localStorage.getItem('shore_token');
   if (typeof url === 'string' && url.startsWith('/api') && token) {
-    options = { ...options };
-    options.headers = {
-      ...(options.headers || {}),
-      'Authorization': `Bearer ${token}`
-    };
+    options = { ...options, headers: { ...(options.headers || {}), Authorization: `Bearer ${token}` } };
   }
   return originalFetch(url, options);
 };
 
-// -------------------------------------------------------------
-// PWA SERVICE WORKER REGISTRATION
-// -------------------------------------------------------------
+// PWA SERVICE WORKER
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js')
-      .then((reg) => {
-        console.log('[PWA] Service Worker registered with scope:', reg.scope);
-      })
-      .catch((err) => {
-        console.warn('[PWA] Service Worker registration failed:', err);
-      });
-  });
+  const isLocal = ['127.0.0.1', 'localhost'].includes(window.location.hostname);
+  if (isLocal) {
+    // Local BAT/Vite launches must always show the current build.
+    navigator.serviceWorker.getRegistrations().then(registrations => {
+      registrations.forEach(registration => registration.unregister());
+    });
+    if ('caches' in window) {
+      caches.keys().then(keys => Promise.all(keys.map(key => caches.delete(key))));
+    }
+  } else {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' })
+        .then(reg => reg.update())
+        .catch(err => console.warn('[PWA] SW registration failed:', err));
+    });
+  }
 }
 
 class ErrorBoundary extends React.Component {
-  constructor(props) {
-    super(props);
-    this.state = { hasError: false, error: null };
-  }
-  static getDerivedStateFromError(error) {
-    return { hasError: true, error };
-  }
-  componentDidCatch(error, errorInfo) {
-    console.error("ErrorBoundary caught an error", error, errorInfo);
-  }
+  state = { hasError: false, error: null };
+  static getDerivedStateFromError(error) { return { hasError: true, error }; }
+  componentDidCatch(error, info) { console.error('ErrorBoundary:', error, info); }
   render() {
     if (this.state.hasError) {
-      return <div style={{padding: '20px', color: 'red'}}>
-        <h1>Something went wrong.</h1>
-        <pre>{this.state.error.toString()}</pre>
-        <pre>{this.state.error.stack}</pre>
-      </div>;
+      return (
+        <div style={{ padding: '20px', color: 'red' }}>
+          <h1>Something went wrong.</h1>
+          <pre>{this.state.error?.toString()}</pre>
+          <pre>{this.state.error?.stack}</pre>
+        </div>
+      );
     }
     return this.props.children;
   }
 }
 
 createRoot(document.getElementById('root')).render(
-  <StrictMode>
+  <React.StrictMode>
     <ErrorBoundary>
       <App />
     </ErrorBoundary>
-    <Toaster position="top-right" richColors closeButton theme="light" />
-  </StrictMode>,
-)
+    <Toaster position="bottom-right" richColors closeButton theme="light" offset="24px" />
+  </React.StrictMode>,
+);
