@@ -12,20 +12,27 @@ export default function SecurityCard({ userEmail }) {
 
   const handleChangePassword = async (e) => {
     e.preventDefault();
+
     if (!currentPasswordInput) {
       toast.error('Please enter your current password.');
+
       return;
     }
+
     if (newPasswordInput.length < 6) {
       toast.error('New password must be at least 6 characters long.');
+
       return;
     }
+
     if (newPasswordInput !== confirmPasswordInput) {
       toast.error('New passwords do not match.');
+
       return;
     }
 
     setIsChangingPassword(true);
+
     try {
       const res = await fetch('/api/users/change-password', {
         method: 'POST',
@@ -36,7 +43,9 @@ export default function SecurityCard({ userEmail }) {
           new_password: newPasswordInput
         })
       });
+
       const data = await res.json();
+
       if (res.ok && data.success) {
         toast.success('Password updated successfully!');
         setCurrentPasswordInput('');

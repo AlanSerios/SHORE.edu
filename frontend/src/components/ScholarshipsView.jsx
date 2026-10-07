@@ -40,6 +40,7 @@ export default function ScholarshipsView({ userEmail, userRole }) {
 
   useEffect(() => {
     fetchScholarships();
+
     if (userEmail) {
       fetchUserTrackedScholarships();
     }
@@ -50,8 +51,10 @@ export default function ScholarshipsView({ userEmail, userRole }) {
   const fetchScholarships = async () => {
     setIsLoadingScholarships(true);
     setScholarshipLoadError('');
+
     try {
       const res = await fetch('/api/scholarships');
+
       if (!res.ok) throw new Error('Request failed');
       const data = await res.json();
       setScholarships(data.scholarships || []);
@@ -67,9 +70,11 @@ export default function ScholarshipsView({ userEmail, userRole }) {
       const res = await fetch('/api/users');
       const data = await res.json();
       const currentUser = (data.users || []).find(u => u.email === userEmail);
+
       if (currentUser && currentUser.appliedScholarships) {
         setTrackedScholarships(currentUser.appliedScholarships || []);
       }
+
       if (userEmail) {
         const vDocs = await getAllVaultDocuments(userEmail);
         setVaultDocs(vDocs || []);
@@ -81,6 +86,7 @@ export default function ScholarshipsView({ userEmail, userRole }) {
 
   const handleSyncOfficialPortals = async (e) => {
     setIsSyncing(true);
+
     if (e) {
       anime({
         targets: e.currentTarget.querySelector('svg'),
@@ -89,9 +95,11 @@ export default function ScholarshipsView({ userEmail, userRole }) {
         easing: 'easeInOutQuad'
       });
     }
+
     try {
       const res = await fetch('/api/scholarships/seed', { method: 'POST' });
       const data = await res.json();
+
       if (res.ok) {
         setScholarships(data.scholarships || []);
         toast.success("Successfully synchronized verified scholarships from official portals!");
@@ -108,18 +116,22 @@ export default function ScholarshipsView({ userEmail, userRole }) {
   const handleAutoParseBot = async () => {
     if (!botInput.trim()) {
       setParseError('Paste an official URL or announcement text first.');
+
       return;
     }
 
     setIsParsingBot(true);
     setParseError('');
+
     try {
       const res = await fetch('/api/scholarships/auto-parse', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ input: botInput.trim() })
       });
+
       const data = await res.json();
+
       if (res.ok && data.parsed) {
         setCurrentScholarship({
           ...currentScholarship,
@@ -153,23 +165,26 @@ export default function ScholarshipsView({ userEmail, userRole }) {
   const handleTrackScholarship = async (scholarship) => {
     if (!userEmail) {
       toast.error("Please log in to track scholarships!");
+
       return;
     }
 
 
 
     const isAlreadyTracked = trackedScholarships.some(item => {
-      const title = typeof item === 'string' ? item : item.title;
+      const title = item?.title ?? item;
+
       return title?.toLowerCase() === scholarship.title.toLowerCase();
     });
 
     if (isAlreadyTracked) {
       toast.info(`"${scholarship.title}" is already in your tracker!`);
+
       return;
     }
 
     const defaultReqs = (scholarship.requirements && scholarship.requirements.length > 0)
-      ? scholarship.requirements.map(r => ({ name: typeof r === 'string' ? r : r.name, status: 'missing' }))
+      ? scholarship.requirements.map(r => ({ name: r?.name ?? r, status: 'missing' }))
       : [
           { name: "Accomplished Application Form", status: "missing" },
           { name: "Grade 12 Report Card (Form 137 / 138)", status: "missing" },
@@ -197,6 +212,7 @@ export default function ScholarshipsView({ userEmail, userRole }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ appliedScholarships: updatedTracked })
       });
+
       if (res.ok) {
         toast.success(`Added "${scholarship.title}" to your Scholarship Tracker!`);
       } else {
@@ -237,6 +253,7 @@ export default function ScholarshipsView({ userEmail, userRole }) {
       setAutoFillSummary(null);
       setParseError('');
     }
+
     setIsModalOpen(true);
   };
 
@@ -261,12 +278,13 @@ export default function ScholarshipsView({ userEmail, userRole }) {
   const handleSave = async () => {
     if (!currentScholarship.title || !currentScholarship.provider || !currentScholarship.applyLink) {
       toast.error("Please fill in the title, provider, and apply link.");
+
       return;
     }
 
     const payload = {
       ...currentScholarship,
-      requirements: currentScholarship.requirements.filter(r => (typeof r === 'string' ? r.trim() : r.name?.trim()) !== '')
+      requirements: currentScholarship.requirements.filter(r => (r?.name ? r.name.trim() : String(r || '').trim()) !== '')
     };
 
     try {
@@ -293,8 +311,10 @@ export default function ScholarshipsView({ userEmail, userRole }) {
 
   const handleDelete = async (id) => {
     if (!confirm('Are you sure you want to delete this scholarship?')) return;
+
     try {
       const res = await fetch(`/api/scholarships/${id}`, { method: 'DELETE' });
+
       if (res.ok) {
         toast.success('Scholarship deleted');
         fetchScholarships();
@@ -331,45 +351,57 @@ export default function ScholarshipsView({ userEmail, userRole }) {
     if (diffDays < 0) {
       return { label: 'Closed', color: 'bg-slate-100 text-slate-500 border-slate-200', days: diffDays };
     }
+
     if (diffDays === 0) {
       return { label: 'Closes Today', color: 'bg-red-50 text-red-700 border-red-200 font-bold', days: diffDays };
     }
+
     if (diffDays <= 7) {
       return { label: `${diffDays}d left`, color: 'bg-amber-50 text-amber-700 border-amber-200 font-semibold', days: diffDays };
     }
+
     return { label: `${diffDays}d remaining`, color: 'bg-emerald-50 text-emerald-700 border-emerald-200 font-semibold', days: diffDays };
   };
 
   const filteredScholarships = scholarships.filter(s => {
     const q = searchQuery.toLowerCase();
+
     const matchesQuery = (
       s.title?.toLowerCase().includes(q) ||
       s.provider?.toLowerCase().includes(q) ||
       s.location?.toLowerCase().includes(q) ||
       s.description?.toLowerCase().includes(q)
     );
+
     if (!matchesQuery) return false;
 
     if (activeFilter === 'verified') {
       return s.verified === true;
     }
+
     if (activeFilter === 'closing') {
       const badge = getDeadlineBadge(s.deadline);
+
       return badge && badge.days >= 0 && badge.days <= 14;
     }
+
     return true;
   });
 
   const verifiedCount = scholarships.filter(s => s.verified === true).length;
+
   const closingSoonCount = scholarships.filter(s => {
     const badge = getDeadlineBadge(s.deadline);
+
     return badge && badge.days >= 0 && badge.days <= 14;
   }).length;
 
   const formatDeadline = (deadline) => {
     if (!deadline) return '';
     const parsed = new Date(`${deadline}T00:00:00`);
+
     if (Number.isNaN(parsed.getTime())) return deadline;
+
     return parsed.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
@@ -377,7 +409,7 @@ export default function ScholarshipsView({ userEmail, userRole }) {
     <PageShell width="wide">
       <PageHeader
         title="Scholarships"
-        description="Compare verified programs, prepare your documents, and track every application in one place."
+        description="Compare verified programs, prepare documents, and track application deadlines."
         actions={(
           <>
             <button
@@ -483,10 +515,13 @@ export default function ScholarshipsView({ userEmail, userRole }) {
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 items-stretch">
         {filteredScholarships.map((scholarship) => {
           const deadlineBadge = getDeadlineBadge(scholarship.deadline);
+
           const isTracked = trackedScholarships.some(item => {
-            const title = typeof item === 'string' ? item : item.title;
+            const title = item?.title ?? item;
+
             return title?.toLowerCase() === scholarship.title.toLowerCase();
           });
+
           const reqCount = scholarship.requirements?.length || 0;
 
           return (
@@ -638,7 +673,7 @@ export default function ScholarshipsView({ userEmail, userRole }) {
       {/* Universal Standard Document Kit Modal */}
       <AnimatePresence>
         {isChecklistModalOpen && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 pb-28 sm:pb-6 overflow-y-auto">
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 pb-[max(1.5rem,calc(1rem+env(safe-area-inset-bottom,0px)))] sm:pb-6 overflow-y-auto">
             <motion.div 
               initial={{ opacity: 0 }} 
               animate={{ opacity: 1 }} 
@@ -745,7 +780,7 @@ export default function ScholarshipsView({ userEmail, userRole }) {
       {/* Scholarship Detail & Requirements Modal */}
       <AnimatePresence>
         {selectedScholarshipDetail && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 pb-28 sm:pb-6 overflow-y-auto">
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 pb-[max(1.5rem,calc(1rem+env(safe-area-inset-bottom,0px)))] sm:pb-6 overflow-y-auto">
             <motion.div 
               initial={{ opacity: 0 }} 
               animate={{ opacity: 1 }} 
@@ -791,7 +826,7 @@ export default function ScholarshipsView({ userEmail, userRole }) {
                     {selectedScholarshipDetail.requirements?.map((req, idx) => (
                       <div key={idx} className="flex items-start gap-2.5 p-2.5 rounded-xl bg-canvas border border-border/60 text-xs text-fg font-medium">
                         <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                        <span className="leading-snug">{typeof req === 'string' ? req : req.name}</span>
+                        <span className="leading-snug">{req?.name ?? req}</span>
                       </div>
                     ))}
                   </div>
@@ -1127,7 +1162,7 @@ export default function ScholarshipsView({ userEmail, userRole }) {
                             </span>
                             <input 
                               type="text" 
-                              value={typeof req === 'string' ? req : req.name} 
+                              value={req?.name ?? req} 
                               onChange={e => handleRequirementChange(index, e.target.value)}
                               placeholder="e.g. PSA Authenticated Birth Certificate"
                               className="flex-1 px-3 py-1.5 rounded-xl border border-border/80 bg-canvas/60 text-xs text-fg placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary/15 focus:border-primary transition-all"

@@ -19,6 +19,7 @@ export default function LeaderboardView() {
         fetch('/api/recitations'),
         fetch('/api/users')
       ]);
+
       const attData = await attRes.json();
       const recData = await recRes.json();
       const usersData = await usersRes.json();
@@ -36,6 +37,7 @@ export default function LeaderboardView() {
       const attLeaders = Object.entries(attCount)
         .map(([email, count]) => {
           const user = students.find(s => s.email === email);
+
           return {
             email,
             name: user ? user.name || email.split('@')[0] : email,
@@ -56,6 +58,7 @@ export default function LeaderboardView() {
       const recLeaders = Object.entries(recCount)
         .map(([email, score]) => {
           const user = students.find(s => s.email === email);
+
           return {
             email,
             name: user ? user.name || email.split('@')[0] : email,

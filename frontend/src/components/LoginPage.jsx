@@ -1,6 +1,5 @@
 import React from "react";
 import { AuthFormSplitScreen } from "./ui/login";
-import { Sparkles } from "lucide-react";
 
 export default function LoginPage({ onLogin }) {
   const handleLogin = async (data, isRegister, isForgot = false) => {
@@ -16,15 +15,16 @@ export default function LoginPage({ onLogin }) {
     });
     
     let result;
+
     try {
       const text = await res.text();
       result = JSON.parse(text);
-    } catch (e) {
-      throw new Error("Server returned an invalid response. Please ensure your backend server has been restarted.");
+    } catch {
+      throw new Error("Could not connect to server.");
     }
     
     if (!res.ok) {
-      throw new Error(result.error || "Authentication failed.");
+      throw Object.assign(new Error(result.error || "Sign in failed."), { code: result.code, on_roster: result.on_roster });
     }
     
     if (isForgot) {
@@ -34,6 +34,7 @@ export default function LoginPage({ onLogin }) {
     if (result.token) {
       localStorage.setItem('shore_token', result.token);
     }
+
     onLogin(result.user, result.token);
   };
 
@@ -43,15 +44,11 @@ export default function LoginPage({ onLogin }) {
         <img 
           src="/shore_logo.png" 
           alt="SHORE.ed" 
-          className="h-14 w-auto object-contain -ml-3" 
+          className="h-7 sm:h-8 w-auto object-contain mx-auto" 
         />
       }
-      title="Welcome back!"
-      description="Sign in by entering the information below"
       images={["/SHORE5.png"]}
       onSubmit={handleLogin}
-      forgotPasswordHref="#"
-      createAccountHref="#"
     />
   );
 }

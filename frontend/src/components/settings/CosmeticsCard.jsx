@@ -46,6 +46,7 @@ export default function CosmeticsCard({
             .filter((b) => ownedBorders.includes(b.id))
             .map((border) => {
               const isActive = equippedBorder === border.id;
+
               return (
                 <button
                   key={border.id}

@@ -15,13 +15,17 @@ const STREAK_THEMES = [
 
 export function getStreakTheme(streak) {
   if (streak >= 11) return STREAK_THEMES[3];
+
   if (streak >= 6) return STREAK_THEMES[2];
+
   if (streak >= 4) return STREAK_THEMES[1];
+
   return STREAK_THEMES[0];
 }
 
 export function LottieFire({ style = { width: '100%', height: '100%' }, className = 'w-full h-full' }) {
   const { View } = useLottie({ animationData: fireAnimation, loop: true, autoplay: true }, style);
+
   return <div className={className}>{View}</div>;
 }
 
@@ -37,6 +41,7 @@ export function StreakModalContent({ studentStreak, setExpandedCard }) {
       targets: obj, val: studentStreak, round: 1, duration: 1500, easing: 'easeOutExpo',
       update() {
         const el = document.querySelector('.streak-number');
+
         if (el) el.innerHTML = obj.val;
       },
     });
@@ -46,6 +51,7 @@ export function StreakModalContent({ studentStreak, setExpandedCard }) {
 
   const maxVisible = 8;
   let startIdx = 0;
+
   if (studentStreak >= 5) startIdx = Math.min(studentStreak - 4, 11 - maxVisible);
 
   return (
@@ -63,6 +69,7 @@ export function StreakModalContent({ studentStreak, setExpandedCard }) {
           if (i < startIdx || i >= startIdx + maxVisible) return null;
           const isChecked = i < studentStreak;
           const isCurrent = i === studentStreak;
+
           return (
             <div key={day} className="streak-milestone flex flex-col items-center gap-1 w-[30px] sm:w-[34px] opacity-0">
               <span className={cn('font-bold text-[9px] sm:text-[10px]', isCurrent ? '' : 'text-white/40')} style={isCurrent ? { color: streakColor } : {}}>{day}</span>

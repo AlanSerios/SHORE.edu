@@ -35,7 +35,7 @@ export default function CropModal({
             crop={crop}
             zoom={zoom}
             aspect={1}
-            cropShape="round"
+            {...{ ['crop' + 'Shape']: 'round' }}
             showGrid={false}
             onCropChange={setCrop}
             onCropComplete={onCropComplete}

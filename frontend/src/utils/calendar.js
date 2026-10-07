@@ -30,13 +30,15 @@ export const AUDIENCES = [
 ];
 
 export function dateKey(value) {
-  if (typeof value === 'string') return value.slice(0, 10);
-  return format(value, 'yyyy-MM-dd');
+  if (value instanceof Date) return format(value, 'yyyy-MM-dd');
+
+  return String(value).slice(0, 10);
 }
 
 export function normalizeCalendarEvent(raw = {}) {
   const type = raw.type === 'overdue' ? 'due' : raw.type;
   const allDay = raw.allDay === undefined ? true : Boolean(raw.allDay);
+
   return {
     ...raw,
     type: EVENT_TYPES.some(item => item.id === type) ? type : 'events',
@@ -62,6 +64,7 @@ function clampedMonthDate(baseDate, monthOffset) {
   const year = baseDate.getFullYear() + Math.floor(targetMonth / 12);
   const month = ((targetMonth % 12) + 12) % 12;
   const lastDay = new Date(year, month + 1, 0).getDate();
+
   return new Date(year, month, Math.min(baseDate.getDate(), lastDay));
 }
 
@@ -82,6 +85,7 @@ export function expandRecurringEvents(rawEvents, rangeStart, rangeEnd) {
 
     const pushOccurrence = start => {
       const end = addDays(start, durationDays);
+
       if (!occurrenceOverlaps(start, end, safeStart, safeEnd)) return;
       const occurrenceDate = dateKey(start);
       results.push({
@@ -98,15 +102,18 @@ export function expandRecurringEvents(rawEvents, rangeStart, rangeEnd) {
 
     if (!event.recurrence) {
       pushOccurrence(baseStart);
+
       return;
     }
 
     const until = event.recurrence.until
       ? parseISO(`${event.recurrence.until}T23:59:59`)
       : safeEnd;
+
     const hardEnd = isBefore(until, safeEnd) ? until : safeEnd;
     let index = 0;
     let occurrenceStart = baseStart;
+
     while (!isAfter(occurrenceStart, hardEnd) && index < 600) {
       pushOccurrence(occurrenceStart);
       index += 1;
@@ -118,8 +125,11 @@ export function expandRecurringEvents(rawEvents, rangeStart, rangeEnd) {
 
   return results.sort((a, b) => {
     if (a.date !== b.date) return a.date.localeCompare(b.date);
+
     if (a.allDay !== b.allDay) return a.allDay ? -1 : 1;
+
     if ((a.startTime || '') !== (b.startTime || '')) return (a.startTime || '').localeCompare(b.startTime || '');
+
     return a.title.localeCompare(b.title);
   });
 }
@@ -131,48 +141,62 @@ export function getCalendarRange(view, focusedDate) {
       end: endOfWeek(endOfMonth(focusedDate)),
     };
   }
+
   if (view === 'week') {
     return { start: startOfWeek(focusedDate), end: endOfWeek(focusedDate) };
   }
+
   return { start: focusedDate, end: addDays(focusedDate, 89) };
 }
 
 export function eventOccursOn(event, day) {
   const key = dateKey(day);
+
   return event.date <= key && (event.endDate || event.date) >= key;
 }
 
 export function groupEventsByDate(events) {
   return events.reduce((groups, event) => {
     const key = event.date;
+
     if (!groups[key]) groups[key] = [];
     groups[key].push(event);
+
     return groups;
   }, {});
 }
 
 function manilaNowKey(now = new Date()) {
-  const parts = new Intl.DateTimeFormat('en-US', {
+  const parts = {};
+
+  for (const part of new Intl.DateTimeFormat('en-US', {
     timeZone: CALENDAR_TIMEZONE,
     year: 'numeric', month: '2-digit', day: '2-digit',
     hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
-  }).formatToParts(now).reduce((result, part) => ({ ...result, [part.type]: part.value }), {});
+  }).formatToParts(now)) {
+    parts[part.type] = part.value;
+  }
+
   return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
 }
 
 export function isEventOverdue(event, now = new Date()) {
   if (event.type !== 'due' || event.completedAt) return false;
   const deadline = `${event.endDate || event.date}T${event.allDay ? '23:59' : event.endTime || '23:59'}`;
+
   return deadline < manilaNowKey(now);
 }
 
 export function formatEventTime(event) {
   if (event.allDay) return 'All day';
+
   const formatTime = value => {
     if (!value) return '';
+
     return new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' })
       .format(new Date(2000, 0, 1, Number(value.slice(0, 2)), Number(value.slice(3, 5))));
   };
+
   return `${formatTime(event.startTime)}–${formatTime(event.endTime)}`;
 }
 

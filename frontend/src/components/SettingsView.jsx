@@ -25,15 +25,18 @@ import DocumentVault, { DEFAULT_MASTER_DOCS } from './settings/DocumentVault';
 // Normalize scholarship entries (string or object) to a structured tracker object
 export const normalizeTrackedScholarships = (list, catalog = []) => {
   return (list || []).map((item, idx) => {
-    if (typeof item === 'string') {
-      const itemStr = item || '';
+    if (!item || !item.requirements) {
+      const itemStr = item?.title || item || '';
+
       const matched = (catalog || []).find(s => {
         const sTitle = s?.title || s?.name || '';
+
         return (
           (sTitle && sTitle.toLowerCase().includes(itemStr.toLowerCase())) ||
           (itemStr && itemStr.toLowerCase().includes(sTitle.toLowerCase()))
         );
       });
+
       const reqNames = (matched && matched.requirements && matched.requirements.length > 0)
         ? matched.requirements
         : [
@@ -44,20 +47,25 @@ export const normalizeTrackedScholarships = (list, catalog = []) => {
             "Certificate of Residency",
             "2x2 ID Picture"
           ];
+
       return {
         id: matched?.id || `custom-${idx}-${Date.now()}`,
         title: itemStr,
         provider: matched?.provider || "Scholarship Provider",
         deadline: matched?.deadline || "",
         applyLink: matched?.applyLink || "",
-        requirements: reqNames.map(r => ({ name: typeof r === 'string' ? r : (r?.name || 'Document'), status: 'missing' }))
+        requirements: reqNames.map(r => ({ name: r?.name ?? r, status: 'missing' }))
       };
     }
+
     const safeItem = item || {};
+
     const reqs = (safeItem.requirements || []).map(r => {
-      if (typeof r === 'string') return { name: r, status: 'missing' };
-      return { name: r?.name || 'Required Document', status: r?.status || 'missing' };
+      if (!r?.name) return { name: String(r || 'Required Document'), status: 'missing' };
+
+      return { name: r.name, status: r.status || 'missing' };
     });
+
     return {
       ...safeItem,
       id: safeItem.id || `sch-${idx}-${Date.now()}`,
@@ -91,14 +99,17 @@ export default function SettingsView({ userEmail, userRole, onUpdateUser }) {
   // Tabs & Document Vault State
   const [activeMainTab, setActiveMainTab] = useState('tracker'); // 'tracker' | 'vault'
   const [vaultDocs, setVaultDocs] = useState([]);
+
   const [customVaultDocs, setCustomVaultDocs] = useState(() => {
     try {
       const saved = localStorage.getItem(`shore_custom_docs_${userEmail}`);
+
       return saved ? JSON.parse(saved) : [];
     } catch {
       return [];
     }
   });
+
   const [isUploadingDoc, setIsUploadingDoc] = useState({});
   const [isExportingZip, setIsExportingZip] = useState(false);
   const [previewModalDoc, setPreviewModalDoc] = useState(null);
@@ -112,6 +123,7 @@ export default function SettingsView({ userEmail, userRole, onUpdateUser }) {
 
   const loadVaultDocs = async () => {
     if (!userEmail) return;
+
     try {
       const docs = await getAllVaultDocuments(userEmail);
       setVaultDocs(docs || []);
@@ -143,12 +155,15 @@ export default function SettingsView({ userEmail, userRole, onUpdateUser }) {
   const fetchUserData = async () => {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 6000);
+
     try {
       const res = await fetch('/api/users', { signal: controller.signal });
       clearTimeout(timeoutId);
+
       if (!res.ok) return;
       const data = await res.json();
       const currentUser = (data.users || []).find(u => u.email === userEmail);
+
       if (currentUser) {
         setCurrentUserData(currentUser);
         setProfilePicture(currentUser.profilePicture || null);
@@ -157,6 +172,7 @@ export default function SettingsView({ userEmail, userRole, onUpdateUser }) {
 
         try {
           const catRes = await fetch('/api/scholarships');
+
           if (catRes.ok) {
             const catData = await catRes.json();
             const catalog = catData.scholarships || [];
@@ -181,11 +197,15 @@ export default function SettingsView({ userEmail, userRole, onUpdateUser }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updates)
       });
+
       const data = await res.json();
+
       if (res.ok) {
         if (onUpdateUser) onUpdateUser(data.user);
+
         return { success: true };
       }
+
       return { success: false, error: data.error || 'Failed to save' };
     } catch (error) {
       return { success: false, error: error.message };
@@ -200,10 +220,13 @@ export default function SettingsView({ userEmail, userRole, onUpdateUser }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userEmail, borderId })
       });
+
       const data = await res.json();
+
       if (res.ok) {
         setEquippedBorder(borderId);
         toast.success("Avatar border equipped!");
+
         if (onUpdateUser && currentUserData) {
           onUpdateUser({ ...currentUserData, equippedBorder: borderId });
         }
@@ -218,16 +241,22 @@ export default function SettingsView({ userEmail, userRole, onUpdateUser }) {
   // Photo crop upload
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
+
     if (!file) return;
+
     if (file.size > 2 * 1024 * 1024) {
       toast.error('Image must be less than 2MB');
+
       return;
     }
+
     const reader = new FileReader();
     reader.onloadend = async () => {
       setImageSrc(reader.result);
+
       if (fileInputRef.current) fileInputRef.current.value = '';
     };
+
     reader.readAsDataURL(file);
   };
 
@@ -241,6 +270,7 @@ export default function SettingsView({ userEmail, userRole, onUpdateUser }) {
       setProfilePicture(croppedImageBase64);
       setImageSrc(null);
       const result = await saveUserData({ profilePicture: croppedImageBase64 });
+
       if (result.success) {
         toast.success('Profile picture updated successfully');
       } else {
@@ -255,13 +285,16 @@ export default function SettingsView({ userEmail, userRole, onUpdateUser }) {
   // Scholarship tracker handlers
   const handleAddScholarship = async (scholarshipItem = null, manualTitle = '', onResetInput) => {
     const titleToAdd = scholarshipItem ? scholarshipItem.title : manualTitle.trim();
+
     if (!titleToAdd) {
       toast.warning("Please type a scholarship name or click a suggestion below");
+
       return;
     }
 
     if (appliedScholarships.some(s => (s?.title || s?.name || '').toLowerCase() === (titleToAdd || '').toLowerCase())) {
       toast.info(`"${titleToAdd}" is already in your tracker!`);
+
       return;
     }
 
@@ -271,7 +304,7 @@ export default function SettingsView({ userEmail, userRole, onUpdateUser }) {
     );
 
     const defaultReqs = (matched && matched.requirements && matched.requirements.length > 0)
-      ? matched.requirements.map(r => ({ name: typeof r === 'string' ? r : r.name, status: 'missing' }))
+      ? matched.requirements.map(r => ({ name: r?.name ?? r, status: 'missing' }))
       : [
           { name: "Accomplished Application Form", status: "missing" },
           { name: "Grade 12 Report Card (Form 137 / 138)", status: "missing" },
@@ -292,9 +325,11 @@ export default function SettingsView({ userEmail, userRole, onUpdateUser }) {
 
     const updated = [newTracked, ...appliedScholarships];
     setAppliedScholarships(updated);
+
     if (onResetInput) onResetInput();
 
     const result = await saveUserData({ appliedScholarships: updated });
+
     if (result.success) {
       toast.success(`Tracked "${newTracked.title}" with checklist!`);
     } else {
@@ -307,6 +342,7 @@ export default function SettingsView({ userEmail, userRole, onUpdateUser }) {
     const updated = appliedScholarships.filter(s => s.id !== id);
     setAppliedScholarships(updated);
     const result = await saveUserData({ appliedScholarships: updated });
+
     if (result.success) {
       toast.success('Removed from your tracker');
     } else {
@@ -317,11 +353,13 @@ export default function SettingsView({ userEmail, userRole, onUpdateUser }) {
 
   const handleToggleRequirementStatus = async (scholarshipId, reqIndex, isInVault, e) => {
     if (e) e.stopPropagation();
+
     const updated = appliedScholarships.map(item => {
       if (item.id === scholarshipId) {
         const nextReqs = [...item.requirements];
         const currentStatus = nextReqs[reqIndex].status;
         let nextStatus = 'missing';
+
         if (isInVault) {
           nextStatus = currentStatus === 'pending' ? 'ready' : 'pending';
         } else {
@@ -333,30 +371,41 @@ export default function SettingsView({ userEmail, userRole, onUpdateUser }) {
             nextStatus = 'missing';
           }
         }
+
         nextReqs[reqIndex] = { ...nextReqs[reqIndex], status: nextStatus };
+
         return { ...item, requirements: nextReqs };
       }
+
       return item;
     });
+
     setAppliedScholarships(updated);
     await saveUserData({ appliedScholarships: updated });
   };
 
   const handleAddInlineRequirement = async (scholarshipId, reqName) => {
     const trimmed = (reqName || '').trim();
+
     if (!trimmed) {
       toast.warning("Please enter a document name");
+
       return;
     }
+
     const updated = appliedScholarships.map(s => {
       if (s.id === scholarshipId) {
         const nextReqs = [...(s.requirements || []), { name: trimmed, status: 'missing' }];
+
         return { ...s, requirements: nextReqs };
       }
+
       return s;
     });
+
     setAppliedScholarships(updated);
     const result = await saveUserData({ appliedScholarships: updated });
+
     if (result.success) {
       toast.success(`Added "${trimmed}" to checklist!`);
     } else {
@@ -366,13 +415,17 @@ export default function SettingsView({ userEmail, userRole, onUpdateUser }) {
 
   const handleDeleteRequirement = async (scholarshipId, reqIndex, e) => {
     if (e) e.stopPropagation();
+
     const updated = appliedScholarships.map(s => {
       if (s.id === scholarshipId) {
         const nextReqs = (s.requirements || []).filter((_, idx) => idx !== reqIndex);
+
         return { ...s, requirements: nextReqs };
       }
+
       return s;
     });
+
     setAppliedScholarships(updated);
     await saveUserData({ appliedScholarships: updated });
     toast.success("Document removed from checklist");
@@ -381,22 +434,30 @@ export default function SettingsView({ userEmail, userRole, onUpdateUser }) {
   const handleSaveTrackedItemEdits = async (editingTrackedItem, onFinish) => {
     if (!editingTrackedItem || !editingTrackedItem.title.trim()) {
       toast.error("Scholarship title cannot be empty");
+
       return;
     }
+
     const cleanedReqs = (editingTrackedItem.requirements || [])
-      .filter(r => (typeof r === 'string' ? r.trim() : r.name?.trim()))
-      .map(r => (typeof r === 'string' ? { name: r.trim(), status: 'missing' } : { name: r.name.trim(), status: r.status || 'missing' }));
+      .filter(r => (r?.name ? r.name.trim() : String(r || '').trim()))
+      .map(r => ({
+        name: r?.name ? r.name.trim() : String(r || '').trim(),
+        status: r?.status || 'missing'
+      }));
 
     const updated = appliedScholarships.map(s => {
       if (s.id === editingTrackedItem.id) {
         return { ...editingTrackedItem, requirements: cleanedReqs };
       }
+
       return s;
     });
 
     setAppliedScholarships(updated);
+
     if (onFinish) onFinish();
     const result = await saveUserData({ appliedScholarships: updated });
+
     if (result.success) {
       toast.success(`Updated "${editingTrackedItem.title}"!`);
     } else {
@@ -408,11 +469,15 @@ export default function SettingsView({ userEmail, userRole, onUpdateUser }) {
   // Document Vault handlers
   const handleUploadVaultDoc = async (docKey, docName, file) => {
     if (!file) return;
+
     if (file.size > 25 * 1024 * 1024) {
       toast.error("File exceeds 25MB limit. Please choose a smaller file.");
+
       return;
     }
+
     setIsUploadingDoc(prev => ({ ...prev, [docKey]: true }));
+
     try {
       await encryptAndSaveDocument(userEmail, docKey, file, { name: docName });
       toast.success(`"${docName}" encrypted with AES-256 and stored in your secure cache!`);
@@ -436,10 +501,13 @@ export default function SettingsView({ userEmail, userRole, onUpdateUser }) {
   const handlePreviewVaultDoc = async (docKey) => {
     try {
       const doc = await loadAndDecryptDocument(userEmail, docKey);
+
       if (!doc) {
         toast.error("Document not found");
+
         return;
       }
+
       setPreviewModalDoc(doc);
     } catch {
       toast.error("Failed to preview document");
@@ -448,6 +516,7 @@ export default function SettingsView({ userEmail, userRole, onUpdateUser }) {
 
   const handleDeleteVaultDoc = async (docKey, docName) => {
     if (!confirm(`Are you sure you want to remove "${docName}" from your encrypted cache?`)) return;
+
     try {
       await deleteVaultDocument(userEmail, docKey);
       toast.success("Document removed from local vault");
@@ -460,15 +529,19 @@ export default function SettingsView({ userEmail, userRole, onUpdateUser }) {
   const handleExportAllZip = async () => {
     if (vaultDocs.length === 0) {
       toast.warning("No files uploaded in your document vault yet!");
+
       return;
     }
+
     setIsExportingZip(true);
+
     try {
       const count = await exportDocumentsAsZip(
         userEmail,
         vaultDocs.map(d => d.docKey),
         `${userEmail ? userEmail.split('@')[0] : 'student'}_Scholarship_Universal_Dossier.zip`
       );
+
       toast.success(`Bundled and downloaded all ${count} documents into a ZIP archive!`);
     } catch (err) {
       toast.error(err.message || "Failed to package documents into ZIP");
@@ -480,9 +553,12 @@ export default function SettingsView({ userEmail, userRole, onUpdateUser }) {
   const handleCreateCustomDoc = (newDoc, onFinish) => {
     if (!newDoc.name.trim()) {
       toast.error("Please enter a document name");
+
       return;
     }
+
     const key = `custom_${Date.now()}`;
+
     const updated = [
       ...customVaultDocs,
       {
@@ -493,12 +569,15 @@ export default function SettingsView({ userEmail, userRole, onUpdateUser }) {
         accepts: 'image/*,.pdf,.doc,.docx'
       }
     ];
+
     setCustomVaultDocs(updated);
+
     try {
       localStorage.setItem(`shore_custom_docs_${userEmail}`, JSON.stringify(updated));
     } catch (e) {
       console.error(e);
     }
+
     if (onFinish) onFinish();
     toast.success("Custom document requirement added!");
   };
@@ -506,11 +585,13 @@ export default function SettingsView({ userEmail, userRole, onUpdateUser }) {
   const handleDeleteCustomDocSlot = (key) => {
     const updated = customVaultDocs.filter(d => d.key !== key);
     setCustomVaultDocs(updated);
+
     try {
       localStorage.setItem(`shore_custom_docs_${userEmail}`, JSON.stringify(updated));
     } catch (e) {
       console.error(e);
     }
+
     deleteVaultDocument(userEmail, key);
     loadVaultDocs();
   };
@@ -529,7 +610,7 @@ export default function SettingsView({ userEmail, userRole, onUpdateUser }) {
   const allVaultSlots = [...DEFAULT_MASTER_DOCS, ...customVaultDocs];
 
   return (
-    <div className="h-full w-full max-w-7xl mx-auto flex flex-col overflow-y-auto relative px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8 bg-canvas">
+    <div className="h-full w-full max-w-7xl mx-auto flex flex-col overflow-y-auto relative px-4 sm:px-6 lg:px-8 pt-[max(1.25rem,calc(0.75rem+env(safe-area-inset-top,0px)))] sm:pt-8 bg-canvas overscroll-contain">
       {/* Photo Crop Modal */}
       <CropModal
         imageSrc={imageSrc}
@@ -549,7 +630,7 @@ export default function SettingsView({ userEmail, userRole, onUpdateUser }) {
         description="Update your profile, avatar cosmetics, and organize your scholarship requirements."
       />
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 pb-28 sm:pb-12">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] md:pb-12">
         {/* Left Column: Profile, Attendance Pass, Cosmetics */}
         <div className="lg:col-span-4 xl:col-span-4 flex flex-col gap-4 sm:gap-6">
           <ProfileCard
@@ -621,11 +702,10 @@ export default function SettingsView({ userEmail, userRole, onUpdateUser }) {
                 </button>
               </div>
 
-              {/* Live Cloud Security Status */}
-              <div className="hidden xl:flex items-center gap-2 text-xs font-medium text-muted shrink-0">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              {/* Vault Status Indicator */}
+              <div className="hidden xl:flex items-center gap-1.5 text-xs font-medium text-muted shrink-0">
                 <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span className="text-[11px] font-semibold tracking-wide text-muted uppercase">AES-256 Cloud Vault</span>
+                <span className="text-[11px] font-semibold tracking-wide text-muted uppercase">Document Vault</span>
               </div>
             </div>
 

@@ -126,6 +126,7 @@ export function TotalScoreContent({ stats }) {
  */
 export function CohortRankContent({ stats }) {
   const { rank, totalStudents, total, subjectRankings = [] } = stats;
+
   if (!rank || !totalStudents) return <div className="p-8 text-center text-muted">Data not available</div>;
 
   const percentile = Math.max(1, Math.round((1 - (rank - 1) / totalStudents) * 100));
@@ -196,6 +197,7 @@ export function CohortRankContent({ stats }) {
  */
 export function TopPerformerContent({ stats }) {
   const { strongest, subjectRankings = [] } = stats;
+
   if (!strongest || !strongest.name) return <div className="p-8 text-center text-muted">Data not available</div>;
 
   const topSubjects = subjectRankings.slice(0, 4);
@@ -273,6 +275,7 @@ export function TopPerformerContent({ stats }) {
  */
 export function PriorityFocusContent({ stats }) {
   const { weaknesses = [], subjectRankings = [] } = stats;
+
   const focusAreas = subjectRankings.filter(s => s.diff < 0).length > 0
     ? subjectRankings.filter(s => s.diff < 0)
     : weaknesses;

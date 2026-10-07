@@ -1,36 +1,45 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Menu, ChevronDown, Layers, Upload, CheckCircle2, LogOut, Settings } from 'lucide-react';
+import { Menu, ChevronDown, Layers, Upload, CheckCircle2, LogOut, Settings, SlidersHorizontal } from 'lucide-react';
 import { cn } from '../utils';
 import AvatarBorder from './AvatarBorder';
-import { TOP_NAV, getClassTools } from '../utils/navConfig';
+import { TOP_NAV, getAcademicTools, getAdminTools } from '../utils/navConfig';
 
 export default function Sidebar({
   sidebarOpen, setSidebarOpen,
   currentView, setCurrentView,
+  preloadView = () => {},
   userRole, userEmail, userName,
   profilePicture, equippedBorder,
   unreadAnnouncements,
   classToolsOpen, setClassToolsOpen,
+  adminToolsOpen = false, setAdminToolsOpen = () => {},
   isProfileMenuOpen, setIsProfileMenuOpen,
   file, fileInputRef, handleFileUpload,
   _status, handleLogout,
 }) {
-  const [collapsedFlyoutOpen, setCollapsedFlyoutOpen] = useState(false);
-  const classTools = getClassTools(userRole);
-  const isAnyClassToolActive = classTools.some(item => item.id === currentView);
+  const [collapsedAcademicFlyoutOpen, setCollapsedAcademicFlyoutOpen] = useState(false);
+  const [collapsedAdminFlyoutOpen, setCollapsedAdminFlyoutOpen] = useState(false);
+
+  const academicTools = getAcademicTools(userRole);
+  const adminTools = getAdminTools(userRole);
+  const isAnyAcademicToolActive = academicTools.some(item => item.id === currentView);
+  const isAnyAdminToolActive = adminTools.some(item => item.id === currentView);
 
   const NavItem = ({ item, indent = false }) => {
     const isActive = currentView === item.id;
+
     return (
       <div className={cn('relative group', sidebarOpen ? 'w-full' : 'flex justify-center w-full')}>
         <button
           type="button"
           onClick={() => setCurrentView(item.id)}
+          onPointerEnter={() => preloadView(item.id)}
+          onFocus={() => preloadView(item.id)}
           aria-label={item.badge > 0 ? `${item.label}, ${item.badge} unread` : item.label}
           aria-current={isActive ? 'page' : undefined}
           className={cn(
-            'relative flex items-center rounded-xl overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 transition-transform active:scale-[0.98]',
+            'relative flex items-center rounded-xl overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 transition-[transform,background-color] active:scale-[0.96] duration-150 ease-out',
             sidebarOpen ? (indent ? 'w-full text-left' : 'w-full text-left') : 'w-11 h-11 justify-center'
           )}
         >
@@ -38,28 +47,38 @@ export default function Sidebar({
             <motion.div
               layoutId={indent ? 'active-sidebar-subpill' : 'active-sidebar-pill'}
               className="absolute inset-0 bg-primary/10 border border-primary/20 rounded-xl"
-              transition={{ type: 'spring', stiffness: 350, damping: 30 }}
+              transition={{ type: 'spring', stiffness: 420, damping: 32 }}
             />
           )}
           {!sidebarOpen && isActive && (
-            <div className="absolute left-0.5 top-2.5 bottom-2.5 w-1 bg-primary rounded-r-full shadow-sm" />
+            <motion.div
+              layoutId="active-sidebar-indicator"
+              className="absolute left-0.5 top-2.5 bottom-2.5 w-1 bg-primary rounded-r-full shadow-sm"
+              transition={{ type: 'spring', stiffness: 420, damping: 32 }}
+            />
           )}
           {!isActive && (
-            <div className="absolute inset-0 bg-canvas/60 opacity-0 group-hover:opacity-100 transition-opacity rounded-xl" />
+            <div className="absolute inset-0 bg-canvas/60 opacity-0 group-hover:opacity-100 transition-opacity duration-150 rounded-xl" />
           )}
           <div className={cn(
-            'relative z-10 flex items-center font-medium transition-[color,background-color] duration-150',
+            'relative z-10 flex items-center font-medium transition-[color] duration-150',
             sidebarOpen ? (indent ? 'w-full px-3 py-2 text-[13px]' : 'w-full px-3.5 py-2.5 text-sm') : 'w-11 h-11 justify-center',
             isActive ? 'text-primary font-semibold' : 'text-muted group-hover:text-fg',
           )}>
-            <item.icon
-              aria-hidden="true"
-              className={cn(
-                'shrink-0 transition-opacity',
-                indent ? 'w-4 h-4' : 'w-5 h-5',
-                isActive ? 'opacity-100 text-primary' : 'opacity-70 group-hover:opacity-100'
-              )}
-            />
+            <motion.div
+              animate={{ scale: isActive ? [1, 1.15, 1] : 1 }}
+              transition={{ type: 'spring', stiffness: 500, damping: 25, duration: 0.25 }}
+              className="shrink-0 flex items-center justify-center"
+            >
+              <item.icon
+                aria-hidden="true"
+                className={cn(
+                  'transition-colors duration-150',
+                  indent ? 'w-4 h-4' : 'w-5 h-5',
+                  isActive ? 'opacity-100 text-primary' : 'opacity-70 group-hover:opacity-100'
+                )}
+              />
+            </motion.div>
             <AnimatePresence>
               {sidebarOpen && (
                 <motion.span
@@ -91,7 +110,7 @@ export default function Sidebar({
         {!sidebarOpen && (
           <div
             role="tooltip"
-            className="absolute left-full top-1/2 -translate-y-1/2 ml-3 px-2.5 py-1.5 bg-slate-900 text-white text-xs font-medium rounded-lg shadow-xl whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity duration-150 z-50 flex items-center gap-1.5"
+            className="absolute left-full top-1/2 -translate-y-1/2 ml-3 px-2.5 py-1.5 bg-slate-900 text-white text-xs font-medium rounded-lg shadow-xl whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity duration-150 z-50 flex items-center gap-1.5 select-none"
           >
             <span>{item.label}</span>
             {item.badge > 0 && (
@@ -109,11 +128,11 @@ export default function Sidebar({
     <motion.aside
       animate={{ width: sidebarOpen ? 240 : 72 }}
       transition={{ duration: 0.2, ease: 'easeOut' }}
-      className="hidden md:flex bg-sidebar border-r border-border flex-col shrink-0 z-20 overflow-visible"
+      className="hidden md:flex bg-sidebar border-r border-border flex-col shrink-0 z-20 overflow-visible h-full select-none"
     >
       {/* Header */}
       <div className={cn(
-        'h-[4.5rem] flex items-center shrink-0 border-b border-border/70 transition-all',
+        'h-16 flex items-center shrink-0 border-b border-border/70 transition-all',
         sidebarOpen ? 'px-3.5 justify-between' : 'justify-center px-0'
       )}>
         <div className={cn('flex items-center min-w-0', !sidebarOpen && 'justify-center w-full')}>
@@ -124,7 +143,10 @@ export default function Sidebar({
               aria-expanded={sidebarOpen}
               onClick={() => {
                 setSidebarOpen(!sidebarOpen);
-                if (collapsedFlyoutOpen) setCollapsedFlyoutOpen(false);
+
+                if (collapsedAcademicFlyoutOpen) setCollapsedAcademicFlyoutOpen(false);
+
+                if (collapsedAdminFlyoutOpen) setCollapsedAdminFlyoutOpen(false);
               }}
               className="w-11 h-11 flex items-center justify-center text-muted hover:text-fg hover:bg-canvas rounded-xl transition-colors shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             >
@@ -133,9 +155,9 @@ export default function Sidebar({
             {!sidebarOpen && (
               <div
                 role="tooltip"
-                className="absolute left-full top-1/2 -translate-y-1/2 ml-3 px-2.5 py-1.5 bg-slate-900 text-white text-xs font-medium rounded-lg shadow-xl whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity duration-150 z-50"
+                className="absolute top-full left-1/2 -translate-x-1/2 mt-1.5 px-2 py-0.5 bg-slate-900 text-white text-[11px] font-medium rounded-md shadow-lg whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity duration-150 z-50 select-none"
               >
-                <span>Expand sidebar</span>
+                <span>Expand</span>
               </div>
             )}
           </div>
@@ -158,7 +180,7 @@ export default function Sidebar({
 
       {/* Nav Items Container with clean scroll containment */}
       <div className={cn(
-        'flex-1 min-h-0 py-3 space-y-1 custom-scrollbar',
+        'flex-1 min-h-0 py-2.5 space-y-1 custom-scrollbar',
         sidebarOpen ? 'px-3 overflow-x-hidden overflow-y-auto' : 'px-2 flex flex-col items-center overflow-visible'
       )}>
         {/* Main Section */}
@@ -167,21 +189,21 @@ export default function Sidebar({
             Main
           </div>
         ) : (
-          <div className="w-8 h-px bg-border/80 my-2 mx-auto" />
+          <div className="w-6 h-px bg-border/60 my-1 mx-auto" />
         )}
 
         {TOP_NAV.map(item => (
           <NavItem key={item.id} item={{ ...item, badge: item.id === 'announcements' ? unreadAnnouncements : 0 }} />
         ))}
 
-        {/* Academics / Class Tools Section */}
-        <div className={cn('pt-3 pb-1', sidebarOpen ? 'w-full' : 'flex flex-col items-center w-full')}>
+        {/* 1. Academics / Class Tools Section */}
+        <div className={cn(sidebarOpen ? 'w-full pt-2.5 pb-0.5' : 'w-full flex flex-col items-center pt-1 pb-0.5')}>
           {sidebarOpen ? (
             <div className="px-3 pb-1.5 text-[10px] font-bold tracking-wider text-muted/70 uppercase select-none">
               Academics
             </div>
           ) : (
-            <div className="w-8 h-px bg-border/80 my-2 mx-auto" />
+            <div className="w-6 h-px bg-border/60 my-1 mx-auto" />
           )}
 
           <div className={cn('relative group', sidebarOpen ? 'w-full' : 'flex justify-center w-full')}>
@@ -189,18 +211,19 @@ export default function Sidebar({
               type="button"
               onClick={() => {
                 if (!sidebarOpen) {
-                  setCollapsedFlyoutOpen(!collapsedFlyoutOpen);
+                  setCollapsedAcademicFlyoutOpen(!collapsedAcademicFlyoutOpen);
+                  setCollapsedAdminFlyoutOpen(false);
                 } else {
                   setClassToolsOpen(!classToolsOpen);
                 }
               }}
               aria-label="Class tools"
-              aria-expanded={sidebarOpen ? classToolsOpen : collapsedFlyoutOpen}
+              aria-expanded={sidebarOpen ? classToolsOpen : collapsedAcademicFlyoutOpen}
               aria-controls="class-tools-list"
               className={cn(
                 'transition-colors rounded-xl group relative text-sm flex items-center',
                 sidebarOpen ? 'w-full justify-between px-3.5 py-2.5' : 'w-11 h-11 justify-center',
-                isAnyClassToolActive && (!classToolsOpen || !sidebarOpen)
+                isAnyAcademicToolActive && (!classToolsOpen || !sidebarOpen)
                   ? 'text-primary bg-primary/10 font-semibold'
                   : 'text-muted hover:text-fg hover:bg-canvas/60'
               )}
@@ -208,7 +231,7 @@ export default function Sidebar({
               <div className={cn('flex items-center', sidebarOpen ? 'gap-3' : 'justify-center')}>
                 <Layers className={cn(
                   'shrink-0 w-5 h-5 transition-opacity',
-                  isAnyClassToolActive ? 'opacity-100 text-primary' : 'opacity-70 group-hover:opacity-100'
+                  isAnyAcademicToolActive ? 'opacity-100 text-primary' : 'opacity-70 group-hover:opacity-100'
                 )} />
                 <AnimatePresence>
                   {sidebarOpen && (
@@ -224,13 +247,13 @@ export default function Sidebar({
                 </AnimatePresence>
               </div>
 
-              {!sidebarOpen && isAnyClassToolActive && (
+              {!sidebarOpen && isAnyAcademicToolActive && (
                 <div className="absolute left-0.5 top-2.5 bottom-2.5 w-1 bg-primary rounded-r-full shadow-sm" />
               )}
 
               {sidebarOpen && (
                 <div className="flex items-center gap-1.5">
-                  {isAnyClassToolActive && !classToolsOpen && (
+                  {isAnyAcademicToolActive && !classToolsOpen && (
                     <span className="w-1.5 h-1.5 rounded-full bg-primary" />
                   )}
                   <ChevronDown className={cn('w-4 h-4 transition-transform duration-200 opacity-70 group-hover:opacity-100', classToolsOpen && 'rotate-180')} />
@@ -239,21 +262,21 @@ export default function Sidebar({
             </button>
 
             {/* Tooltip for collapsed mode when flyout is closed */}
-            {!sidebarOpen && !collapsedFlyoutOpen && (
+            {!sidebarOpen && !collapsedAcademicFlyoutOpen && (
               <div
                 role="tooltip"
-                className="absolute left-full top-1/2 -translate-y-1/2 ml-3 px-2.5 py-1.5 bg-slate-900 text-white text-xs font-medium rounded-lg shadow-xl whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity duration-150 z-50 flex items-center gap-1.5"
+                className="absolute left-full top-1/2 -translate-y-1/2 ml-3 px-2.5 py-1.5 bg-slate-900 text-white text-xs font-medium rounded-lg shadow-xl whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity duration-150 z-50 flex items-center gap-1.5 select-none"
               >
                 <span>Class Tools</span>
-                {isAnyClassToolActive && <span className="w-1.5 h-1.5 rounded-full bg-primary" />}
+                {isAnyAcademicToolActive && <span className="w-1.5 h-1.5 rounded-full bg-primary" />}
               </div>
             )}
 
             {/* Floating Flyout Menu for Collapsed Mode */}
             <AnimatePresence>
-              {!sidebarOpen && collapsedFlyoutOpen && (
+              {!sidebarOpen && collapsedAcademicFlyoutOpen && (
                 <>
-                  <div className="fixed inset-0 z-40" onClick={() => setCollapsedFlyoutOpen(false)} />
+                  <div className="fixed inset-0 z-40" onClick={() => setCollapsedAcademicFlyoutOpen(false)} />
                   <motion.div
                     initial={{ opacity: 0, x: -8, scale: 0.95 }}
                     animate={{ opacity: 1, x: 0, scale: 1 }}
@@ -262,20 +285,22 @@ export default function Sidebar({
                     className="absolute left-full top-0 ml-3 w-56 bg-card border border-border shadow-2xl rounded-2xl p-1.5 z-50 flex flex-col gap-0.5"
                   >
                     <div className="px-3 py-2 border-b border-border/60 text-[10px] font-bold text-muted uppercase tracking-wider">
-                      Class Tools
+                      Academic Tools
                     </div>
-                    {classTools.map(subItem => {
+                    {academicTools.map(subItem => {
                       const isSubActive = currentView === subItem.id;
+
                       return (
                         <button
                           key={subItem.id}
                           type="button"
+                          onPointerEnter={() => preloadView(subItem.id)}
                           onClick={() => {
                             setCurrentView(subItem.id);
-                            setCollapsedFlyoutOpen(false);
+                            setCollapsedAcademicFlyoutOpen(false);
                           }}
                           className={cn(
-                            'w-full px-3 py-2 text-left text-xs font-semibold rounded-xl flex items-center gap-2.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+                            'w-full px-3 py-2 text-left text-xs font-semibold rounded-xl flex items-center gap-2.5 transition-[background-color,transform] active:scale-[0.97] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
                             isSubActive ? 'bg-primary text-white shadow-sm' : 'text-fg hover:bg-canvas'
                           )}
                         >
@@ -300,17 +325,154 @@ export default function Sidebar({
                 transition={{ duration: 0.2, ease: 'easeOut' }}
                 className="overflow-hidden flex flex-col gap-0.5 mt-1 pl-3.5 border-l-2 border-border/80 ml-5"
               >
-                {classTools.map(item => <NavItem key={item.id} item={item} indent />)}
+                {academicTools.map(item => <NavItem key={item.id} item={item} indent />)}
               </motion.div>
             )}
           </AnimatePresence>
         </div>
+
+        {/* 2. Administration / Account Tools Section (Role-filtered) */}
+        {adminTools.length > 0 && (
+          <div className={cn(sidebarOpen ? 'w-full pt-2 pb-0.5' : 'w-full flex flex-col items-center pt-1 pb-0.5')}>
+            {sidebarOpen ? (
+              <div className="px-3 pb-1.5 text-[10px] font-bold tracking-wider text-muted/70 uppercase select-none">
+                Administration
+              </div>
+            ) : (
+              <div className="w-6 h-px bg-border/60 my-1 mx-auto" />
+            )}
+
+            <div className={cn('relative group', sidebarOpen ? 'w-full' : 'flex justify-center w-full')}>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!sidebarOpen) {
+                    setCollapsedAdminFlyoutOpen(!collapsedAdminFlyoutOpen);
+                    setCollapsedAcademicFlyoutOpen(false);
+                  } else {
+                    setAdminToolsOpen(!adminToolsOpen);
+                  }
+                }}
+                aria-label="Admin tools"
+                aria-expanded={sidebarOpen ? adminToolsOpen : collapsedAdminFlyoutOpen}
+                aria-controls="admin-tools-list"
+                className={cn(
+                  'transition-colors rounded-xl group relative text-sm flex items-center',
+                  sidebarOpen ? 'w-full justify-between px-3.5 py-2.5' : 'w-11 h-11 justify-center',
+                  isAnyAdminToolActive && (!adminToolsOpen || !sidebarOpen)
+                    ? 'text-primary bg-primary/10 font-semibold'
+                    : 'text-muted hover:text-fg hover:bg-canvas/60'
+                )}
+              >
+                <div className={cn('flex items-center', sidebarOpen ? 'gap-3' : 'justify-center')}>
+                  <SlidersHorizontal className={cn(
+                    'shrink-0 w-5 h-5 transition-opacity',
+                    isAnyAdminToolActive ? 'opacity-100 text-primary' : 'opacity-70 group-hover:opacity-100'
+                  )} />
+                  <AnimatePresence>
+                    {sidebarOpen && (
+                      <motion.span
+                        initial={{ opacity: 0, width: 0, marginLeft: 0 }}
+                        animate={{ opacity: 1, width: 'auto', marginLeft: 12 }}
+                        exit={{ opacity: 0, width: 0, marginLeft: 0 }}
+                        className="whitespace-nowrap overflow-hidden font-medium"
+                      >
+                        Admin Tools
+                      </motion.span>
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                {!sidebarOpen && isAnyAdminToolActive && (
+                  <div className="absolute left-0.5 top-2.5 bottom-2.5 w-1 bg-primary rounded-r-full shadow-sm" />
+                )}
+
+                {sidebarOpen && (
+                  <div className="flex items-center gap-1.5">
+                    {isAnyAdminToolActive && !adminToolsOpen && (
+                      <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+                    )}
+                    <ChevronDown className={cn('w-4 h-4 transition-transform duration-200 opacity-70 group-hover:opacity-100', adminToolsOpen && 'rotate-180')} />
+                  </div>
+                )}
+              </button>
+
+              {/* Tooltip for collapsed mode when flyout is closed */}
+              {!sidebarOpen && !collapsedAdminFlyoutOpen && (
+                <div
+                  role="tooltip"
+                  className="absolute left-full top-1/2 -translate-y-1/2 ml-3 px-2.5 py-1.5 bg-slate-900 text-white text-xs font-medium rounded-lg shadow-xl whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity duration-150 z-50 flex items-center gap-1.5 select-none"
+                >
+                  <span>Admin Tools</span>
+                  {isAnyAdminToolActive && <span className="w-1.5 h-1.5 rounded-full bg-primary" />}
+                </div>
+              )}
+
+              {/* Floating Flyout Menu for Collapsed Mode */}
+              <AnimatePresence>
+                {!sidebarOpen && collapsedAdminFlyoutOpen && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setCollapsedAdminFlyoutOpen(false)} />
+                    <motion.div
+                      initial={{ opacity: 0, x: -8, scale: 0.95 }}
+                      animate={{ opacity: 1, x: 0, scale: 1 }}
+                      exit={{ opacity: 0, x: -8, scale: 0.95 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute left-full top-0 ml-3 w-56 bg-card border border-border shadow-2xl rounded-2xl p-1.5 z-50 flex flex-col gap-0.5"
+                    >
+                      <div className="px-3 py-2 border-b border-border/60 text-[10px] font-bold text-muted uppercase tracking-wider">
+                        Admin Tools
+                      </div>
+                      {adminTools.map(subItem => {
+                        const isSubActive = currentView === subItem.id;
+
+                        return (
+                          <button
+                            key={subItem.id}
+                            type="button"
+                            onPointerEnter={() => preloadView(subItem.id)}
+                            onClick={() => {
+                              setCurrentView(subItem.id);
+                              setCollapsedAdminFlyoutOpen(false);
+                            }}
+                            className={cn(
+                              'w-full px-3 py-2 text-left text-xs font-semibold rounded-xl flex items-center gap-2.5 transition-[background-color,transform] active:scale-[0.97] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+                              isSubActive ? 'bg-primary text-white shadow-sm' : 'text-fg hover:bg-canvas'
+                            )}
+                          >
+                            <subItem.icon className={cn('w-4 h-4', isSubActive ? 'text-white' : 'text-primary')} />
+                            <span>{subItem.label}</span>
+                          </button>
+                        );
+                      })}
+                    </motion.div>
+                  </>
+                )}
+              </AnimatePresence>
+            </div>
+
+            <AnimatePresence>
+              {adminToolsOpen && sidebarOpen && (
+                <motion.div
+                  id="admin-tools-list"
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.2, ease: 'easeOut' }}
+                  className="overflow-hidden flex flex-col gap-0.5 mt-1 pl-3.5 border-l-2 border-border/80 ml-5"
+                >
+                  {adminTools.map(item => <NavItem key={item.id} item={item} indent />)}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        )}
       </div>
 
       {/* Footer Profile Area */}
       <div className={cn(
-        'border-t border-border shrink-0 relative bg-sidebar select-none transition-all',
-        sidebarOpen ? 'p-3' : 'py-3 px-2 flex flex-col items-center justify-center'
+        'border-t border-border/70 shrink-0 mt-auto relative bg-sidebar select-none transition-all',
+        sidebarOpen ? 'p-3' : 'py-2 px-2 flex flex-col items-center justify-center'
       )}>
         {/* Hidden File Input for Global Admin Tracker Upload */}
         <input
@@ -430,7 +592,7 @@ export default function Sidebar({
             >
               <div className="relative shrink-0 flex items-center justify-center">
                 <AvatarBorder borderId={equippedBorder} className="w-10 h-10 shrink-0">
-                  <div className="w-full h-full rounded-full overflow-hidden bg-primary/10 text-primary flex items-center justify-center font-bold">
+                  <div className="w-full h-full rounded-full overflow-hidden bg-primary/10 border border-primary/20 text-primary flex items-center justify-center font-bold">
                     {profilePicture ? (
                       <img src={profilePicture} alt="Profile" width="40" height="40" className="w-full h-full object-cover" />
                     ) : (
@@ -486,7 +648,7 @@ export default function Sidebar({
               )}
             >
               <AvatarBorder borderId={equippedBorder} className="w-10 h-10 shrink-0">
-                <div className="w-full h-full rounded-full overflow-hidden bg-primary/10 text-primary flex items-center justify-center font-bold text-sm">
+                <div className="w-full h-full rounded-full overflow-hidden bg-primary/10 border border-primary/20 text-primary flex items-center justify-center font-bold text-sm">
                   {profilePicture ? (
                     <img src={profilePicture} alt="Profile" width="40" height="40" className="w-full h-full object-cover" />
                   ) : (
@@ -500,7 +662,7 @@ export default function Sidebar({
             {!isProfileMenuOpen && (
               <div
                 role="tooltip"
-                className="absolute left-full top-1/2 -translate-y-1/2 ml-3 px-2.5 py-1.5 bg-slate-900 text-white text-xs font-medium rounded-lg shadow-xl whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity duration-150 z-50 flex items-center gap-1.5"
+                className="absolute left-full top-1/2 -translate-y-1/2 ml-3 px-2.5 py-1.5 bg-slate-900 text-white text-xs font-medium rounded-lg shadow-xl whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity duration-150 z-50 flex items-center gap-1.5 select-none"
               >
                 <span>{userRole === 'admin' ? 'Admin Profile & Settings' : (userName || 'Profile & Settings')}</span>
               </div>

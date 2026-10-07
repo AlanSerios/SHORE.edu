@@ -8,7 +8,7 @@ export default function QRPassModal({ isOpen, onClose, userEmail, userRole }) {
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 pb-28 sm:pb-6 overflow-y-auto">
+      <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 pb-[max(1.5rem,calc(1rem+env(safe-area-inset-bottom,0px)))] pt-[max(1.5rem,calc(1rem+env(safe-area-inset-top,0px)))] sm:p-6 overflow-y-auto overscroll-contain">
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -25,7 +25,8 @@ export default function QRPassModal({ isOpen, onClose, userEmail, userRole }) {
         >
           <button
             onClick={onClose}
-            className="absolute top-4 right-4 p-2 bg-canvas text-muted hover:text-fg rounded-full transition-colors"
+            aria-label="Close QR Pass"
+            className="absolute top-4 right-4 min-w-[44px] min-h-[44px] flex items-center justify-center bg-canvas text-muted hover:text-fg rounded-full transition-colors active:scale-90 touch-manipulation"
           >
             <X className="w-5 h-5" />
           </button>

@@ -1,4 +1,5 @@
 const CACHE_NAME = 'shore-skwela-v1.1';
+
 const OFFLINE_URL = '/';
 
 const PRECACHE_ASSETS = [
@@ -17,6 +18,7 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       console.log('[SW] Pre-caching offline application shell');
+
       return cache.addAll(PRECACHE_ASSETS);
     }).then(() => self.skipWaiting())
   );
@@ -30,6 +32,7 @@ self.addEventListener('activate', (event) => {
         keys.map((key) => {
           if (key !== CACHE_NAME) {
             console.log('[SW] Removing old cache version:', key);
+
             return caches.delete(key);
           }
         })
@@ -57,18 +60,22 @@ self.addEventListener('fetch', (event) => {
               cache.put(request, responseClone);
             });
           }
+
           return response;
         })
         .catch(async () => {
           console.log('[SW] Network failed. Serving cached API response for:', url.pathname);
           const cached = await caches.match(request);
+
           if (cached) return cached;
+
           return new Response(JSON.stringify({ error: 'Offline mode: No cached data available.' }), {
             status: 503,
             headers: { 'Content-Type': 'application/json' }
           });
         })
     );
+
     return;
   }
 
@@ -81,10 +88,12 @@ self.addEventListener('fetch', (event) => {
             const responseClone = networkResponse.clone();
             caches.open(CACHE_NAME).then((cache) => cache.put(OFFLINE_URL, responseClone));
           }
+
           return networkResponse;
         })
         .catch(() => caches.match(OFFLINE_URL))
     );
+
     return;
   }
 
@@ -105,6 +114,7 @@ self.addEventListener('fetch', (event) => {
                 cache.put(request, responseClone);
               });
             }
+
             return networkResponse;
           })
           .catch(() => undefined);
@@ -112,6 +122,7 @@ self.addEventListener('fetch', (event) => {
         return cachedResponse || fetchPromise;
       })
     );
+
     return;
   }
 

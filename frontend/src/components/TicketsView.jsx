@@ -33,12 +33,15 @@ export default function TicketsView({ userEmail, userName, userRole }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
     if (!title.trim() || !description.trim()) {
       toast.error('Please fill in all fields');
+
       return;
     }
 
     setIsSubmitting(true);
+
     try {
       const res = await fetch('/api/tickets', {
         method: 'POST',
@@ -51,7 +54,9 @@ export default function TicketsView({ userEmail, userName, userRole }) {
           authorName: userName
         })
       });
+
       const data = await res.json();
+
       if (data.success) {
         toast.success('Ticket submitted successfully!');
         setShowForm(false);
@@ -64,6 +69,7 @@ export default function TicketsView({ userEmail, userName, userRole }) {
     } catch {
       toast.error('Network error');
     }
+
     setIsSubmitting(false);
   };
 
@@ -74,7 +80,9 @@ export default function TicketsView({ userEmail, userName, userRole }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ reply: replyText })
       });
+
       const data = await res.json();
+
       if (data.success) {
         toast.success('Ticket resolved');
         setReplyingTo(null);
@@ -88,8 +96,10 @@ export default function TicketsView({ userEmail, userName, userRole }) {
 
   const handleDelete = async (ticketId) => {
     if (!window.confirm('Delete this ticket?')) return;
+
     try {
       const res = await fetch(`/api/tickets/${ticketId}`, { method: 'DELETE' });
+
       if ((await res.json()).success) {
         toast.success('Ticket deleted');
         fetchTickets();
@@ -104,13 +114,13 @@ export default function TicketsView({ userEmail, userName, userRole }) {
   const resolvedTickets = myTickets.filter(t => t.status === 'resolved');
 
   return (
-    <div className="h-full overflow-y-auto bg-canvas">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 pt-6 sm:pt-8 pb-28 md:pb-10 space-y-6">
+    <div className="h-full overflow-y-auto bg-canvas overscroll-contain">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 pt-[max(1.25rem,calc(0.75rem+env(safe-area-inset-top,0px)))] sm:pt-8 pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] md:pb-10 space-y-6">
         
         {/* Header */}
         <PageHeader
           title="Support Tickets"
-          description={userRole === 'admin' ? 'Manage and resolve user feedback and bug reports.' : 'Report bugs or submit feedback to the administrators.'}
+          description={userRole === 'admin' ? 'Review and resolve reported issues and feedback.' : 'Submit bug reports or questions to administrators.'}
           actions={userRole !== 'admin' ? (
             <button
               type="button"

@@ -12,6 +12,7 @@ export default function PWAInstallBanner() {
     // Check if app is already running in standalone PWA mode
     if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true) {
       setIsInstalled(true);
+
       return;
     }
 
@@ -20,10 +21,13 @@ export default function PWAInstallBanner() {
       setDeferredPrompt(e);
       
       const dismissedTime = localStorage.getItem('shore_pwa_dismissed');
+
       if (dismissedTime) {
         const diffHours = (Date.now() - parseInt(dismissedTime, 10)) / (1000 * 60 * 60);
+
         if (diffHours < 24) return; // Don't prompt again within 24 hours
       }
+
       setIsVisible(true);
     };
 
@@ -46,9 +50,11 @@ export default function PWAInstallBanner() {
     if (!deferredPrompt) return;
     deferredPrompt.prompt();
     const { outcome } = await deferredPrompt.userChoice;
+
     if (outcome === 'accepted') {
       setIsVisible(false);
     }
+
     setDeferredPrompt(null);
   };
 

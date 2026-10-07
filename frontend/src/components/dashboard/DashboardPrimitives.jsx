@@ -1,5 +1,7 @@
 import React from 'react';
 import anime from 'animejs';
+import { MATH_SUBJ, SCI_SUBJ } from '../../utils/analytics';
+import { cn } from '../../utils';
 
 /** Animated counting number — shared by all dashboard cards. */
 export function AnimatedNumber({ value }) {
@@ -18,6 +20,7 @@ export function AnimatedNumber({ value }) {
       },
     });
   }, [value]);
+
   return <span ref={nodeRef}>0</span>;
 }
 
@@ -26,27 +29,49 @@ export function CustomTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
   const val1 = payload[0]?.value;
   const val2 = payload[1]?.value;
-  const hasDelta = typeof val1 === 'number' && typeof val2 === 'number';
+  const hasDelta = Number.isFinite(val1) && Number.isFinite(val2);
   const diff = hasDelta ? val1 - val2 : null;
 
+  const domain = label
+    ? (MATH_SUBJ.includes(label) ? 'Math' : SCI_SUBJ.includes(label) ? 'Science' : 'Humanities')
+    : null;
+
+  const domainColor = domain === 'Math'
+    ? 'bg-blue-50 text-blue-700 border-blue-200/70'
+    : domain === 'Science'
+      ? 'bg-emerald-50 text-emerald-700 border-emerald-200/70'
+      : 'bg-purple-50 text-purple-700 border-purple-200/70';
+
   return (
-    <div className="bg-white/95 backdrop-blur-sm border border-border p-3.5 shadow-xl rounded-xl min-w-[160px] text-xs">
-      <p className="font-bold text-fg text-sm mb-2 pb-1 border-b border-border/60">{label}</p>
+    <div className="bg-white/95 backdrop-blur-md border border-slate-200/90 p-3.5 shadow-xl rounded-xl min-w-[180px] text-xs transition-all">
+      <div className="flex items-center justify-between gap-2 mb-2 pb-2 border-b border-slate-100">
+        <p className="font-bold text-fg text-sm tracking-tight">{label}</p>
+        {domain && (
+          <span className={cn('text-[10px] font-bold px-1.5 py-0.5 rounded border', domainColor)}>
+            {domain}
+          </span>
+        )}
+      </div>
       <div className="space-y-1.5">
         {payload.map((entry, i) => (
-          <div key={i} className="flex items-center justify-between gap-3 font-medium">
-            <span className="flex items-center gap-1.5 text-muted">
-              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
+          <div key={i} className="flex items-center justify-between gap-3 text-xs">
+            <span className="flex items-center gap-1.5 text-muted font-medium">
+              <span className="w-2.5 h-2.5 rounded-sm shadow-xs" style={{ backgroundColor: entry.color }} />
               <span>{entry.name}</span>
             </span>
-            <span className="font-bold text-fg">{entry.value} pts</span>
+            <span className="font-mono font-bold text-fg tabular-nums">{entry.value} pts</span>
           </div>
         ))}
       </div>
       {diff !== null && (
-        <div className="mt-2 pt-1.5 border-t border-border/60 flex items-center justify-between font-semibold">
-          <span className="text-muted">Gap</span>
-          <span className={diff >= 0 ? 'text-accentGreenFg font-bold' : 'text-accentRedFg font-bold'}>
+        <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
+          <span className="text-muted font-medium">Net Delta</span>
+          <span className={cn(
+            'inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[11px] font-bold font-mono tabular-nums border',
+            diff >= 0
+              ? 'bg-emerald-50 text-emerald-700 border-emerald-200/70'
+              : 'bg-rose-50 text-rose-700 border-rose-200/70'
+          )}>
             {diff >= 0 ? `+${diff}` : diff} pts
           </span>
         </div>

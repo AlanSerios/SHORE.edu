@@ -6,22 +6,54 @@ import './index.css';
 
 // JWT AUTH INTERCEPTOR: attaches Authorization header to /api/ requests
 const originalFetch = window.fetch;
+
 window.fetch = async (url, options = {}) => {
   const token = localStorage.getItem('shore_token');
-  if (typeof url === 'string' && url.startsWith('/api') && token) {
-    options = { ...options, headers: { ...(options.headers || {}), Authorization: `Bearer ${token}` } };
+  const urlString = String(url || '');
+
+  if (urlString.startsWith('/api') && token) {
+    const rawHeaders = options.headers;
+
+    if (rawHeaders instanceof Headers) {
+      if (!rawHeaders.has('Authorization')) {
+        rawHeaders.set('Authorization', `Bearer ${token}`);
+      }
+    } else if (Array.isArray(rawHeaders)) {
+      if (!rawHeaders.some(([k]) => String(k).toLowerCase() === 'authorization')) {
+        options = { ...options, headers: [...rawHeaders, ['Authorization', `Bearer ${token}`]] };
+      }
+    } else {
+      options = {
+        ...options,
+        headers: {
+          ...rawHeaders,
+          Authorization: `Bearer ${token}`
+        }
+      };
+    }
   }
-  return originalFetch(url, options);
+
+  const response = await originalFetch(url, options);
+
+  // Auto-logout and clear revoked/expired token on 401 responses
+  if (response.status === 401 && urlString.startsWith('/api') && !urlString.includes('/api/users/login')) {
+    localStorage.removeItem('shore_token');
+    window.dispatchEvent(new CustomEvent('shore_auth_expired'));
+  }
+
+  return response;
 };
 
 // PWA SERVICE WORKER
 if ('serviceWorker' in navigator) {
   const isLocal = ['127.0.0.1', 'localhost'].includes(window.location.hostname);
+
   if (isLocal) {
     // Local BAT/Vite launches must always show the current build.
     navigator.serviceWorker.getRegistrations().then(registrations => {
       registrations.forEach(registration => registration.unregister());
     });
+
     if ('caches' in window) {
       caches.keys().then(keys => Promise.all(keys.map(key => caches.delete(key))));
     }
@@ -48,6 +80,7 @@ class ErrorBoundary extends React.Component {
         </div>
       );
     }
+
     return this.props.children;
   }
 }

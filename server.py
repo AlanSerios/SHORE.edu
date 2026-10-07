@@ -7,12 +7,15 @@ import socket
 import hmac
 import ipaddress
 import urllib.parse
+import urllib.request
+import secrets
 import threading
 from functools import wraps
 import jwt
 from concurrent.futures import ThreadPoolExecutor
-from flask import Flask, request, send_file, jsonify
+from flask import Flask, request, send_file, jsonify, redirect
 from flask_cors import CORS
+from werkzeug.security import generate_password_hash, check_password_hash
 from pdf_generator import generate_pdf_bytes
 from calendar_events import audience_allows, normalize_event, notification_allows, validate_event_payload
 
@@ -21,10 +24,50 @@ import pathlib
 _BASE_DIR = pathlib.Path(__file__).parent  # directory containing this server.py
 app = Flask(__name__, static_folder=str(_BASE_DIR / 'frontend' / 'dist'), static_url_path='')
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16 MB max payload
-CORS(app)
 
 # -------------------------------------------------------------
-# HTTP SECURITY HEADERS & ERROR HANDLERS
+# CORS & CSRF DEFENSES
+# -------------------------------------------------------------
+ALLOWED_ORIGIN_PATTERNS = [
+    r'^http://localhost(:\d+)?$',
+    r'^http://127\.0\.0\.1(:\d+)?$',
+    r'^http://192\.168\.\d+\.\d+(:\d+)?$',
+    r'^http://10\.\d+\.\d+\.\d+(:\d+)?$',
+    r'^http://172\.(1[6-9]|2\d|3[01])\.\d+\.\d+(:\d+)?$',
+    r'^https?://.*\.shoreskwela\.com$',
+    r'^https?://.*\.firebaseapp\.com$',
+    r'^https?://.*\.web\.app$',
+]
+
+_custom_origins = os.environ.get('CORS_ALLOWED_ORIGINS', '')
+if _custom_origins:
+    for o in _custom_origins.split(','):
+        if o.strip():
+            ALLOWED_ORIGIN_PATTERNS.append(re.escape(o.strip()))
+
+def is_allowed_origin(origin: str) -> bool:
+    if not origin:
+        return True
+    origin_clean = origin.strip().rstrip('/')
+    for pattern in ALLOWED_ORIGIN_PATTERNS:
+        if re.match(pattern, origin_clean, re.IGNORECASE):
+            return True
+    return False
+
+CORS(app, origins=is_allowed_origin, supports_credentials=True)
+
+@app.before_request
+def csrf_defense_middleware():
+    """Rejects state-changing requests originating from unauthorized foreign domains (CSRF defense)."""
+    if request.method in ('POST', 'PUT', 'DELETE', 'PATCH'):
+        if request.path.startswith('/api/auth/google/callback'):
+            return None
+        origin = request.headers.get('Origin')
+        if origin and not is_allowed_origin(origin):
+            return jsonify({"error": "Forbidden. Cross-origin request rejected (CSRF protection)."}), 403
+
+# -------------------------------------------------------------
+# HTTP SECURITY HEADERS & ERROR HANDLERS (MitM & XSS DEFENSES)
 # -------------------------------------------------------------
 @app.after_request
 def add_security_headers(response):
@@ -33,13 +76,23 @@ def add_security_headers(response):
     response.headers['X-XSS-Protection'] = '1; mode=block'
     response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
     response.headers['Permissions-Policy'] = 'camera=(), microphone=(), geolocation=(self)'
+    
+    # HSTS - MitM & SSL Stripping Defense
+    is_https = request.is_secure or request.headers.get('X-Forwarded-Proto') == 'https'
+    if is_https:
+        response.headers['Strict-Transport-Security'] = 'max-age=63072000; includeSubDomains; preload'
+
     if 'Content-Security-Policy' not in response.headers:
         response.headers['Content-Security-Policy'] = (
             "default-src 'self' 'unsafe-inline' 'unsafe-eval' https: data: blob:; "
-            "img-src 'self' data: https: blob:; "
-            "font-src 'self' https: data:; "
-            "connect-src 'self' https: wss:; "
-            "frame-ancestors 'self';"
+            "img-src 'self' data: https: blob: https://*.googleusercontent.com; "
+            "font-src 'self' https: data: https://fonts.gstatic.com; "
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+            "connect-src 'self' https: wss: https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://accounts.google.com https://*.firebaseio.com; "
+            "frame-src 'self' https://accounts.google.com; "
+            "frame-ancestors 'self'; "
+            "object-src 'none'; "
+            "base-uri 'self';"
         )
     return response
 
@@ -78,11 +131,58 @@ class RateLimiter:
 
 _RATE_LIMITER = RateLimiter()
 
+_FAILED_LOGINS = {}
+_FAILED_LOGINS_LOCK = threading.Lock()
+
+def check_account_lock(account_key: str) -> tuple:
+    """Checks if an account or IP is temporarily locked due to repeated failed logins. Returns (is_locked, retry_after)."""
+    now = time.time()
+    with _FAILED_LOGINS_LOCK:
+        record = _FAILED_LOGINS.get(account_key)
+        if not record:
+            return False, 0
+        lock_until = record.get('lock_until', 0)
+        if lock_until > now:
+            return True, max(1, int(lock_until - now))
+        if lock_until != 0 and lock_until <= now:
+            _FAILED_LOGINS.pop(account_key, None)
+            return False, 0
+    return False, 0
+
+def record_failed_login(account_key: str) -> tuple:
+    """Records a failed login attempt. Locks account for 120s if 5 attempts within 5 minutes occur."""
+    now = time.time()
+    with _FAILED_LOGINS_LOCK:
+        record = _FAILED_LOGINS.get(account_key, {'attempts': [], 'lock_until': 0})
+        attempts = [t for t in record.get('attempts', []) if now - t < 300]
+        attempts.append(now)
+        record['attempts'] = attempts
+        if len(attempts) >= 5:
+            record['lock_until'] = now + 120
+            _FAILED_LOGINS[account_key] = record
+            return True, 120
+        _FAILED_LOGINS[account_key] = record
+        return False, 0
+
+def clear_failed_login(account_key: str):
+    with _FAILED_LOGINS_LOCK:
+        _FAILED_LOGINS.pop(account_key, None)
+
 def safe_str_compare(val1, val2) -> bool:
     """Constant-time string comparison to prevent timing side-channel attacks."""
     if val1 is None or val2 is None:
         return False
     return hmac.compare_digest(str(val1), str(val2))
+
+def sanitize_user_record(user: dict) -> dict:
+    """Strips sensitive credentials (password, pin, password_hash, pin_hash) from user objects returned in API responses (OWASP API3:2023)."""
+    if not isinstance(user, dict):
+        return user
+    sensitive_keys = {'password', 'pin', 'password_hash', 'pin_hash'}
+    safe = {k: v for k, v in user.items() if k not in sensitive_keys}
+    safe['hasPassword'] = bool(user.get('password_hash') or user.get('password'))
+    safe['hasPin'] = bool(user.get('pin_hash') or user.get('pin'))
+    return safe
 
 def is_safe_url(url_str: str) -> tuple:
     """Validates that a URL does not target internal/private/loopback/cloud metadata IP addresses (SSRF defense)."""
@@ -139,19 +239,36 @@ def sanitize_text(text: str, max_length: int = 10000) -> str:
 # -------------------------------------------------------------
 # JWT & ROLE-BASED ACCESS CONTROL (RBAC)
 # -------------------------------------------------------------
-JWT_SECRET = os.environ.get('JWT_SECRET', 'shore-skwela-secret-jwt-key-production-change-in-env-98234791283749')
+def _resolve_jwt_secret():
+    secret = os.environ.get('JWT_SECRET')
+    if secret:
+        return secret
+    secret_path = _BASE_DIR / '.jwt_secret'
+    try:
+        if secret_path.exists():
+            saved = secret_path.read_text(encoding='utf-8').strip()
+            if saved:
+                return saved
+        generated = secrets.token_hex(32)
+        secret_path.write_text(generated, encoding='utf-8')
+        return generated
+    except Exception:
+        return 'shore-skwela-secret-jwt-key-secure-fallback-node-8934'
+
+JWT_SECRET = _resolve_jwt_secret()
 
 def create_jwt_token(user_dict: dict) -> str:
-    """Generates a secure signed JWT token valid for 30 days."""
+    """Generates a secure signed JWT token valid for 30 days with issuance timestamp."""
     email = (user_dict.get('email') or '').strip().lower()
     role = user_dict.get('role', 'student')
     name = user_dict.get('name', '')
+    now = int(time.time())
     payload = {
         'email': email,
         'role': role,
         'name': name,
-        'iat': int(time.time()),
-        'exp': int(time.time()) + (86400 * 30)
+        'iat': now,
+        'exp': now + (86400 * 30)
     }
     token = jwt.encode(payload, JWT_SECRET, algorithm='HS256')
     if isinstance(token, bytes):
@@ -159,11 +276,21 @@ def create_jwt_token(user_dict: dict) -> str:
     return token
 
 def decode_jwt_token(token_str: str) -> dict:
-    """Decodes and validates a JWT token signature and expiration."""
+    """Decodes and validates JWT signature, expiration, and password-change revocation status."""
     if not token_str:
         return None
     try:
-        return jwt.decode(token_str, JWT_SECRET, algorithms=['HS256'])
+        payload = jwt.decode(token_str, JWT_SECRET, algorithms=['HS256'])
+        token_email = (payload.get('email') or '').strip().lower()
+        if token_email:
+            users = load_json(USERS_FILE)
+            user = next((u for u in users if (u.get('email') or '').strip().lower() == token_email), None)
+            if user:
+                pwd_changed_at = user.get('password_changed_at', 0)
+                if pwd_changed_at and payload.get('iat', 0) < pwd_changed_at:
+                    # Token was issued before password change/reset -> REVOKED
+                    return None
+        return payload
     except Exception:
         return None
 
@@ -350,52 +477,359 @@ def load_events():
 def save_events(events):
     save_json(EVENTS_FILE, events)
 
+def find_roster_matches(name):
+    """Return canonical roster matches for a name, grouped by account role."""
+    normalized_name = " ".join(str(name or "").strip().casefold().split())
+    if not normalized_name:
+        return []
+
+    matches = []
+    seen = set()
+    for role, collection in (("student", STUDENTS_FILE), ("volunteer", VOLUNTEERS_FILE)):
+        roster = load_json(collection)
+        if not isinstance(roster, list):
+            continue
+        for roster_name in roster:
+            if isinstance(roster_name, str) and " ".join(roster_name.strip().casefold().split()) == normalized_name:
+                match_key = (role, roster_name.strip().casefold())
+                if match_key not in seen:
+                    seen.add(match_key)
+                    matches.append((role, roster_name.strip()))
+    return matches
+
 @app.route('/api/users/register', methods=['POST'])
 def register():
+    client_ip = request.headers.get('X-Forwarded-For', request.remote_addr or '127.0.0.1').split(',')[0].strip()
+    allowed, retry_after = _RATE_LIMITER.is_allowed(f"register_{client_ip}", max_requests=15, window_seconds=60)
+    if not allowed:
+        return jsonify({"error": f"Too many registration requests from this network. Please try again in {retry_after} seconds.", "retry_after": retry_after}), 429
+
     users = load_json(USERS_FILE)
-    new_user = request.json
-    
-    allowed_students = load_json(STUDENTS_FILE)
-    allowed_volunteers = load_json(VOLUNTEERS_FILE)
+    new_user = request.json or {}
     
     role = new_user.get('role', 'student')
-    name = new_user.get('name')
-    
-    if role == 'student' and name not in allowed_students:
-        return {"error": "Your name is not in the allowed students list."}, 400
-    elif role == 'volunteer' and name not in allowed_volunteers:
-        return {"error": "Your name is not in the allowed volunteers list."}, 400
+    name = (new_user.get('name') or '').strip()
+    raw_email = sanitize_text(new_user.get('email') or '').strip().lower()
+    password = str(new_user.get('password') or '')
+    pin = str(new_user.get('pin') or '').strip()
+
+    if not name:
+        return jsonify({"error": "Full name is required for registration."}), 400
+
+    if role not in ('student', 'volunteer'):
+        return jsonify({"error": "Choose Student or Volunteer before creating your account.", "code": "invalid_role"}), 400
+
+    if not raw_email:
+        return jsonify({"error": "Account username or email is required."}), 400
+
+    email = raw_email if '@' in raw_email else f"{raw_email}@shoreskwela.com"
+
+    role_roster_matches = [match for match in find_roster_matches(name) if match[0] == role]
+    if not role_roster_matches:
+        roster_label = "student" if role == "student" else "volunteer"
+        return jsonify({
+            "error": f"No {roster_label} roster entry found with this name.",
+            "code": "roster_name_mismatch"
+        }), 400
+    name = role_roster_matches[0][1]
         
     for user in users:
-        if user.get('email') == new_user.get('email'):
-            return {"error": "Email already registered."}, 400
+        if (user.get('email') or '').strip().lower() == email:
+            return jsonify({"error": "An account with this username already exists.", "code": "account_exists"}), 400
+
+    # 4-digit security PIN verification
+    if not pin or len(pin) != 4 or not pin.isdigit():
+        return jsonify({"error": "Enter a 4-digit PIN for account recovery.", "code": "invalid_pin"}), 400
+
+    # Secure password policy enforcement: min 8 chars, uppercase, lowercase, number, special character
+    if (len(password) < 8 or 
+        not re.search(r'[A-Z]', password) or 
+        not re.search(r'[a-z]', password) or 
+        not re.search(r'[0-9]', password) or 
+        not re.search(r'[^a-zA-Z0-9]', password)):
+        return jsonify({
+            "error": "Password needs 8+ characters, letters, a number, and symbol.",
+            "code": "weak_password"
+        }), 400
             
-    new_user['role'] = role
-    users.append(new_user)
+    # Cryptographically secure salted password and PIN hashing
+    password_hash = generate_password_hash(password)
+    pin_hash = generate_password_hash(pin)
+
+    user_record = {
+        "name": name,
+        "email": email,
+        "role": role,
+        "password_hash": password_hash,
+        "pin_hash": pin_hash
+    }
+    users.append(user_record)
     save_json(USERS_FILE, users)
     
-    safe_user = {k: v for k, v in new_user.items() if k != 'password'}
-    return {"success": True, "user": safe_user}
+    safe_user = sanitize_user_record(user_record)
+    token = create_jwt_token(user_record)
+    return jsonify({"success": True, "user": safe_user, "token": token}), 201
+
 
 @app.route('/api/users/login', methods=['POST'])
 def login():
     client_ip = request.headers.get('X-Forwarded-For', request.remote_addr or '127.0.0.1').split(',')[0].strip()
     allowed, retry_after = _RATE_LIMITER.is_allowed(f"login_{client_ip}", max_requests=30, window_seconds=60)
     if not allowed:
-        return jsonify({"error": f"Too many login attempts. Please try again in {retry_after} seconds.", "retry_after": retry_after}), 429
+        return jsonify({"error": f"Too many attempts. Try again in {retry_after}s.", "retry_after": retry_after}), 429
 
     creds = request.json or {}
-    email = (creds.get('email') or '').strip().lower()
-    password = creds.get('password')
+    email = sanitize_text(creds.get('email') or '').strip().lower()
+    password = str(creds.get('password') or '')
+
+    if not email or not password:
+        return jsonify({"error": "Enter your username and password."}), 400
+
+    # Account-level brute-force lock check
+    is_locked, lock_seconds = check_account_lock(email)
+    if is_locked:
+        return jsonify({
+            "error": f"Account temporarily locked. Try again in {lock_seconds}s.",
+            "locked": True,
+            "retry_after": lock_seconds
+        }), 429
 
     users = load_json(USERS_FILE)
+    matched_user = None
+    input_user = email.replace('@shoreskwela.com', '').strip().lower()
     for user in users:
         user_email = (user.get('email') or '').strip().lower()
-        if user_email == email and safe_str_compare(user.get('password'), password):
-            safe_user = {k: v for k, v in user.items() if k != 'password'}
-            token = create_jwt_token(user)
-            return jsonify({"success": True, "user": safe_user, "token": token}), 200
-    return jsonify({"error": "Invalid credentials."}), 401
+        user_name = " ".join((user.get('name') or '').strip().lower().split())
+        user_username = user_email.replace('@shoreskwela.com', '').strip().lower()
+        if user_email == email or user_username == input_user or (user_name and user_name == input_user):
+            matched_user = user
+            break
+
+    if not matched_user:
+        # Check if this name exists on the school roster to give a specific, helpful hint
+        roster_matches = find_roster_matches(input_user)
+        if roster_matches:
+            return jsonify({
+                "error": "No account with this name yet. Please register first.",
+                "code": "account_not_found",
+                "on_roster": True
+            }), 401
+        return jsonify({
+            "error": "No account with this name.",
+            "code": "account_not_found"
+        }), 401
+
+    is_valid = False
+    needs_upgrade = False
+
+    stored_hash = matched_user.get('password_hash')
+    stored_plain = matched_user.get('password')
+
+    if stored_hash:
+        is_valid = check_password_hash(stored_hash, password)
+    elif stored_plain is not None:
+        # Legacy plain-text fallback with automatic hash upgrade
+        is_valid = safe_str_compare(stored_plain, password)
+        if is_valid:
+            needs_upgrade = True
+
+    if is_valid:
+        clear_failed_login(email)
+        
+        # Transparent credential upgrade for legacy accounts
+        if needs_upgrade or not matched_user.get('password_hash'):
+            matched_user['password_hash'] = generate_password_hash(password)
+            matched_user.pop('password', None)
+            if matched_user.get('pin') and not matched_user.get('pin_hash'):
+                matched_user['pin_hash'] = generate_password_hash(str(matched_user['pin']))
+                matched_user.pop('pin', None)
+            save_json(USERS_FILE, users)
+
+        safe_user = sanitize_user_record(matched_user)
+        token = create_jwt_token(matched_user)
+        return jsonify({"success": True, "user": safe_user, "token": token}), 200
+
+    locked_now, lock_time = record_failed_login(email)
+    if locked_now:
+        return jsonify({
+            "error": f"Too many failed attempts. Account locked for {lock_time}s.",
+            "locked": True,
+            "retry_after": lock_time
+        }), 429
+
+    return jsonify({"error": "Incorrect password.", "code": "invalid_password"}), 401
+
+@app.route('/api/users/google-login', methods=['POST'])
+def google_login():
+    client_ip = request.headers.get('X-Forwarded-For', request.remote_addr or '127.0.0.1').split(',')[0].strip()
+    allowed, retry_after = _RATE_LIMITER.is_allowed(f"google_login_{client_ip}", max_requests=25, window_seconds=60)
+    if not allowed:
+        return jsonify({"error": f"Too many Google sign-in attempts. Please try again in {retry_after} seconds.", "retry_after": retry_after}), 429
+
+    data = request.json or {}
+    email = sanitize_text(data.get('email') or '').strip().lower()
+    name = sanitize_text(data.get('name') or '').strip()
+    google_id = sanitize_text(str(data.get('google_id') or data.get('uid') or ''))
+    avatar = sanitize_text(data.get('avatar_url') or data.get('photoURL') or '')
+
+    if not email or '@' not in email:
+        return jsonify({"error": "A valid Google email address is required."}), 400
+
+    users = load_json(USERS_FILE)
+    matched_user = next((u for u in users if (u.get('email') or '').strip().lower() == email), None)
+
+    if matched_user:
+        updated = False
+        if google_id and matched_user.get('google_id') != google_id:
+            matched_user['google_id'] = google_id
+            updated = True
+        if avatar and not matched_user.get('avatar'):
+            matched_user['avatar'] = avatar
+            updated = True
+        if updated:
+            save_json(USERS_FILE, users)
+        safe_user = sanitize_user_record(matched_user)
+        token = create_jwt_token(matched_user)
+        return jsonify({"success": True, "user": safe_user, "token": token}), 200
+
+    # First-time Google sign-ins may only create accounts for rostered people.
+    roster_matches = find_roster_matches(name)
+    if not roster_matches:
+        return jsonify({
+            "error": "No SHORE roster match found for this Google profile. Create an account with the name listed in your student or volunteer roster.",
+            "code": "roster_name_mismatch"
+        }), 403
+    if len(roster_matches) > 1:
+        return jsonify({
+            "error": "This name appears in both rosters. Create your account by choosing Student or Volunteer first.",
+            "code": "ambiguous_roster_name"
+        }), 403
+    role, display_name = roster_matches[0]
+
+    new_user = {
+        "name": display_name,
+        "email": email,
+        "role": role,
+        "google_id": google_id or f"google_{int(time.time())}",
+        "auth_provider": "google",
+        "created_at": time.time()
+    }
+    if avatar:
+        new_user['avatar'] = avatar
+
+    users.append(new_user)
+    save_json(USERS_FILE, users)
+
+    safe_user = sanitize_user_record(new_user)
+    token = create_jwt_token(new_user)
+    return jsonify({"success": True, "user": safe_user, "token": token, "is_new_user": True}), 200
+
+@app.route('/api/auth/google/config', methods=['GET'])
+def google_oauth_config():
+    client_id = os.environ.get('GOOGLE_CLIENT_ID') or os.environ.get('VITE_GOOGLE_CLIENT_ID')
+    return jsonify({
+        "configured": bool(client_id),
+        "client_id": client_id if client_id else None
+    }), 200
+
+@app.route('/api/auth/google/login', methods=['GET'])
+def google_oauth_login():
+    client_id = os.environ.get('GOOGLE_CLIENT_ID') or os.environ.get('VITE_GOOGLE_CLIENT_ID')
+    host = request.host_url.rstrip('/')
+    redirect_uri = f"{host}/api/auth/google/callback"
+    if not client_id:
+        return redirect("/?auth_error=Google+OAuth+Client+ID+not+configured.+Please+set+GOOGLE_CLIENT_ID+in+.env")
+    
+    state = secrets.token_urlsafe(16)
+    google_url = (
+        "https://accounts.google.com/o/oauth2/v2/auth?"
+        f"client_id={urllib.parse.quote(client_id)}&"
+        f"redirect_uri={urllib.parse.quote(redirect_uri)}&"
+        "response_type=code&"
+        "scope=openid%20email%20profile&"
+        "prompt=select_account&"
+        f"state={state}"
+    )
+    return redirect(google_url)
+
+@app.route('/api/auth/google/callback', methods=['GET'])
+def google_oauth_callback():
+    code = request.args.get('code')
+    if not code:
+        err = request.args.get('error', 'Google sign-in was cancelled.')
+        return redirect(f"/?auth_error={urllib.parse.quote(err)}")
+
+    client_id = os.environ.get('GOOGLE_CLIENT_ID') or os.environ.get('VITE_GOOGLE_CLIENT_ID')
+    client_secret = os.environ.get('GOOGLE_CLIENT_SECRET')
+    host = request.host_url.rstrip('/')
+    redirect_uri = f"{host}/api/auth/google/callback"
+
+    try:
+        token_payload = urllib.parse.urlencode({
+            'code': code,
+            'client_id': client_id or '',
+            'client_secret': client_secret or '',
+            'redirect_uri': redirect_uri,
+            'grant_type': 'authorization_code'
+        }).encode('utf-8')
+        req = urllib.request.Request(
+            'https://oauth2.googleapis.com/token',
+            data=token_payload,
+            headers={'Content-Type': 'application/x-www-form-urlencoded'}
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            token_data = json.loads(resp.read().decode('utf-8'))
+        
+        access_token = token_data.get('access_token')
+        id_token = token_data.get('id_token')
+        
+        user_info = {}
+        if access_token:
+            u_req = urllib.request.Request(
+                'https://www.googleapis.com/oauth2/v3/userinfo',
+                headers={'Authorization': f"Bearer {access_token}"}
+            )
+            with urllib.request.urlopen(u_req, timeout=10) as u_resp:
+                user_info = json.loads(u_resp.read().decode('utf-8'))
+        elif id_token:
+            user_info = jwt.decode(id_token, options={"verify_signature": False})
+        
+        email = sanitize_text(user_info.get('email') or '').strip().lower()
+        name = sanitize_text(user_info.get('name') or '').strip()
+        google_id = sanitize_text(str(user_info.get('sub') or ''))
+        avatar = sanitize_text(user_info.get('picture') or '')
+        
+        if not email:
+            return redirect("/?auth_error=No+email+provided+by+Google")
+            
+        users = load_json(USERS_FILE)
+        matched_user = next((u for u in users if (u.get('email') or '').strip().lower() == email), None)
+        if matched_user:
+            token = create_jwt_token(matched_user)
+        else:
+            roster_matches = find_roster_matches(name)
+            if not roster_matches:
+                return redirect("/?auth_error=" + urllib.parse.quote("No SHORE roster match found for this Google profile. Create an account with the name listed in your student or volunteer roster."))
+            if len(roster_matches) > 1:
+                return redirect("/?auth_error=" + urllib.parse.quote("This name appears in both rosters. Create your account by choosing Student or Volunteer first."))
+            role, display_name = roster_matches[0]
+            new_user = {
+                "name": display_name,
+                "email": email,
+                "role": role,
+                "google_id": google_id or f"google_{int(time.time())}",
+                "auth_provider": "google",
+                "created_at": time.time(),
+                "avatar": avatar
+            }
+            users.append(new_user)
+            save_json(USERS_FILE, users)
+            token = create_jwt_token(new_user)
+            
+        return redirect(f"/?token={urllib.parse.quote(token)}&google_auth=success#dashboard")
+    except Exception as e:
+        print("Google OAuth callback exception:", e)
+        return redirect(f"/?auth_error={urllib.parse.quote(str(e))}")
 
 @app.route('/api/users/me', methods=['GET'])
 @token_required(optional=False)
@@ -405,36 +839,62 @@ def get_current_user_profile():
     user = next((u for u in users if (u.get('email') or '').strip().lower() == email), None)
     if not user:
         return jsonify({"error": "User not found"}), 404
-    safe_user = {k: v for k, v in user.items() if k != 'password'}
+    safe_user = sanitize_user_record(user)
     return jsonify({"user": safe_user, "token_payload": request.current_user}), 200
 
 @app.route('/api/users', methods=['GET'])
+@token_required(optional=False)
 def get_all_users():
     users = load_json(USERS_FILE)
-    return {"users": users}
+    safe_users = [sanitize_user_record(u) for u in users]
+    response = jsonify({"users": safe_users})
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    return response, 200
 
 @app.route('/api/users/change-password', methods=['POST'])
 def change_password():
+    client_ip = request.headers.get('X-Forwarded-For', request.remote_addr or '127.0.0.1').split(',')[0].strip()
+    allowed, retry_after = _RATE_LIMITER.is_allowed(f"chg_pwd_{client_ip}", max_requests=15, window_seconds=60)
+    if not allowed:
+        return jsonify({"error": f"Too many requests. Please try again in {retry_after} seconds.", "retry_after": retry_after}), 429
+
     data = request.json or {}
     email = (data.get('email') or '').strip().lower()
-    current_password = data.get('current_password')
-    new_password = data.get('new_password')
+    current_password = str(data.get('current_password') or '')
+    new_password = str(data.get('new_password') or '')
     
     if not email:
         return jsonify({"error": "Account email is required."}), 400
     if not current_password:
         return jsonify({"error": "Current password is required."}), 400
-    if not new_password or len(str(new_password)) < 6:
-        return jsonify({"error": "New password must be at least 6 characters long."}), 400
+    
+    # Password complexity enforcement: min 8 chars, uppercase, lowercase, numbers, special characters
+    if (len(new_password) < 8 or 
+        not re.search(r'[A-Z]', new_password) or 
+        not re.search(r'[a-z]', new_password) or 
+        not re.search(r'[0-9]', new_password) or 
+        not re.search(r'[^a-zA-Z0-9]', new_password)):
+        return jsonify({
+            "error": "New password must be at least 8 characters long and contain uppercase, lowercase, numbers, and at least one special character."
+        }), 400
 
     users = load_json(USERS_FILE)
     for i, user in enumerate(users):
         if (user.get('email') or '').strip().lower() == email:
-            if not safe_str_compare(user.get('password'), current_password):
+            is_valid = False
+            if user.get('password_hash'):
+                is_valid = check_password_hash(user['password_hash'], current_password)
+            elif user.get('password') is not None:
+                is_valid = safe_str_compare(user.get('password'), current_password)
+
+            if not is_valid:
                 return jsonify({"error": "Current password is incorrect."}), 400
-            users[i]['password'] = str(new_password)
+            
+            users[i]['password_hash'] = generate_password_hash(new_password)
+            users[i]['password_changed_at'] = int(time.time())
+            users[i].pop('password', None)
             save_json(USERS_FILE, users)
-            return jsonify({"success": True, "message": "Password changed successfully."}), 200
+            return jsonify({"success": True, "message": "Password changed successfully. All previous sessions have been invalidated."}), 200
             
     return jsonify({"error": "User account not found."}), 404
 
@@ -442,63 +902,163 @@ def change_password():
 def reset_password():
     data = request.json or {}
     email = (data.get('email') or '').strip().lower()
+    pin = str(data.get('pin') or '').strip()
+    new_password = str(data.get('new_password') or '')
     client_ip = request.headers.get('X-Forwarded-For', request.remote_addr or '127.0.0.1').split(',')[0].strip()
     
+    if not email:
+        return jsonify({"error": "Account email or username is required."}), 400
+    if '@' not in email:
+        email = f"{email}@shoreskwela.com"
+
     # Brute-force lockout for PIN attempts
     rate_key = f"pin_reset_{email}_{client_ip}"
     allowed, retry_after = _RATE_LIMITER.is_allowed(rate_key, max_requests=10, window_seconds=300)
     if not allowed:
-        return jsonify({"error": f"Too many PIN reset attempts for this account. Please wait {retry_after} seconds before trying again.", "retry_after": retry_after}), 429
+        return jsonify({"error": f"Too many reset attempts. Wait {retry_after}s.", "retry_after": retry_after}), 429
+
+    # Password policy check: at least 8 chars with uppercase, lowercase, numbers, and symbols
+    if (len(new_password) < 8 or 
+        not re.search(r'[A-Z]', new_password) or 
+        not re.search(r'[a-z]', new_password) or 
+        not re.search(r'[0-9]', new_password) or
+        not re.search(r'[^a-zA-Z0-9]', new_password)):
+        return jsonify({
+            "error": "New password needs 8+ characters, letters, a number, and symbol.",
+            "code": "weak_password"
+        }), 400
 
     users = load_json(USERS_FILE)
+    matched_user = None
+    input_user = email.replace('@shoreskwela.com', '').strip().lower()
     for user in users:
         user_email = (user.get('email') or '').strip().lower()
-        if user_email == email:
-            if user.get('pin') and safe_str_compare(user.get('pin'), data.get('pin')):
-                user['password'] = data.get('new_password')
-                save_json(USERS_FILE, users)
-                return jsonify({"success": True}), 200
-            return jsonify({"error": "Invalid PIN."}), 400
-    return jsonify({"error": "Account not found."}), 404
+        user_name = " ".join((user.get('name') or '').strip().lower().split())
+        user_username = user_email.replace('@shoreskwela.com', '').strip().lower()
+        if user_email == email or user_username == input_user or (user_name and user_name == input_user):
+            matched_user = user
+            break
 
-@app.route('/api/users/<email>', methods=['PUT'])
+    if not matched_user:
+        return jsonify({"error": "No account with this name.", "code": "account_not_found"}), 404
+
+    pin_valid = False
+    if matched_user.get('pin_hash'):
+        pin_valid = check_password_hash(matched_user['pin_hash'], pin)
+    elif matched_user.get('pin'):
+        pin_valid = safe_str_compare(str(matched_user['pin']), pin)
+
+    if pin_valid:
+        matched_user['password_hash'] = generate_password_hash(new_password)
+        matched_user['password_changed_at'] = int(time.time())
+        matched_user.pop('password', None)
+        # Upgrade PIN to hash if it was plaintext
+        if not matched_user.get('pin_hash') and pin:
+            matched_user['pin_hash'] = generate_password_hash(pin)
+            matched_user.pop('pin', None)
+        save_json(USERS_FILE, users)
+        clear_failed_login(email)
+        return jsonify({"success": True, "message": "Password reset successful."}), 200
+    return jsonify({"error": "Incorrect 4-digit PIN.", "code": "invalid_pin"}), 400
+
+
+@app.route('/api/users/<path:email>', methods=['PUT'])
+@token_required(optional=False)
 def update_user(email):
     users = load_json(USERS_FILE)
-    updated_data = request.json
-    for i, user in enumerate(users):
-        if user.get('email') == email:
-            # Cannot change email to one that already exists (unless it's the same)
-            if updated_data.get('email') and updated_data.get('email') != email:
-                if any(u.get('email') == updated_data.get('email') for u in users):
-                    return {"error": "Email already in use by another account."}, 400
-            
-            users[i].update(updated_data)
-            save_json(USERS_FILE, users)
-            safe_user = {k: v for k, v in users[i].items() if k != 'password'}
-            return {"success": True, "user": safe_user}
+    normalized_email = urllib.parse.unquote(email or '').strip().lower()
+    caller = request.current_user or {}
+    caller_email = (caller.get('email') or '').strip().lower()
+    caller_role = caller.get('role', 'student')
 
-    # Upsert user if not existing
-    new_user = {
-        'email': email,
-        'role': 'student',
-        'name': email.split('@')[0],
-        **updated_data
-    }
-    users.append(new_user)
-    save_json(USERS_FILE, users)
-    safe_user = {k: v for k, v in new_user.items() if k != 'password'}
-    return {"success": True, "user": safe_user}
+    # BOLA Defense: caller must be admin or modifying their own profile
+    is_admin = (caller_role == 'admin')
+    is_self = (caller_email == normalized_email)
+    if not is_admin and not is_self:
+        return jsonify({"error": "Forbidden. You are not authorized to update another user's account."}), 403
 
-@app.route('/api/users/<email>', methods=['DELETE'])
+    target_idx = next((i for i, u in enumerate(users) if (u.get('email') or '').strip().lower() == normalized_email), -1)
+    if target_idx == -1:
+        users = load_json(USERS_FILE, bypass_cache=True)
+        target_idx = next((i for i, u in enumerate(users) if (u.get('email') or '').strip().lower() == normalized_email), -1)
+
+    if target_idx != -1:
+        updated_data = dict(request.json or {})
+
+        # Privilege Escalation Defense: non-admins CANNOT change roles!
+        if not is_admin and 'role' in updated_data and updated_data['role'] != users[target_idx].get('role'):
+            return jsonify({"error": "Forbidden. Only administrators can change account roles."}), 403
+
+        # Non-admins cannot alter their own registered email address
+        new_email = (updated_data.get('email') or '').strip().lower()
+        if not is_admin and new_email and new_email != normalized_email:
+            return jsonify({"error": "Forbidden. Changing account email requires administrator assistance."}), 403
+
+        if new_email and new_email != normalized_email:
+            if any((u.get('email') or '').strip().lower() == new_email for u in users):
+                return jsonify({"error": "Email already in use by another account."}), 400
+        
+        # If password update is requested, validate and hash it securely
+        if 'password' in updated_data:
+            new_pwd = str(updated_data.pop('password') or '').strip()
+            if new_pwd:
+                if (len(new_pwd) < 8 or 
+                    not re.search(r'[A-Z]', new_pwd) or 
+                    not re.search(r'[a-z]', new_pwd) or 
+                    not re.search(r'[0-9]', new_pwd) or 
+                    not re.search(r'[^a-zA-Z0-9]', new_pwd)):
+                    return jsonify({
+                        "error": "Password must be at least 8 characters long and contain uppercase, lowercase, numbers, and at least one special character."
+                    }), 400
+                users[target_idx]['password_hash'] = generate_password_hash(new_pwd)
+                users[target_idx]['password_changed_at'] = int(time.time())
+                users[target_idx].pop('password', None)
+
+        # If PIN update is requested, validate and hash it securely
+        if 'pin' in updated_data:
+            new_pin = str(updated_data.pop('pin') or '').strip()
+            if new_pin:
+                if len(new_pin) != 4 or not new_pin.isdigit():
+                    return jsonify({"error": "PIN must be exactly 4 digits."}), 400
+                users[target_idx]['pin_hash'] = generate_password_hash(new_pin)
+                users[target_idx].pop('pin', None)
+
+        # Sanitize strings to neutralize stored control characters
+        if 'name' in updated_data:
+            updated_data['name'] = sanitize_text(str(updated_data['name']))
+
+        users[target_idx].update(updated_data)
+        save_json(USERS_FILE, users)
+        safe_user = sanitize_user_record(users[target_idx])
+        return jsonify({"success": True, "user": safe_user})
+
+    return jsonify({"error": "Account not found. New accounts must use SHORE registration."}), 404
+
+@app.route('/api/users/<path:email>', methods=['DELETE'])
+@require_role('admin')
 def delete_user(email):
     users = load_json(USERS_FILE)
-    new_users = [u for u in users if u.get('email') != email]
-    if len(users) == len(new_users):
-        return {"error": "User not found."}, 404
+    normalized_email = urllib.parse.unquote(email or '').strip().lower()
+    target = next((u for u in users if (u.get('email') or '').strip().lower() == normalized_email), None)
+    if not target:
+        users = load_json(USERS_FILE, bypass_cache=True)
+        target = next((u for u in users if (u.get('email') or '').strip().lower() == normalized_email), None)
+    if not target:
+        return jsonify({"error": "User not found."}), 404
+
+    current_email = (request.current_user.get('email') or '').strip().lower()
+    if normalized_email == current_email:
+        return jsonify({"error": "You can't delete the account you're currently using."}), 409
+
+    if target.get('role') == 'admin' and sum(1 for user in users if user.get('role') == 'admin') <= 1:
+        return jsonify({"error": "You can't delete the last administrator account."}), 409
+
+    new_users = [u for u in users if (u.get('email') or '').strip().lower() != normalized_email]
     save_json(USERS_FILE, new_users)
-    return {"success": True}
+    return jsonify({"success": True})
 
 @app.route('/api/allowed_students', methods=['GET'])
+@token_required(optional=False)
 def get_allowed_students():
     data = {"students": load_json(STUDENTS_FILE)}
     response = jsonify(data)
@@ -513,6 +1073,7 @@ def update_allowed_students():
     return {"success": True}
 
 @app.route('/api/allowed_volunteers', methods=['GET'])
+@token_required(optional=False)
 def get_allowed_volunteers():
     return {"volunteers": load_json(VOLUNTEERS_FILE)}
 
@@ -782,6 +1343,7 @@ def save_scholarships(data):
     save_json(SCHOLARSHIPS_FILE, data)
 
 @app.route('/api/scholarships', methods=['GET'])
+@token_required(optional=False)
 def get_scholarships():
     return {"scholarships": load_scholarships()}
 
@@ -1171,24 +1733,35 @@ def delete_announcement(announcement_id):
     return {"success": True}
 
 @app.route('/api/announcements/<announcement_id>/comments', methods=['POST'])
+@token_required(optional=False)
 def add_comment(announcement_id):
+    caller = request.current_user or {}
     announcements = load_json(ANNOUNCEMENTS_FILE)
     comment = request.json or {}
-    if not comment.get('content', '').strip():
-        return {"error": "Comment content cannot be empty."}, 400
+    raw_content = comment.get('content') or comment.get('text') or ''
+    content = sanitize_text(str(raw_content)).strip()
+    if not content:
+        return jsonify({"error": "Comment content cannot be empty."}), 400
     import datetime
     import uuid
-    comment['id'] = str(uuid.uuid4())
-    comment['timestamp'] = datetime.datetime.now().isoformat()
+    author_name = caller.get('name') or comment.get('author') or 'SHORE User'
+    author_email = (caller.get('email') or comment.get('authorEmail') or '').strip().lower()
+    new_comment = {
+        'id': str(uuid.uuid4()),
+        'timestamp': datetime.datetime.now().isoformat(),
+        'text': content,
+        'author': author_name,
+        'authorEmail': author_email
+    }
     for a in announcements:
-        if a['id'] == announcement_id:
+        if str(a.get('id')) == str(announcement_id):
             if 'comments' not in a:
                 a['comments'] = []
-            a['comments'].append(comment)
-            a['read_by'] = [comment.get('authorEmail', '')] if comment.get('authorEmail') else []
+            a['comments'].append(new_comment)
+            a['read_by'] = [author_email] if author_email else []
             save_json(ANNOUNCEMENTS_FILE, announcements)
-            return {"success": True, "comment": comment}
-    return {"error": "Announcement not found"}, 404
+            return jsonify({"success": True, "comment": new_comment})
+    return jsonify({"error": "Announcement not found"}), 404
 
 @app.route('/api/unread_counts', methods=['POST'])
 def unread_counts():
@@ -1243,6 +1816,7 @@ def mark_read(announcement_id):
     return {"error": "Announcement not found"}, 404
 
 @app.route('/api/recitations', methods=['GET'])
+@token_required(optional=False)
 def get_recitations():
     return {"recitations": load_json(RECITATIONS_FILE)}
 
@@ -1269,51 +1843,91 @@ def delete_recitation(rec_id):
     return {"success": True}
 
 @app.route('/api/tickets', methods=['GET'])
+@token_required(optional=False)
 def get_tickets():
-    return {"tickets": load_json(TICKETS_FILE)}
+    caller = request.current_user or {}
+    caller_role = caller.get('role', 'student')
+    caller_email = (caller.get('email') or '').strip().lower()
+    all_tickets = load_json(TICKETS_FILE) or []
+    if caller_role in ('admin', 'volunteer'):
+        return {"tickets": all_tickets}
+    # Tenant privacy: students only retrieve tickets they submitted
+    my_tickets = [t for t in all_tickets if (t.get('createdBy') or t.get('authorEmail') or '').strip().lower() == caller_email]
+    return {"tickets": my_tickets}
 
 @app.route('/api/tickets', methods=['POST'])
+@token_required(optional=False)
 def add_ticket():
     try:
-        tickets = load_json(TICKETS_FILE)
-        new_ticket = request.json or {}
-        if not new_ticket.get('title') or not str(new_ticket.get('title')).strip():
-            return {"error": "Ticket title is required."}, 400
-        if not new_ticket.get('createdBy') or not str(new_ticket.get('createdBy')).strip():
-            return {"error": "Ticket creator email is required."}, 400
+        caller = request.current_user or {}
+        tickets = load_json(TICKETS_FILE) or []
+        data = request.json or {}
+        raw_title = sanitize_text(str(data.get('title') or ''), max_length=200).strip()
+        raw_desc = sanitize_text(str(data.get('description') or ''), max_length=5000).strip()
+        raw_cat = sanitize_text(str(data.get('category') or 'Bug'), max_length=50).strip()
+        if not raw_title:
+            return jsonify({"error": "Ticket title is required."}), 400
+        if not raw_desc:
+            return jsonify({"error": "Ticket description is required."}), 400
 
         import uuid
         import datetime
-        new_ticket['id'] = str(uuid.uuid4())
-        new_ticket['timestamp'] = datetime.datetime.now().isoformat()
-        new_ticket['status'] = 'open'
-        new_ticket['reply'] = ''
-        tickets.append(new_ticket)
+        creator_email = (caller.get('email') or data.get('createdBy') or data.get('authorEmail') or '').strip().lower()
+        creator_name = caller.get('name') or data.get('authorName') or 'SHORE User'
+        ticket_record = {
+            'id': str(uuid.uuid4()),
+            'title': raw_title,
+            'description': raw_desc,
+            'category': raw_cat,
+            'createdBy': creator_email,
+            'authorEmail': creator_email,
+            'authorName': creator_name,
+            'timestamp': datetime.datetime.now().isoformat(),
+            'status': 'open',
+            'reply': ''
+        }
+        tickets.append(ticket_record)
         save_json(TICKETS_FILE, tickets)
-        return {"success": True, "ticket": new_ticket}
+        return jsonify({"success": True, "ticket": ticket_record}), 201
     except Exception as e:
         import traceback
         traceback.print_exc()
-        return {"error": str(e)}, 500
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/tickets/<ticket_id>', methods=['PUT'])
+@require_role('admin', 'volunteer')
 def resolve_ticket(ticket_id):
-    tickets = load_json(TICKETS_FILE)
-    data = request.json
+    tickets = load_json(TICKETS_FILE) or []
+    data = request.json or {}
+    reply_msg = sanitize_text(str(data.get('reply') or ''), max_length=5000).strip()
+    found = False
     for t in tickets:
-        if t.get('id') == ticket_id:
+        if str(t.get('id')) == str(ticket_id):
             t['status'] = 'resolved'
-            t['reply'] = data.get('reply', '')
+            t['reply'] = reply_msg
+            found = True
             break
+    if not found:
+        return jsonify({"error": "Ticket not found."}), 404
     save_json(TICKETS_FILE, tickets)
-    return {"success": True}
+    return jsonify({"success": True})
 
 @app.route('/api/tickets/<ticket_id>', methods=['DELETE'])
+@token_required(optional=False)
 def delete_ticket(ticket_id):
-    tickets = load_json(TICKETS_FILE)
+    caller = request.current_user or {}
+    caller_email = (caller.get('email') or '').strip().lower()
+    caller_role = caller.get('role', 'student')
+    tickets = load_json(TICKETS_FILE) or []
+    target = next((t for t in tickets if str(t.get('id')) == str(ticket_id)), None)
+    if not target:
+        return jsonify({"error": "Ticket not found."}), 404
+    creator = (target.get('createdBy') or target.get('authorEmail') or '').strip().lower()
+    if caller_role not in ('admin', 'volunteer') and creator != caller_email:
+        return jsonify({"error": "Forbidden. Only administrators or the ticket author can delete this ticket."}), 403
     new_tickets = [t for t in tickets if str(t.get('id')) != str(ticket_id)]
     save_json(TICKETS_FILE, new_tickets)
-    return {"success": True}
+    return jsonify({"success": True})
 
 @app.route('/api/inventory', methods=['GET'])
 def get_inventory():
@@ -1351,22 +1965,40 @@ def add_update_inventory():
         return {"error": str(e)}, 500
 
 @app.route('/api/purchases', methods=['GET'])
+@token_required(optional=False)
 def get_purchases():
-    return {"purchases": load_json(PURCHASES_FILE)}
+    caller = request.current_user or {}
+    caller_role = caller.get('role', 'student')
+    caller_email = (caller.get('email') or '').strip().lower()
+    purchases = load_json(PURCHASES_FILE) or []
+    if caller_role == 'admin':
+        return {"purchases": purchases}
+    # Students only retrieve their own purchase records
+    return {"purchases": [p for p in purchases if (p.get('studentEmail') or '').strip().lower() == caller_email]}
 
 @app.route('/api/purchases/<purchase_id>', methods=['DELETE'])
+@require_role('admin')
 def delete_purchase(purchase_id):
-    purchases = load_json(PURCHASES_FILE)
-    new_purchases = [p for p in purchases if p.get('id') != purchase_id]
+    purchases = load_json(PURCHASES_FILE) or []
+    new_purchases = [p for p in purchases if str(p.get('id')) != str(purchase_id)]
     save_json(PURCHASES_FILE, new_purchases)
     return {"success": True}
 
 @app.route('/api/inventory/purchase', methods=['POST'])
+@token_required(optional=False)
 def purchase_item():
     try:
+        caller = request.current_user or {}
+        caller_role = caller.get('role', 'student')
+        caller_email = (caller.get('email') or '').strip().lower()
+
         data = request.json or {}
-        user_email = data.get('userEmail')
+        user_email = (data.get('userEmail') or caller_email).strip().lower()
         item_id = data.get('itemId')
+
+        # BOLA Defense: students cannot initiate purchases for another user
+        if caller_role != 'admin' and user_email != caller_email:
+            return jsonify({"error": "Forbidden. You cannot execute purchases on behalf of another user."}), 403
         
         if not user_email or item_id is None:
             return {"error": "Missing userEmail or itemId"}, 400
@@ -1437,7 +2069,7 @@ def purchase_item():
         save_json(PURCHASES_FILE, purchases)
         
         # Return updated user if available
-        safe_user = {k: v for k, v in user.items() if k != 'password'} if user else None
+        safe_user = sanitize_user_record(user) if user else None
         
         return {"success": True, "purchase": new_purchase, "user": safe_user}
     except Exception as e:
@@ -1446,32 +2078,57 @@ def purchase_item():
         return {"error": str(e)}, 500
 
 @app.route('/api/inventory/equip', methods=['POST'])
+@token_required(optional=False)
 def equip_border():
     try:
-        data = request.json
-        user_email = data.get('userEmail')
+        caller = request.current_user or {}
+        caller_role = caller.get('role', 'student')
+        caller_email = (caller.get('email') or '').strip().lower()
+
+        data = request.json or {}
+        user_email = (data.get('userEmail') or caller_email).strip().lower()
         border_id = data.get('borderId')
+
+        # BOLA Defense: cannot modify another account's equipped cosmetics
+        if caller_role != 'admin' and user_email != caller_email:
+            return jsonify({"error": "Forbidden. You cannot equip borders on behalf of another user."}), 403
         
         users = load_json(USERS_FILE)
-        user = next((u for u in users if u.get('email') == user_email), None)
+        user = next((u for u in users if (u.get('email') or '').strip().lower() == user_email), None)
         if not user:
-            return {"error": "User not found"}, 404
+            return jsonify({"error": "User not found"}), 404
+
+        # Ownership validation: confirm cosmetic is in ownedBorders or unequipped (None)
+        if border_id is not None:
+            owned = user.get('ownedBorders', [])
+            if caller_role != 'admin' and border_id not in owned:
+                return jsonify({"error": "Forbidden. You do not own this avatar border."}), 403
             
         user['equippedBorder'] = border_id
         save_json(USERS_FILE, users)
         
-        safe_user = {k: v for k, v in user.items() if k != 'password'}
-        return {"success": True, "user": safe_user}
+        safe_user = sanitize_user_record(user)
+        return jsonify({"success": True, "user": safe_user})
     except Exception as e:
-        return {"error": str(e)}, 500
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route('/api/generate-pdf', methods=['POST'])
+@token_required(optional=False)
 def handle_generate_pdf():
     try:
+        caller = request.current_user or {}
+        caller_role = caller.get('role', 'student')
+        caller_name = (caller.get('name') or '').strip().lower()
+
         student_name = request.form.get('student_name')
         if not student_name:
             student_name = request.json.get('student_name') if request.is_json else None
+
+        # BOLA Defense: Students can only generate diagnostic PDFs for their own record
+        if caller_role == 'student' and student_name:
+            if student_name.strip().lower() != caller_name:
+                return jsonify({"error": "Forbidden. Students can only generate their own diagnostic report."}), 403
         
         report_type = request.form.get('report_type', 'both')
         if not request.form and request.is_json:

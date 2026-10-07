@@ -36,6 +36,7 @@ export default function ShopView({ userEmail, userRole }) {
         fetch('/api/purchases'),
         fetch('/api/users')
       ]);
+
       const attData = await attRes.json();
       const recData = await recRes.json();
       const invData = await invRes.json();
@@ -46,6 +47,7 @@ export default function ShopView({ userEmail, userRole }) {
 
       // Find user data for borders
       const currentUser = (usersData.users || []).find(u => u.email === userEmail);
+
       if (currentUser) {
         setOwnedBorders(currentUser.ownedBorders || []);
         setEquippedBorder(currentUser.equippedBorder || null);
@@ -84,10 +86,13 @@ export default function ShopView({ userEmail, userRole }) {
   const handlePurchase = async (item) => {
     if (balance < item.price) {
       toast.error("Not enough SHORE coins!");
+
       return;
     }
+
     if (item.stock <= 0 && item.itemType !== 'border') {
       toast.error("This item is out of stock!");
+
       return;
     }
 
@@ -97,10 +102,12 @@ export default function ShopView({ userEmail, userRole }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userEmail, itemId: item.id })
       });
+
       const data = await res.json();
       
       if (!res.ok) {
         toast.error(data.error || "Failed to purchase item.");
+
         return;
       }
 
@@ -122,7 +129,7 @@ export default function ShopView({ userEmail, userRole }) {
         handleEquip(item.id);
       }
 
-    } catch (e) {
+    } catch {
       toast.error("Network error during purchase.");
     }
   };
@@ -134,7 +141,9 @@ export default function ShopView({ userEmail, userRole }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userEmail, borderId })
       });
+
       const data = await res.json();
+
       if (res.ok) {
         setEquippedBorder(borderId);
         toast.success("Avatar border equipped!");
@@ -145,6 +154,7 @@ export default function ShopView({ userEmail, userRole }) {
       toast.error("Network error.");
     }
   };
+
   const startEditing = () => {
     setEditInventory(JSON.parse(JSON.stringify(inventory)));
     setIsEditing(true);
@@ -157,6 +167,7 @@ export default function ShopView({ userEmail, userRole }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(editInventory)
       });
+
       if (res.ok) {
         setInventory(editInventory);
         setIsEditing(false);
@@ -188,6 +199,7 @@ export default function ShopView({ userEmail, userRole }) {
       iconType: "Gift",
       color: "bg-gray-100 text-gray-600"
     };
+
     setEditInventory([...editInventory, newItem]);
   };
 
@@ -282,7 +294,7 @@ export default function ShopView({ userEmail, userRole }) {
   if (loading) return <div className="p-8">Loading Rewards Shop...</div>;
 
   return (
-    <div className="h-full overflow-y-auto bg-canvas pb-28 sm:pb-20 relative">
+    <div className="h-full overflow-y-auto bg-canvas pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] md:pb-12 relative overscroll-contain">
       {/* Success Popup */}
       {showSuccess && (
         <div
@@ -372,12 +384,12 @@ export default function ShopView({ userEmail, userRole }) {
         </div>
       )}
 
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-6 sm:pt-8 space-y-6">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-[max(1.25rem,calc(0.75rem+env(safe-area-inset-top,0px)))] sm:pt-8 space-y-6">
         
         {/* Header & Balance */}
         <PageHeader
           title="Rewards Shop"
-          description="Redeem the coins you earn from attendance and recitation participation."
+          description="Redeem earned coins for school supplies and rewards."
           actions={(
             <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
               <div id="balance-container" className="flex min-h-11 items-center justify-center gap-3 rounded-xl border border-border bg-white px-4 shadow-sm">

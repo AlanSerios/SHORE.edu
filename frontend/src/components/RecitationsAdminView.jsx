@@ -26,6 +26,7 @@ export default function RecitationsAdminView() {
         fetch('/api/recitations'),
         fetch('/api/users')
       ]);
+
       const recData = await recRes.json();
       const stuData = await stuRes.json();
       
@@ -41,6 +42,7 @@ export default function RecitationsAdminView() {
   const handleAddRecitation = async () => {
     if (!selectedStudent || !score) {
       toast.error("Student and Score are required.");
+
       return;
     }
 
@@ -56,6 +58,7 @@ export default function RecitationsAdminView() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newRec)
       });
+
       if (res.ok) {
         toast.success("Recitation recorded!");
         setSelectedStudent('');
@@ -72,6 +75,7 @@ export default function RecitationsAdminView() {
   const handleDelete = async (id) => {
     try {
       const res = await fetch(`/api/recitations/${id}`, { method: 'DELETE' });
+
       if (res.ok) {
         toast.success("Record deleted.");
         fetchData();
@@ -83,6 +87,7 @@ export default function RecitationsAdminView() {
 
   const getStudentName = (email) => {
     const student = students.find(s => s.email === email);
+
     return student ? student.name || student.email.split('@')[0] : email;
   };
 
@@ -94,13 +99,13 @@ export default function RecitationsAdminView() {
   if (loading) return <div className="p-8">Loading recitations...</div>;
 
   return (
-    <div className="h-full overflow-y-auto bg-canvas">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-6 sm:pt-8 pb-28 md:pb-10 space-y-6">
+    <div className="h-full overflow-y-auto overscroll-contain bg-canvas">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-[max(1rem,calc(0.5rem+env(safe-area-inset-top,0px)))] sm:pt-8 pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] md:pb-10 space-y-6">
 
         {/* Header */}
         <PageHeader
           title="Oral Recitations"
-          description="Grade and record student performance in oral recitations."
+          description="Grade and record student classroom recitation scores."
           actions={<button
             type="button"
             onClick={() => setIsAdding(!isAdding)}
@@ -173,7 +178,7 @@ export default function RecitationsAdminView() {
             <div className="flex justify-end">
               <button 
                 onClick={handleAddRecitation}
-                className="px-8 py-2.5 bg-fg text-canvas text-sm font-bold rounded-xl hover:bg-fg/90 transition-all flex items-center gap-2"
+                className="w-full sm:w-auto min-h-11 px-8 py-2.5 bg-fg text-canvas text-sm font-bold rounded-xl hover:bg-fg/90 active:scale-[0.98] touch-manipulation transition-all flex items-center justify-center gap-2"
               >
                 <UserCheck className="w-4 h-4" />
                 Save Record
@@ -278,7 +283,7 @@ export default function RecitationsAdminView() {
                       </div>
                       <button 
                         onClick={() => handleDelete(rec.id)}
-                        className="p-2 text-muted hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors shrink-0"
+                        className="p-2.5 min-w-[44px] min-h-[44px] flex items-center justify-center text-muted hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors shrink-0 active:scale-90 touch-manipulation"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>

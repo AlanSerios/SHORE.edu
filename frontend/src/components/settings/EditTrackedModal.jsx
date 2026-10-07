@@ -104,14 +104,16 @@ export default function EditTrackedModal({
                   <div key={idx} className="flex gap-2">
                     <input
                       type="text"
-                      value={typeof req === 'string' ? req : req.name}
+                      value={req?.name ?? req}
                       onChange={(e) => {
                         const next = [...editingTrackedItem.requirements];
-                        if (typeof next[idx] === 'string') {
-                          next[idx] = e.target.value;
-                        } else {
+
+                        if (next[idx]?.name !== undefined) {
                           next[idx] = { ...next[idx], name: e.target.value };
+                        } else {
+                          next[idx] = e.target.value;
                         }
+
                         setEditingTrackedItem({ ...editingTrackedItem, requirements: next });
                       }}
                       placeholder="Document name..."

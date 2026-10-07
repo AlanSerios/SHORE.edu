@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { motion } from 'framer-motion';
 import {
   addDays, addMonths, addWeeks, eachDayOfInterval, format, isSameDay, isSameMonth,
   parseISO, subMonths, subWeeks,
@@ -21,24 +22,31 @@ const VIEW_OPTIONS = [
   { id: 'week', label: 'Week' },
   { id: 'agenda', label: 'Agenda' },
 ];
+
 const HOURS = Array.from({ length: 24 }, (_, index) => index);
+
 const TIMELINE_HEIGHT = 1152;
 
 function initialView() {
   const query = new URLSearchParams(window.location.search).get('calendarView');
+
   if (VIEW_OPTIONS.some(option => option.id === query)) return query;
+
   return window.matchMedia('(max-width: 767px)').matches ? 'agenda' : 'month';
 }
 
 function initialDate() {
   const query = new URLSearchParams(window.location.search).get('calendarDate');
+
   if (query && /^\d{4}-\d{2}-\d{2}$/.test(query)) return parseISO(query);
+
   return new Date();
 }
 
 function EventChip({ event, onOpen, compact = false, className, style }) {
   const type = eventType(event);
   const overdue = isEventOverdue(event);
+
   return (
     <button
       type="button"
@@ -62,6 +70,7 @@ function EventChip({ event, onOpen, compact = false, className, style }) {
     </button>
   );
 }
+
 function EmptySchedule({ filtered, onReset }) {
   return (
     <div className="grid min-h-56 place-items-center px-6 py-10 text-center">
@@ -78,6 +87,7 @@ function EmptySchedule({ filtered, onReset }) {
 function AgendaEvent({ event, onOpen }) {
   const type = eventType(event);
   const audience = AUDIENCES.find(item => item.id === event.audience)?.label || 'Everyone';
+
   return (
     <button type="button" onClick={() => onOpen(event)} className="group flex w-full gap-3 rounded-2xl border border-border bg-white p-3.5 text-left shadow-sm transition-[border-color,box-shadow] hover:border-borderHover hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
       <span className={cn('mt-1 h-9 w-1 shrink-0 rounded-full', type.dot)} />
@@ -100,6 +110,7 @@ function AgendaEvent({ event, onOpen }) {
 
 function DayEventList({ day, events, onOpen, canEdit, onCreate, emptyLabel = 'No events on this day.' }) {
   const dayEvents = events.filter(event => eventOccursOn(event, day));
+
   if (!dayEvents.length) {
     return (
       <div className="rounded-2xl border border-dashed border-border px-4 py-7 text-center">
@@ -108,11 +119,13 @@ function DayEventList({ day, events, onOpen, canEdit, onCreate, emptyLabel = 'No
       </div>
     );
   }
+
   return <div className="space-y-2">{dayEvents.map(event => <AgendaEvent key={event.occurrenceId} event={event} onOpen={onOpen} />)}</div>;
 }
 
 function MonthMobile({ focusedDate, selectedDate, setSelectedDate, events, onOpen, canEdit, onCreate }) {
   const days = eachDayOfInterval(getCalendarRange('month', focusedDate));
+
   return (
     <div className="md:hidden">
       <div className="overflow-hidden rounded-2xl border border-border bg-white shadow-sm">
@@ -124,6 +137,7 @@ function MonthMobile({ focusedDate, selectedDate, setSelectedDate, events, onOpe
             const dayEvents = events.filter(event => eventOccursOn(event, day));
             const selected = isSameDay(day, selectedDate);
             const today = isSameDay(day, new Date());
+
             return (
               <button key={dateKey(day)} type="button" aria-label={`${format(day, 'MMMM d')}, ${dayEvents.length} events`} aria-pressed={selected} onClick={() => setSelectedDate(day)} className={cn('flex min-h-12 flex-col items-center justify-center rounded-xl text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary', !isSameMonth(day, focusedDate) && 'text-slate-400', selected ? 'bg-primary text-white' : today ? 'bg-primary/10 text-primary' : 'text-fg hover:bg-canvas')}>
                 <span>{format(day, 'd')}</span>
@@ -150,6 +164,7 @@ function packWeekSegments(weekStart, events) {
   const endKey = dateKey(weekEnd);
   const lanes = [];
   const hidden = Array(7).fill(0);
+
   const segments = events
     .filter(event => event.date <= endKey && (event.endDate || event.date) >= startKey)
     .map(event => {
@@ -157,22 +172,29 @@ function packWeekSegments(weekStart, events) {
       const segmentEnd = (event.endDate || event.date) > endKey ? endKey : (event.endDate || event.date);
       const startCol = Math.max(0, Math.round((parseISO(segmentStart) - weekStart) / 86400000));
       const endCol = Math.min(6, Math.round((parseISO(segmentEnd) - weekStart) / 86400000));
+
       return { event, startCol, endCol };
     })
     .sort((a, b) => a.startCol - b.startCol || b.endCol - a.endCol);
+
   const placed = segments.map(segment => {
     let lane = lanes.findIndex(lastEnd => lastEnd < segment.startCol);
+
     if (lane < 0) lane = lanes.length;
     lanes[lane] = segment.endCol;
+
     if (lane >= 2) for (let day = segment.startCol; day <= segment.endCol; day += 1) hidden[day] += 1;
+
     return { ...segment, lane };
   });
+
   return { segments: placed, hidden };
 }
 
 function MonthDesktop({ focusedDate, events, onOpen, canEdit, onCreate, onMore }) {
   const days = eachDayOfInterval(getCalendarRange('month', focusedDate));
   const weeks = Array.from({ length: Math.ceil(days.length / 7) }, (_, index) => days.slice(index * 7, index * 7 + 7));
+
   return (
     <div className="hidden h-full min-h-0 flex-col overflow-y-auto rounded-2xl border border-border bg-white shadow-sm md:flex">
       <div className="sticky top-0 z-30 grid shrink-0 grid-cols-7 border-b border-border bg-canvas/95 backdrop-blur-sm">
@@ -181,11 +203,13 @@ function MonthDesktop({ focusedDate, events, onOpen, canEdit, onCreate, onMore }
       <div className="grid flex-1" style={{ gridTemplateRows: `repeat(${weeks.length}, minmax(112px, 1fr))`, minHeight: weeks.length * 112 }}>
         {weeks.map(week => {
           const { segments, hidden } = packWeekSegments(week[0], events);
+
           return (
             <div key={dateKey(week[0])} className="relative min-h-[112px] border-b border-border last:border-b-0">
               <div className="absolute inset-0 grid grid-cols-7">
                 {week.map((day, index) => {
                   const today = isSameDay(day, new Date());
+
                   return (
                     <div key={dateKey(day)} className={cn('relative border-r border-border last:border-r-0', !isSameMonth(day, focusedDate) && 'bg-canvas/50')}>
                       <button type="button" onClick={() => canEdit && onCreate(day)} aria-label={`${format(day, 'EEEE, MMMM d')}${canEdit ? ', add event' : ''}`} className={cn('h-full w-full p-2 text-left align-top transition-colors focus-visible:z-20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary', canEdit && 'hover:bg-blue-50/40')}>
@@ -209,20 +233,25 @@ function MonthDesktop({ focusedDate, events, onOpen, canEdit, onCreate, onMore }
 
 function layoutTimedEvents(events) {
   const columnEnds = [];
+
   const placed = events.slice().sort((a, b) => (a.startTime || '').localeCompare(b.startTime || '')).map(event => {
     const start = Number(event.startTime.slice(0, 2)) * 60 + Number(event.startTime.slice(3));
     const end = Number(event.endTime.slice(0, 2)) * 60 + Number(event.endTime.slice(3));
     let column = columnEnds.findIndex(columnEnd => columnEnd <= start);
+
     if (column < 0) column = columnEnds.length;
     columnEnds[column] = end;
+
     return { event, start, end, column };
   });
+
   return placed.map(item => ({ ...item, columnCount: Math.max(1, columnEnds.length) }));
 }
 
 function WeekDesktop({ focusedDate, events, onOpen, canEdit, onCreate }) {
   const days = eachDayOfInterval(getCalendarRange('week', focusedDate));
   const allDayEvents = events.filter(event => event.allDay || event.endDate);
+
   return (
     <div className="hidden h-full min-h-0 overflow-auto rounded-2xl border border-border bg-white shadow-sm xl:block">
       <div className="min-w-[900px]">
@@ -238,6 +267,7 @@ function WeekDesktop({ focusedDate, events, onOpen, canEdit, onCreate }) {
           <div className="relative border-r border-border" style={{ height: TIMELINE_HEIGHT }}>{HOURS.map(hour => <span key={hour} className="absolute right-2 -translate-y-1/2 text-[11px] font-medium text-muted" style={{ top: hour * 48 }}>{hour === 0 ? '12 AM' : hour < 12 ? `${hour} AM` : hour === 12 ? '12 PM' : `${hour - 12} PM`}</span>)}</div>
           {days.map(day => {
             const timed = layoutTimedEvents(events.filter(event => !event.allDay && !event.endDate && event.date === dateKey(day)));
+
             return (
               <div key={dateKey(day)} className="relative border-r border-border last:border-r-0" style={{ height: TIMELINE_HEIGHT }}>
                 {canEdit && <button type="button" aria-label={`Add timed event on ${format(day, 'MMMM d')}`} onClick={click => { const bounds = click.currentTarget.getBoundingClientRect(); const minutes = Math.max(0, Math.min(1410, Math.round(((click.clientY - bounds.top) / bounds.height * 1440) / 30) * 30)); onCreate(day, `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`); }} className="absolute inset-0 z-0 w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary" />}
@@ -254,10 +284,13 @@ function WeekDesktop({ focusedDate, events, onOpen, canEdit, onCreate }) {
 
 function WeekMobile({ focusedDate, selectedDate, setSelectedDate, events, onOpen, canEdit, onCreate }) {
   const days = eachDayOfInterval(getCalendarRange('week', focusedDate));
+
   return (
     <div className="xl:hidden">
       <div className="grid grid-cols-7 gap-1 rounded-2xl border border-border bg-white p-2 shadow-sm">
-        {days.map(day => { const count = events.filter(event => eventOccursOn(event, day)).length; const selected = isSameDay(day, selectedDate); return <button key={dateKey(day)} type="button" onClick={() => setSelectedDate(day)} aria-pressed={selected} className={cn('flex min-h-14 flex-col items-center justify-center rounded-xl transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary', selected ? 'bg-primary text-white' : 'hover:bg-canvas')}><span className={cn('text-[10px] font-bold uppercase', selected ? 'text-white/75' : 'text-muted')}>{format(day, 'EEE')}</span><span className="mt-0.5 text-sm font-bold">{format(day, 'd')}</span>{count > 0 && <span className={cn('mt-1 h-1.5 w-1.5 rounded-full', selected ? 'bg-white' : 'bg-primary')} />}</button>; })}
+        {days.map(day => { const count = events.filter(event => eventOccursOn(event, day)).length; const selected = isSameDay(day, selectedDate);
+
+ return <button key={dateKey(day)} type="button" onClick={() => setSelectedDate(day)} aria-pressed={selected} className={cn('flex min-h-14 flex-col items-center justify-center rounded-xl transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary', selected ? 'bg-primary text-white' : 'hover:bg-canvas')}><span className={cn('text-[10px] font-bold uppercase', selected ? 'text-white/75' : 'text-muted')}>{format(day, 'EEE')}</span><span className="mt-0.5 text-sm font-bold">{format(day, 'd')}</span>{count > 0 && <span className={cn('mt-1 h-1.5 w-1.5 rounded-full', selected ? 'bg-white' : 'bg-primary')} />}</button>; })}
       </div>
       <section className="mt-5"><h3 className="mb-3 text-lg font-bold text-fg">{format(selectedDate, 'EEEE, MMMM d')}</h3><DayEventList day={selectedDate} events={events} onOpen={onOpen} canEdit={canEdit} onCreate={onCreate} /></section>
     </div>
@@ -267,12 +300,15 @@ function WeekMobile({ focusedDate, selectedDate, setSelectedDate, events, onOpen
 function AgendaView({ events, onOpen, filtered, onReset }) {
   const groups = groupEventsByDate(events);
   const dates = Object.keys(groups).sort();
+
   if (!dates.length) return <EmptySchedule filtered={filtered} onReset={onReset} />;
+
   return <div className="space-y-7 pb-4">{dates.map(date => <section key={date} className="grid gap-3 sm:grid-cols-[150px_minmax(0,1fr)]" aria-labelledby={`agenda-${date}`}><div><p className="text-xs font-bold uppercase tracking-wider text-primary">{isSameDay(parseISO(date), new Date()) ? 'Today' : format(parseISO(date), 'EEEE')}</p><h3 id={`agenda-${date}`} className="mt-0.5 font-bold text-fg">{format(parseISO(date), 'MMMM d, yyyy')}</h3></div><div className="space-y-2">{groups[date].map(event => <AgendaEvent key={event.occurrenceId} event={event} onOpen={onOpen} />)}</div></section>)}</div>;
 }
 
 function UpcomingRail({ events, onOpen }) {
   const todayKey = dateKey(new Date());
+
   return (
     <aside className="hidden w-72 shrink-0 2xl:block" aria-labelledby="upcoming-title">
       <div className="sticky top-0 rounded-2xl border border-border bg-white p-4 shadow-sm">
@@ -283,14 +319,16 @@ function UpcomingRail({ events, onOpen }) {
   );
 }
 
+let cachedCalendarEvents = null;
+
 export default function CalendarView({ userRole = 'student' }) {
   const [view, setView] = useState(initialView);
   const [focusedDate, setFocusedDate] = useState(initialDate);
   const [selectedDate, setSelectedDate] = useState(initialDate);
-  const [events, setEvents] = useState([]);
+  const [events, setEvents] = useState(() => cachedCalendarEvents || []);
   const [activeTypes, setActiveTypes] = useState(() => new Set(EVENT_TYPES.map(type => type.id)));
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !cachedCalendarEvents);
   const [loadError, setLoadError] = useState('');
   const [isBusy, setIsBusy] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -302,67 +340,148 @@ export default function CalendarView({ userRole = 'student' }) {
   const canEdit = userRole === 'admin' || userRole === 'volunteer';
 
   const fetchEvents = useCallback(async () => {
-    setLoading(true); setLoadError('');
+    if (!cachedCalendarEvents) setLoading(true);
+    setLoadError('');
+
     try {
       const response = await fetch('/api/events');
       const data = await response.json();
+
       if (!response.ok) throw new Error(data.error || 'Unable to load events.');
-      setEvents((data.events || []).map(normalizeCalendarEvent));
+      const normalized = (data.events || []).map(normalizeCalendarEvent);
+      cachedCalendarEvents = normalized;
+      setEvents(normalized);
     } catch (error) {
       console.error('Failed to fetch calendar events', error);
-      setLoadError(error.message || 'We could not load the calendar.');
+
+      if (!cachedCalendarEvents) setLoadError(error.message || 'We could not load the calendar.');
     } finally { setLoading(false); }
   }, []);
 
   useEffect(() => { fetchEvents(); }, [fetchEvents]);
   useEffect(() => { const url = new URL(window.location.href); url.searchParams.set('calendarView', view); url.searchParams.set('calendarDate', dateKey(focusedDate)); window.history.replaceState({}, '', url); }, [focusedDate, view]);
-  useEffect(() => { const close = event => { if (filterRef.current && !filterRef.current.contains(event.target)) setFiltersOpen(false); }; document.addEventListener('pointerdown', close); return () => document.removeEventListener('pointerdown', close); }, []);
+  useEffect(() => { const close = event => { if (filterRef.current && !filterRef.current.contains(event.target)) setFiltersOpen(false); };
+
+ document.addEventListener('pointerdown', close);
+
+ return () => document.removeEventListener('pointerdown', close); }, []);
 
   const range = useMemo(() => getCalendarRange(view, focusedDate), [focusedDate, view]);
-  const visibleOccurrences = useMemo(() => expandRecurringEvents(events, range.start, range.end).filter(event => activeTypes.has(event.type)), [activeTypes, events, range.end, range.start]);
-  const upcomingEvents = useMemo(() => { const start = new Date(); return expandRecurringEvents(events, start, addDays(start, 13)).filter(event => activeTypes.has(event.type)).slice(0, 6); }, [activeTypes, events]);
+
+  const visibleOccurrences = useMemo(
+    () => expandRecurringEvents(events, range.start, range.end).filter(event => activeTypes.has(event.type)),
+    [activeTypes, events, range.end, range.start]
+  );
+
+  const upcomingEvents = useMemo(() => {
+    const start = new Date();
+
+    return expandRecurringEvents(events, start, addDays(start, 13))
+      .filter(event => activeTypes.has(event.type))
+      .slice(0, 6);
+  }, [activeTypes, events]);
+
   const hasFilters = activeTypes.size !== EVENT_TYPES.length;
 
   const changePeriod = direction => {
     const next = view === 'month' ? (direction > 0 ? addMonths(focusedDate, 1) : subMonths(focusedDate, 1)) : view === 'week' ? (direction > 0 ? addWeeks(focusedDate, 1) : subWeeks(focusedDate, 1)) : addDays(focusedDate, direction * 30);
-    setFocusedDate(next); setSelectedDate(next);
+    setFocusedDate(next);
+    setSelectedDate(next);
   };
-  const jumpToToday = () => { const now = new Date(); setFocusedDate(now); setSelectedDate(now); };
-  const openCreate = (day = new Date(), time = null) => { setSelectedEvent(null); setCreateDate(dateKey(day)); setCreateTime(time); setDrawerMode('create'); setDrawerOpen(true); };
-  const openDetails = event => { setSelectedEvent(event); setDrawerMode('details'); setDrawerOpen(true); };
+
+  const jumpToToday = () => {
+    const now = new Date();
+    setFocusedDate(now);
+    setSelectedDate(now);
+  };
+
+  const openCreate = (day = new Date(), time = null) => {
+    setSelectedEvent(null);
+    setCreateDate(dateKey(day));
+    setCreateTime(time);
+    setDrawerMode('create');
+    setDrawerOpen(true);
+  };
+
+  const openDetails = event => {
+    setSelectedEvent(event);
+    setDrawerMode('details');
+    setDrawerOpen(true);
+  };
+
   const resetFilters = () => setActiveTypes(new Set(EVENT_TYPES.map(type => type.id)));
-  const toggleType = type => setActiveTypes(current => { const next = new Set(current); if (next.has(type)) next.delete(type); else next.add(type); return next; });
+
+  const toggleType = type => setActiveTypes(current => {
+    const next = new Set(current);
+
+    if (next.has(type)) next.delete(type);
+    else next.add(type);
+
+    return next;
+  });
 
   const saveEvent = async payload => {
     setIsBusy(true);
+
     try {
       const isEditing = drawerMode === 'edit';
       const id = selectedEvent?.seriesId || selectedEvent?.id;
       const response = await fetch(isEditing ? `/api/events/${id}` : '/api/events', { method: isEditing ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       const data = await response.json();
+
       if (!response.ok) throw new Error(data.error || 'Unable to save the event.');
       const saved = normalizeCalendarEvent(data.event);
-      setEvents(current => isEditing ? current.map(event => event.id === saved.id ? saved : event) : [...current, saved]);
+      setEvents(current => {
+        const next = isEditing ? current.map(event => event.id === saved.id ? saved : event) : [...current, saved];
+        cachedCalendarEvents = next;
+
+        return next;
+      });
       toast.success(isEditing ? 'Event series updated.' : 'Event created.'); setDrawerOpen(false);
     } catch (error) { toast.error(error.message || 'Unable to save the event.'); } finally { setIsBusy(false); }
   };
 
   const deleteEvent = async () => {
     const id = selectedEvent?.seriesId || selectedEvent?.id; setIsBusy(true);
-    try { const response = await fetch(`/api/events/${id}`, { method: 'DELETE' }); const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Unable to delete the event.'); setEvents(current => current.filter(event => event.id !== id)); toast.success('Event cancelled.'); setDrawerOpen(false); }
-    catch (error) { toast.error(error.message || 'Unable to delete the event.'); } finally { setIsBusy(false); }
+
+    try {
+      const response = await fetch(`/api/events/${id}`, { method: 'DELETE' });
+      const data = await response.json();
+
+      if (!response.ok) throw new Error(data.error || 'Unable to delete the event.');
+      setEvents(current => {
+        const next = current.filter(event => event.id !== id);
+        cachedCalendarEvents = next;
+
+        return next;
+      });
+      toast.success('Event cancelled.'); setDrawerOpen(false);
+    } catch (error) { toast.error(error.message || 'Unable to delete the event.'); } finally { setIsBusy(false); }
   };
 
   const completeEvent = async () => {
     const id = selectedEvent?.seriesId || selectedEvent?.id; setIsBusy(true);
-    try { const response = await fetch(`/api/events/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ completedAt: new Date().toISOString() }) }); const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Unable to complete the deadline.'); const saved = normalizeCalendarEvent(data.event); setEvents(current => current.map(event => event.id === saved.id ? saved : event)); toast.success('Deadline marked complete.'); setDrawerOpen(false); }
-    catch (error) { toast.error(error.message || 'Unable to complete the deadline.'); } finally { setIsBusy(false); }
+
+    try {
+      const response = await fetch(`/api/events/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ completedAt: new Date().toISOString() }) });
+      const data = await response.json();
+
+      if (!response.ok) throw new Error(data.error || 'Unable to complete the deadline.');
+      const saved = normalizeCalendarEvent(data.event);
+      setEvents(current => {
+        const next = current.map(event => event.id === saved.id ? saved : event);
+        cachedCalendarEvents = next;
+
+        return next;
+      });
+      toast.success('Deadline marked complete.'); setDrawerOpen(false);
+    } catch (error) { toast.error(error.message || 'Unable to complete the deadline.'); } finally { setIsBusy(false); }
   };
 
   const periodTitle = view === 'month' ? format(focusedDate, 'MMMM yyyy') : view === 'week' ? `${format(range.start, 'MMM d')} – ${format(range.end, 'MMM d, yyyy')}` : `From ${format(focusedDate, 'MMMM d, yyyy')}`;
 
   return (
-    <div className="flex h-full w-full flex-col overflow-y-auto bg-canvas px-4 pb-28 pt-5 md:overflow-hidden md:px-6 md:pb-6 lg:px-8">
+    <div className="flex h-full w-full flex-col overflow-y-auto bg-canvas px-4 pt-[max(1.25rem,calc(0.75rem+env(safe-area-inset-top,0px)))] pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] md:overflow-hidden md:px-6 md:pb-6 md:pt-5 lg:px-8 overscroll-contain">
       <header className="mb-4 shrink-0">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0"><div className="flex flex-wrap items-baseline gap-2.5"><h1 className="text-2xl font-bold tracking-tight text-fg sm:text-3xl">{periodTitle}</h1><span className="text-sm font-semibold text-muted">{visibleOccurrences.length} in view</span></div></div>
@@ -386,7 +505,7 @@ export default function CalendarView({ userRole = 'student' }) {
 
       {loading ? <div className="grid flex-1 place-items-center" role="status" aria-live="polite"><div className="text-center"><Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" /><p className="mt-3 text-sm font-semibold text-muted">Loading calendar…</p></div></div>
         : loadError ? <div className="grid flex-1 place-items-center px-6 text-center" role="alert"><div className="max-w-sm"><CalendarDays className="mx-auto h-10 w-10 text-rose-500" /><h2 className="mt-3 text-xl font-bold text-fg">Calendar unavailable</h2><p className="mt-2 text-sm text-muted">{loadError}</p><button type="button" onClick={fetchEvents} className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-xl bg-primary px-4 text-sm font-bold text-white"><RefreshCw className="h-4 w-4" /> Try again</button></div></div>
-          : <div className="flex min-h-0 flex-1 gap-5"><main className="min-w-0 flex-1 md:min-h-0">{view === 'month' && <><MonthMobile focusedDate={focusedDate} selectedDate={selectedDate} setSelectedDate={setSelectedDate} events={visibleOccurrences} onOpen={openDetails} canEdit={canEdit} onCreate={openCreate} /><MonthDesktop focusedDate={focusedDate} events={visibleOccurrences} onOpen={openDetails} canEdit={canEdit} onCreate={openCreate} onMore={day => { setFocusedDate(day); setSelectedDate(day); setView('agenda'); }} /></>}{view === 'week' && <><WeekMobile focusedDate={focusedDate} selectedDate={selectedDate} setSelectedDate={setSelectedDate} events={visibleOccurrences} onOpen={openDetails} canEdit={canEdit} onCreate={openCreate} /><WeekDesktop focusedDate={focusedDate} events={visibleOccurrences} onOpen={openDetails} canEdit={canEdit} onCreate={openCreate} /></>}{view === 'agenda' && <div className="h-full overflow-y-auto rounded-2xl border border-border bg-white p-4 shadow-sm sm:p-6"><AgendaView events={visibleOccurrences} onOpen={openDetails} filtered={hasFilters} onReset={resetFilters} /></div>}</main>{view !== 'agenda' && <UpcomingRail events={upcomingEvents} onOpen={openDetails} />}</div>}
+          : <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.18, ease: 'easeOut' }} className="flex min-h-0 flex-1 gap-5"><main className="min-w-0 flex-1 md:min-h-0">{view === 'month' && <><MonthMobile focusedDate={focusedDate} selectedDate={selectedDate} setSelectedDate={setSelectedDate} events={visibleOccurrences} onOpen={openDetails} canEdit={canEdit} onCreate={openCreate} /><MonthDesktop focusedDate={focusedDate} events={visibleOccurrences} onOpen={openDetails} canEdit={canEdit} onCreate={openCreate} onMore={day => { setFocusedDate(day); setSelectedDate(day); setView('agenda'); }} /></>}{view === 'week' && <><WeekMobile focusedDate={focusedDate} selectedDate={selectedDate} setSelectedDate={setSelectedDate} events={visibleOccurrences} onOpen={openDetails} canEdit={canEdit} onCreate={openCreate} /><WeekDesktop focusedDate={focusedDate} events={visibleOccurrences} onOpen={openDetails} canEdit={canEdit} onCreate={openCreate} /></>}{view === 'agenda' && <div className="h-full overflow-y-auto rounded-2xl border border-border bg-white p-4 shadow-sm sm:p-6"><AgendaView events={visibleOccurrences} onOpen={openDetails} filtered={hasFilters} onReset={resetFilters} /></div>}</main>{view !== 'agenda' && <UpcomingRail events={upcomingEvents} onOpen={openDetails} />}</motion.div>}
 
       <EventDrawer isOpen={drawerOpen} mode={drawerMode} setMode={setDrawerMode} event={selectedEvent} initialDate={createDate} initialTime={createTime} canEdit={canEdit} isBusy={isBusy} onClose={() => !isBusy && setDrawerOpen(false)} onSave={saveEvent} onDelete={deleteEvent} onComplete={completeEvent} />
     </div>

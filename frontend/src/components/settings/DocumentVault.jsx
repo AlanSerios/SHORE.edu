@@ -10,6 +10,7 @@ export const formatFileSize = (bytes) => {
   const k = 1024;
   const sizes = ['B', 'KB', 'MB', 'GB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
+
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 };
 
@@ -45,8 +46,10 @@ export default function DocumentVault({
 
   const allVaultSlots = [...DEFAULT_MASTER_DOCS, ...customVaultDocs];
   const customCategories = Array.from(new Set(customVaultDocs.map(d => d.category).filter(Boolean)));
+
   const filteredVaultSlots = allVaultSlots.filter(docDef => {
     if (vaultCategoryFilter === 'All') return true;
+
     return docDef.category?.toLowerCase() === vaultCategoryFilter.toLowerCase();
   });
 
@@ -120,9 +123,11 @@ export default function DocumentVault({
       <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
         {['All', 'Identity', 'Academic', 'Civil', 'Financial', ...(customCategories.length > 0 ? ['Custom'] : [])].map((cat) => {
           const isActive = vaultCategoryFilter === cat;
+
           const count = cat === 'All'
             ? allVaultSlots.length
             : allVaultSlots.filter(s => s.category?.toLowerCase() === cat.toLowerCase()).length;
+
           if (count === 0 && cat !== 'All') return null;
 
           return (

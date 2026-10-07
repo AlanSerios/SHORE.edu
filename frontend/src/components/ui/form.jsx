@@ -1,7 +1,6 @@
 "use client"
 
 import * as React from "react"
-import * as LabelPrimitive from "@radix-ui/react-label"
 import { Slot } from "@radix-ui/react-slot"
 import {
   Controller,
@@ -11,6 +10,7 @@ import {
 
 import { cn } from "../../utils"
 import { Label } from "./label"
+import { AlertCircle } from "lucide-react"
 
 const Form = FormProvider
 
@@ -58,6 +58,7 @@ const FormItem = React.forwardRef(({ className, ...props }, ref) => {
     </FormItemContext.Provider>
   )
 })
+
 FormItem.displayName = "FormItem"
 
 const FormLabel = React.forwardRef(({ className, ...props }, ref) => {
@@ -72,6 +73,7 @@ const FormLabel = React.forwardRef(({ className, ...props }, ref) => {
     />
   )
 })
+
 FormLabel.displayName = "FormLabel"
 
 const FormControl = React.forwardRef(({ ...props }, ref) => {
@@ -91,6 +93,7 @@ const FormControl = React.forwardRef(({ ...props }, ref) => {
     />
   )
 })
+
 FormControl.displayName = "FormControl"
 
 const FormDescription = React.forwardRef(({ className, ...props }, ref) => {
@@ -105,6 +108,7 @@ const FormDescription = React.forwardRef(({ className, ...props }, ref) => {
     />
   )
 })
+
 FormDescription.displayName = "FormDescription"
 
 const FormMessage = React.forwardRef(({ className, children, ...props }, ref) => {
@@ -119,13 +123,16 @@ const FormMessage = React.forwardRef(({ className, children, ...props }, ref) =>
     <p
       ref={ref}
       id={formMessageId}
-      className={cn("text-sm font-medium text-accentRedFg", className)}
+      role="alert"
+      className={cn("text-xs font-semibold text-rose-600 dark:text-rose-400 flex items-center gap-1.5 mt-1", className)}
       {...props}
     >
-      {body}
+      <AlertCircle className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+      <span>{body}</span>
     </p>
   )
 })
+
 FormMessage.displayName = "FormMessage"
 
 export {

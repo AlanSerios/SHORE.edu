@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, Megaphone, Calendar, LifeBuoy,
-  ClipboardCheck, ShoppingBag, Target, Award,
-  FileText, GraduationCap, Shield, Users
+  ClipboardCheck, Target, FileText, Award, ShoppingBag,
+  GraduationCap, Shield, Users
 } from 'lucide-react';
 
 /** Top-level nav items (always visible, no role filter needed here). */
@@ -12,22 +12,54 @@ export const TOP_NAV = [
   { id: 'tickets',       icon: LifeBuoy,         label: 'Support Tickets' },
 ];
 
-/** Class tools nav items — filter by role before rendering. */
-export const CLASS_TOOLS_NAV = [
+/**
+ * Academic / Classroom tools — ranked in order of importance:
+ * 1. Attendance: Essential daily session check-in (starts every class).
+ * 2. Recitations: In-class active student participation & grading during lessons.
+ * 3. Reports: Student diagnostic analysis, grade records, & progress trackers.
+ * 4. Scholarships: Financial aid directory, eligibility guidelines, & application tracking.
+ * 5. Rewards Shop: Gamified point redemption and student incentives store.
+ */
+export const ACADEMIC_TOOLS_NAV = [
   { id: 'attendance',   icon: ClipboardCheck, label: 'Attendance',   adminOnly: false },
-  { id: 'shop',         icon: ShoppingBag,    label: 'Rewards Shop', adminOnly: false },
   { id: 'recitations',  icon: Target,         label: 'Recitations',  adminOnly: true  },
-  { id: 'scholarships', icon: Award,          label: 'Scholarships', adminOnly: false },
   { id: 'reports',      icon: FileText,       label: 'Reports',      adminOnly: true  },
-  { id: 'manageclass',  icon: GraduationCap,  label: 'Manage Class', adminOnly: true  },
-  { id: 'manageteam',   icon: Shield,         label: 'Manage Team',  adminOnly: true  },
-  { id: 'accounts',     icon: Users,          label: 'Accounts',     adminOnly: true  },
+  { id: 'scholarships', icon: Award,          label: 'Scholarships', adminOnly: false },
+  { id: 'shop',         icon: ShoppingBag,    label: 'Rewards Shop', adminOnly: false },
 ];
 
 /**
- * Returns CLASS_TOOLS_NAV filtered for the given role.
- * ponytail: single filter replaces three separate arrays scattered across App.jsx
+ * Administration / Account tools — ranked in order of operational importance:
+ * 1. Manage Class: Classroom setup, student rosters, & tracker spreadsheet sync.
+ * 2. Manage Team: Volunteer teachers, staff permissions, & team coordination.
+ * 3. Accounts: User credentials, account roles, & security directory.
  */
+export const ADMIN_TOOLS_NAV = [
+  { id: 'manageclass', icon: GraduationCap, label: 'Manage Class', adminOnly: true },
+  { id: 'manageteam',  icon: Shield,        label: 'Manage Team',  adminOnly: true },
+  { id: 'accounts',    icon: Users,         label: 'Accounts',     adminOnly: true },
+];
+
+/** Combined list for backwards compatibility. */
+export const CLASS_TOOLS_NAV = [...ACADEMIC_TOOLS_NAV, ...ADMIN_TOOLS_NAV];
+
+export const ACADEMIC_TOOL_IDS = ACADEMIC_TOOLS_NAV.map(i => i.id);
+
+export const ADMIN_TOOL_IDS = ADMIN_TOOLS_NAV.map(i => i.id);
+
+export const ALL_TOOL_IDS = [...ACADEMIC_TOOL_IDS, ...ADMIN_TOOL_IDS];
+
+/** Returns academic tools filtered for the given role. */
+export function getAcademicTools(userRole) {
+  return ACADEMIC_TOOLS_NAV.filter(i => !i.adminOnly || userRole === 'admin');
+}
+
+/** Returns admin/management tools filtered for the given role. */
+export function getAdminTools(userRole) {
+  return ADMIN_TOOLS_NAV.filter(i => !i.adminOnly || userRole === 'admin');
+}
+
+/** Legacy helper: returns combined list for the given role. */
 export function getClassTools(userRole) {
   return CLASS_TOOLS_NAV.filter(i => !i.adminOnly || userRole === 'admin');
 }

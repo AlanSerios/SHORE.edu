@@ -1,6 +1,6 @@
 // Import the functions you need from the SDKs you need
 import { initializeApp } from "firebase/app";
-import { getMessaging, getToken, onMessage } from "firebase/messaging";
+import { getMessaging, getToken } from "firebase/messaging";
 
 // TODO: Replace with your app's Firebase project configuration
 const firebaseConfig = {
@@ -13,7 +13,9 @@ const firebaseConfig = {
 };
 
 let app;
+
 export let messaging;
+
 try {
   app = initializeApp(firebaseConfig);
   messaging = getMessaging(app);
@@ -24,15 +26,18 @@ try {
 export const requestFirebaseNotificationPermission = async () => {
   try {
     const permission = await Notification.requestPermission();
+
     if (permission === 'granted') {
       // TODO: Get VAPID key from Firebase console
       const token = await getToken(messaging, { vapidKey: 'YOUR_VAPID_KEY_HERE' });
+
       return token;
     } else {
       return null;
     }
   } catch (error) {
     console.error('An error occurred while retrieving token. ', error);
+
     return null;
   }
 };

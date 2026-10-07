@@ -6,7 +6,9 @@ import JSZip from 'jszip';
  */
 
 const DB_NAME = 'SHORE_Secure_Vault_DB';
+
 const DB_VERSION = 1;
+
 const STORE_NAME = 'encrypted_documents';
 
 // Open / initialize IndexedDB
@@ -15,11 +17,13 @@ function openDB() {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
     request.onupgradeneeded = (e) => {
       const db = e.target.result;
+
       if (!db.objectStoreNames.contains(STORE_NAME)) {
         const store = db.createObjectStore(STORE_NAME, { keyPath: 'id' });
         store.createIndex('userEmail', 'userEmail', { unique: false });
       }
     };
+
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
   });
@@ -28,6 +32,7 @@ function openDB() {
 // Derive AES-GCM Key using PBKDF2 from user credentials/salt
 async function deriveKey(userEmail) {
   const enc = new TextEncoder();
+
   const passwordKey = await window.crypto.subtle.importKey(
     'raw',
     enc.encode(userEmail || 'shore_default_salt_vault'),
@@ -37,6 +42,7 @@ async function deriveKey(userEmail) {
   );
 
   const salt = enc.encode(`shore_vault_${userEmail || 'universal'}`);
+
   return window.crypto.subtle.deriveKey(
     {
       name: 'PBKDF2',
@@ -82,6 +88,7 @@ export async function encryptAndSaveDocument(userEmail, docKey, file, metadata =
     };
 
     const db = await openDB();
+
     return new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, 'readwrite');
       const store = tx.objectStore(STORE_NAME);
@@ -123,6 +130,7 @@ export async function loadAndDecryptDocument(userEmail, docKey) {
     );
 
     const blob = new Blob([decryptedBuffer], { type: record.fileType });
+
     return {
       ...record,
       blob,
@@ -140,6 +148,7 @@ export async function loadAndDecryptDocument(userEmail, docKey) {
 export async function getAllVaultDocuments(userEmail) {
   try {
     const db = await openDB();
+
     return new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, 'readonly');
       const store = tx.objectStore(STORE_NAME);
@@ -158,12 +167,15 @@ export async function getAllVaultDocuments(userEmail) {
           notes: r.notes,
           category: r.category
         }));
+
         resolve(results);
       };
+
       req.onerror = () => reject(req.error);
     });
   } catch (error) {
     console.error('Failed to fetch vault documents:', error);
+
     return [];
   }
 }
@@ -175,6 +187,7 @@ export async function deleteVaultDocument(userEmail, docKey) {
   try {
     const db = await openDB();
     const id = `${userEmail}_${docKey}`;
+
     return new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, 'readwrite');
       const store = tx.objectStore(STORE_NAME);
@@ -193,6 +206,7 @@ export async function deleteVaultDocument(userEmail, docKey) {
  */
 export async function downloadSingleDocument(userEmail, docKey) {
   const doc = await loadAndDecryptDocument(userEmail, docKey);
+
   if (!doc) throw new Error('Document not found in vault');
 
   const link = document.createElement('a');
@@ -213,9 +227,11 @@ export async function exportDocumentsAsZip(userEmail, docKeys = [], zipName = 'S
   const targetKeys = docKeys.length > 0 ? docKeys : allMeta.map(m => m.docKey);
 
   let addedCount = 0;
+
   for (const key of targetKeys) {
     try {
       const doc = await loadAndDecryptDocument(userEmail, key);
+
       if (doc && doc.blob) {
         const fileName = doc.originalFileName || `${doc.name}.${doc.fileType.split('/')[1] || 'bin'}`;
         zip.file(fileName, doc.blob);
@@ -239,6 +255,7 @@ export async function exportDocumentsAsZip(userEmail, docKeys = [], zipName = 'S
   link.click();
   document.body.removeChild(link);
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+
   return addedCount;
 }
 
@@ -263,6 +280,7 @@ export function findVaultDocForReq(reqName, vaultDocs = []) {
   for (const item of keywordMap) {
     if (item.terms.some(t => lowerReq.includes(t))) {
       const found = vaultDocs.find(d => item.keys.includes(d.docKey));
+
       if (found) return found;
     }
   }
@@ -270,9 +288,11 @@ export function findVaultDocForReq(reqName, vaultDocs = []) {
   for (const doc of vaultDocs) {
     const docName = (doc.name || '').toLowerCase();
     const origName = (doc.originalFileName || '').toLowerCase();
+
     if (docName && (lowerReq.includes(docName) || docName.includes(lowerReq))) {
       return doc;
     }
+
     if (origName && (lowerReq.includes(origName) || origName.includes(lowerReq))) {
       return doc;
     }

@@ -20,12 +20,15 @@ export const getDeadlineBadge = (deadlineStr) => {
   if (diffDays < 0) {
     return { label: 'Expired', color: 'bg-red-500/10 text-red-600 border-red-500/20' };
   }
+
   if (diffDays === 0) {
     return { label: 'Due Today!', color: 'bg-red-500 text-white font-bold' };
   }
+
   if (diffDays <= 7) {
     return { label: `Due in ${diffDays} day${diffDays > 1 ? 's' : ''}`, color: 'bg-amber-500/15 text-amber-700 border-amber-500/30 font-bold' };
   }
+
   return { label: `Due in ${diffDays} days`, color: 'bg-emerald-500/10 text-emerald-700 border-emerald-500/20 font-bold' };
 };
 
@@ -43,9 +46,11 @@ export default function ScholarshipTracker({
   onPreviewVaultDoc
 }) {
   const [newScholarship, setNewScholarship] = useState('');
+
   const [expandedTrackerId, setExpandedTrackerId] = useState(
     appliedScholarships.length > 0 ? appliedScholarships[0].id : null
   );
+
   const [isNoticeExpanded, setIsNoticeExpanded] = useState(false);
   const [inlineNewReqName, setInlineNewReqName] = useState({});
   const [editingTrackedItem, setEditingTrackedItem] = useState(null);
@@ -57,8 +62,10 @@ export default function ScholarshipTracker({
     const missing = (s.requirements || []).filter(r => {
       const inVault = findVaultDocForReq(r.name, vaultDocs);
       const isMarkedReady = r.status === 'ready' || r.status === 'submitted';
+
       return !inVault && !isMarkedReady;
     });
+
     return {
       title: s.title,
       deadline: s.deadline,
@@ -72,6 +79,7 @@ export default function ScholarshipTracker({
 
   const handleAddClick = (item = null) => {
     const title = item ? item.title : newScholarship.trim();
+
     if (!title && inputContainerRef.current) {
       anime({
         targets: inputContainerRef.current,
@@ -80,6 +88,7 @@ export default function ScholarshipTracker({
         easing: 'easeInOutQuad'
       });
     }
+
     onAddScholarship(item, title, () => setNewScholarship(''));
   };
 
@@ -185,6 +194,7 @@ export default function ScholarshipTracker({
               const isAlreadyTracked = appliedScholarships.some(t =>
                 (t?.title || t?.name || '').toLowerCase() === (s?.title || s?.name || '').toLowerCase()
               );
+
               return (
                 <button
                   key={s.id}
@@ -225,11 +235,13 @@ export default function ScholarshipTracker({
 
             const readyCount = reqs.filter(r => {
               const inVault = findVaultDocForReq(r.name, vaultDocs);
+
               return inVault || r.status === 'ready' || r.status === 'submitted';
             }).length;
 
             const pendingCount = reqs.filter(r => {
               const inVault = findVaultDocForReq(r.name, vaultDocs);
+
               return !inVault && (r.status === 'pending' || r.status === 'in_progress');
             }).length;
 

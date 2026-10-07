@@ -36,6 +36,7 @@ const AttendanceStudentView = ({ userEmail }) => {
     "Session 5", "Session 6", "Session 7", "Session 8", 
     "Graduation"
   ];
+
   const attendedEvents = new Set(
     attendance.filter(log => log.type === 'Time In').map(log => log.event)
   );
@@ -43,12 +44,12 @@ const AttendanceStudentView = ({ userEmail }) => {
   const absences = mandatoryEvents.filter(ev => globalEvents.has(ev) && !attendedEvents.has(ev)).length;
 
   return (
-    <div className="h-full overflow-y-auto bg-canvas">
-      <div className="max-w-7xl mx-auto pb-28 md:pb-10 px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8">
+    <div className="h-full overflow-y-auto bg-canvas overscroll-contain">
+      <div className="max-w-7xl mx-auto pt-[max(1.25rem,calc(0.75rem+env(safe-area-inset-top,0px)))] pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] md:pb-10 px-4 sm:px-6 lg:px-8 sm:pt-8">
       
       <PageHeader
         title="My Attendance"
-        description="Present your digital pass at mandatory events and review your check-in history."
+        description="Show your digital QR pass at class sessions and review your check-in logs."
       />
 
       {/* MAIN GRID LAYOUT */}

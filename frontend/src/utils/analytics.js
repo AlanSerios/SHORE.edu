@@ -9,6 +9,7 @@ export const ALL_SUBJ = [
 ];
 
 export const MATH_SUBJ = ["Arithmetic", "Algebra", "Geometry", "Calculus", "Trigonometry"];
+
 export const SCI_SUBJ = ["Chemistry", "Biology", "Earth Science", "Physics"];
 
 /**
@@ -25,6 +26,7 @@ export function computeStats(selectedStudent, reportType, parsedData) {
   const activeData = parsedData[fallbackType];
 
   const studentData = activeData?.[selectedStudent];
+
   if (!studentData) return null;
 
   let rank = 1;
@@ -32,10 +34,12 @@ export function computeStats(selectedStudent, reportType, parsedData) {
   const cohortTotals = Object.values(activeData || {}).map(s => s.total);
   cohortTotals.forEach(t => {
     totalStudents++;
+
     if (t > studentData.total) rank++;
   });
 
   const cohortAverages = {};
+
   if (totalStudents > 0) {
     ALL_SUBJ.forEach(subj => {
       let sum = 0;
@@ -57,6 +61,7 @@ export function computeStats(selectedStudent, reportType, parsedData) {
   }));
 
   let preVsPostData = null;
+
   if (pre && post && reportType === 'both') {
     preVsPostData = ALL_SUBJ.map(subj => ({
       subject: subj,
@@ -68,6 +73,7 @@ export function computeStats(selectedStudent, reportType, parsedData) {
   const subjectRankings = Object.entries(studentData.subjects || {})
     .map(([name, score]) => {
       const cohortAvg = Math.round(cohortAverages[name] || 0);
+
       return { name, score, cohortAvg, diff: score - cohortAvg };
     })
     .sort((a, b) => b.score - a.score);
@@ -75,15 +81,19 @@ export function computeStats(selectedStudent, reportType, parsedData) {
   const strongest = subjectRankings.length > 0
     ? subjectRankings[0]
     : { name: 'N/A', score: 0, cohortAvg: 0 };
+
   const weaknesses = [...subjectRankings].reverse().slice(0, 3);
 
   let growth = null;
+
   if (pre && post) growth = post.total - pre.total;
 
   let mostImproved = { name: 'N/A', diff: -Infinity };
+
   if (pre && post) {
     Object.keys(pre.subjects).forEach(subj => {
       const diff = (post.subjects[subj] || 0) - (pre.subjects[subj] || 0);
+
       if (diff > mostImproved.diff) mostImproved = { name: subj, diff };
     });
   }
@@ -111,8 +121,10 @@ export function computeStreak(globalAttendance, globalUsers, selectedStudent, us
   if (!globalAttendance || globalAttendance.length === 0) return 0;
 
   let targetEmail = userEmail;
+
   if (userRole === 'admin' || userRole === 'volunteer') {
     const matchingUser = globalUsers.find(u => u.name === selectedStudent);
+
     if (matchingUser) targetEmail = matchingUser.email;
     else return 0;
   }
@@ -120,6 +132,7 @@ export function computeStreak(globalAttendance, globalUsers, selectedStudent, us
   if (!targetEmail) return 0;
 
   const allTimeIns = globalAttendance.filter(log => log.type === 'Time In');
+
   if (allTimeIns.length === 0) return 0;
 
   const classDatesSet = new Set();
@@ -128,6 +141,7 @@ export function computeStreak(globalAttendance, globalUsers, selectedStudent, us
   });
 
   const classDatesList = Array.from(classDatesSet).sort((a, b) => new Date(b) - new Date(a));
+
   if (classDatesList.length === 0) return 0;
 
   const studentDatesSet = new Set(
@@ -137,6 +151,7 @@ export function computeStreak(globalAttendance, globalUsers, selectedStudent, us
   );
 
   let streak = 0;
+
   for (const date of classDatesList) {
     if (studentDatesSet.has(date)) streak++;
     else break;
@@ -149,8 +164,10 @@ export function computeStreak(globalAttendance, globalUsers, selectedStudent, us
 export function playSound(type) {
   try {
     const Ctx = window.AudioContext || window.webkitAudioContext;
+
     if (!Ctx) return;
     const ctx = new Ctx();
+
     if (type === 'pop') {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
@@ -167,6 +184,7 @@ export function playSound(type) {
       const bufferSize = ctx.sampleRate * 0.3;
       const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
       const data = buffer.getChannelData(0);
+
       for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
       const noise = ctx.createBufferSource();
       noise.buffer = buffer;
@@ -184,5 +202,5 @@ export function playSound(type) {
       noiseGain.connect(ctx.destination);
       noise.start(ctx.currentTime);
     }
-  } catch (_) {}
+  } catch {}
 }

@@ -6,22 +6,32 @@ import AvatarBorder from './AvatarBorder';
 import { PageHeader } from './ui/page';
 
 
-// A simple utility to parse basic markdown for rendering
+// Secure markdown parser: escapes raw HTML to neutralize XSS, then converts safe markdown
+const escapeHtml = (str) => {
+  return String(str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+};
+
 const parseMarkdown = (text) => {
   if (!text) return '';
-  let html = text
+
+  const escaped = escapeHtml(text);
+
+  const html = escaped
     // Bold
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     // Italic
     .replace(/\*(.*?)\*/g, '<em>$1</em>')
     .replace(/_(.*?)_/g, '<em>$1</em>')
-    // Links
-    .replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-primary hover:underline">$1</a>');
-    
-  // Newlines (only if text doesn't already contain block HTML tags)
-  if (!html.includes('<div') && !html.includes('<p') && !html.includes('<br')) {
-    html = html.replace(/\n/g, '<br />');
-  }
+    // Safe links: only permit http://, https://, and mailto: protocols
+    .replace(/\[(.*?)\]\(((?:https?:\/\/|mailto:)[^\s"'<>]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-primary hover:underline">$1</a>')
+    // Line breaks
+    .replace(/\n/g, '<br />');
+
   return html;
 };
 
@@ -158,15 +168,15 @@ const AnnouncementItem = ({ post, userRole, userEmail, profilePicture, userEquip
               value={commentText[post.id] || ''}
               onChange={(e) => setCommentText({ ...commentText, [post.id]: e.target.value })}
               onKeyDown={(e) => e.key === 'Enter' && handleComment(post.id)}
-              className="w-full pl-4 pr-12 py-2.5 rounded-full border border-border/60 bg-white text-sm outline-none focus:border-primary/50 shadow-sm"
+              className="w-full pl-4 pr-12 py-2.5 min-h-[44px] rounded-full border border-border/60 bg-white text-base sm:text-sm outline-none focus:border-primary/50 shadow-sm"
             />
             <button 
               type="button"
               aria-label={`Post comment on ${post.title}`}
               onClick={() => handleComment(post.id)}
-              className="absolute right-1.5 top-1/2 -translate-y-1/2 p-1.5 bg-primary text-white rounded-full hover:bg-primary/90 transition-colors"
+              className="absolute right-1 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center bg-primary text-white rounded-full hover:bg-primary/90 active:scale-90 transition-all touch-manipulation shadow-xs"
             >
-              <Send className="w-3.5 h-3.5" />
+              <Send className="w-4 h-4" />
             </button>
           </div>
         </div>
@@ -175,10 +185,14 @@ const AnnouncementItem = ({ post, userRole, userEmail, profilePicture, userEquip
   );
 };
 
+let cachedAnnouncements = null;
+
+let cachedAllUsers = null;
+
 export default function AnnouncementsView({ userEmail, userName, userRole, profilePicture, onRead }) {
-  const [announcements, setAnnouncements] = useState([]);
-  const [allUsers, setAllUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [announcements, setAnnouncements] = useState(() => cachedAnnouncements || []);
+  const [allUsers, setAllUsers] = useState(() => cachedAllUsers || []);
+  const [loading, setLoading] = useState(() => !cachedAnnouncements);
   const [loadError, setLoadError] = useState('');
 
   // Admin New Post State
@@ -203,7 +217,7 @@ export default function AnnouncementsView({ userEmail, userName, userRole, profi
   }, [newContent]);
 
   useEffect(() => {
-    fetchAnnouncements({ showLoading: true });
+    fetchAnnouncements({ showLoading: !cachedAnnouncements });
     fetchAllUsers();
   }, []);
 
@@ -211,7 +225,9 @@ export default function AnnouncementsView({ userEmail, userName, userRole, profi
     try {
       const res = await fetch('/api/users');
       const data = await res.json();
-      setAllUsers(data.users || []);
+      const usersList = data.users || [];
+      cachedAllUsers = usersList;
+      setAllUsers(usersList);
     } catch {
       console.error('Failed to load users');
     }
@@ -220,23 +236,29 @@ export default function AnnouncementsView({ userEmail, userName, userRole, profi
   const fetchAnnouncements = async ({ showLoading = false } = {}) => {
     if (showLoading) setLoading(true);
     setLoadError('');
+
     try {
       const res = await fetch('/api/announcements');
+
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
       const data = await res.json();
       // Sort newest first
-      setAnnouncements((data.announcements || []).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)));
+      const sorted = (data.announcements || []).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+      cachedAnnouncements = sorted;
+      setAnnouncements(sorted);
     } catch (e) {
       console.error('Failed to load announcements', e);
       setLoadError('We could not load announcements. Check your connection and try again.');
     } finally {
       setLoading(false);
+
       if (onRead) onRead();
     }
   };
 
   const renderAvatar = (email, name) => {
     const user = allUsers.find(u => u.email === email);
+
     const content = (user && user.profilePicture) 
       ? <img src={user.profilePicture} alt={name} className="w-full h-full object-cover rounded-full" />
       : <div className="w-full h-full flex items-center justify-center bg-canvas text-primary font-bold rounded-full">{name ? name.charAt(0).toUpperCase() : '?'}</div>;
@@ -251,6 +273,7 @@ export default function AnnouncementsView({ userEmail, userName, userRole, profi
   const handlePostAnnouncement = async () => {
     if (!newTitle.trim() || !newContent.trim()) {
       toast.error("Title and Content are required.");
+
       return;
     }
 
@@ -269,7 +292,9 @@ export default function AnnouncementsView({ userEmail, userName, userRole, profi
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newPost)
       });
+
       const data = await res.json();
+
       if (data.success) {
         toast.success("Announcement posted!");
         setNewTitle('');
@@ -285,11 +310,14 @@ export default function AnnouncementsView({ userEmail, userName, userRole, profi
 
   const handleDeleteAnnouncement = async (postId) => {
     if (!window.confirm("Are you sure you want to delete this announcement?")) return;
+
     try {
       const res = await fetch(`/api/announcements/${postId}`, {
         method: 'DELETE'
       });
+
       const data = await res.json();
+
       if (data.success) {
         toast.success("Announcement deleted.");
         fetchAnnouncements();
@@ -303,15 +331,20 @@ export default function AnnouncementsView({ userEmail, userName, userRole, profi
 
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
+
     if (!file) return;
+
     if (file.size > 10 * 1024 * 1024) {
       toast.error('Image or GIF must be less than 10MB');
+
       return;
     }
+
     const reader = new FileReader();
     reader.onloadend = () => {
       setAttachedImages([...attachedImages, reader.result]);
     };
+
     reader.readAsDataURL(file);
   };
 
@@ -319,6 +352,7 @@ export default function AnnouncementsView({ userEmail, userName, userRole, profi
 
   const handleComment = async (announcementId) => {
     const text = commentText[announcementId];
+
     if (!text || !text.trim()) return;
 
     try {
@@ -331,6 +365,7 @@ export default function AnnouncementsView({ userEmail, userName, userRole, profi
           text: text.trim()
         })
       });
+
       if (res.ok) {
         setCommentText({ ...commentText, [announcementId]: '' });
         fetchAnnouncements();
@@ -347,6 +382,7 @@ export default function AnnouncementsView({ userEmail, userName, userRole, profi
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: userEmail })
       });
+
       if (res.ok) {
         fetchAnnouncements();
       }
@@ -378,13 +414,13 @@ export default function AnnouncementsView({ userEmail, userName, userRole, profi
   );
 
   return (
-    <div className="h-full overflow-y-auto bg-canvas">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 pt-6 sm:pt-8 pb-28 md:pb-10 space-y-6">
+    <div className="h-full overflow-y-auto bg-canvas overscroll-contain">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 pt-[max(1.25rem,calc(0.75rem+env(safe-area-inset-top,0px)))] sm:pt-8 pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] md:pb-10 space-y-6">
         
         {/* Header */}
         <PageHeader
           title="Announcements"
-          description="Stay up to date with the latest news and updates from the team."
+          description="Cohort notices, event schedules, and team updates."
           actions={userRole === 'admin' && !isComposing ? (
             <button 
               type="button"
@@ -431,7 +467,9 @@ export default function AnnouncementsView({ userEmail, userName, userRole, profi
                     <div className="flex gap-2 p-2 bg-canvas/50 border-b border-border/50">
                       <button onClick={() => document.execCommand('bold', false, null)} className="p-2 hover:bg-white rounded-md text-fg transition-colors" title="Bold"><Bold className="w-4 h-4" /></button>
                       <button onClick={() => document.execCommand('italic', false, null)} className="p-2 hover:bg-white rounded-md text-fg transition-colors" title="Italic"><Italic className="w-4 h-4" /></button>
-                      <button onClick={() => { const url = prompt('Enter link URL:'); if (url) document.execCommand('createLink', false, url); }} className="p-2 hover:bg-white rounded-md text-fg transition-colors" title="Link"><Link2 className="w-4 h-4" /></button>
+                      <button onClick={() => { const url = prompt('Enter link URL:');
+
+ if (url) document.execCommand('createLink', false, url); }} className="p-2 hover:bg-white rounded-md text-fg transition-colors" title="Link"><Link2 className="w-4 h-4" /></button>
                       <div className="w-px h-6 bg-border/50 mx-2 self-center"></div>
                       <button onClick={() => fileInputRef.current?.click()} className="p-2 hover:bg-white rounded-md text-fg transition-colors flex items-center gap-2 text-xs font-bold" title="Attach Image or GIF">
                         <ImageIcon className="w-4 h-4" /> Attach Image/GIF
@@ -488,7 +526,9 @@ export default function AnnouncementsView({ userEmail, userName, userRole, profi
         <div className="space-y-6">
           {announcements.filter(post => {
             if (userRole === 'admin') return true;
+
             if (!post.audience || post.audience === 'All') return true;
+
             return post.audience === `${userRole}s`;
           }).length === 0 ? (
             <div className="flex min-h-72 flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-white px-6 py-14 text-center">
@@ -503,7 +543,9 @@ export default function AnnouncementsView({ userEmail, userName, userRole, profi
           ) : (
             announcements.filter(post => {
               if (userRole === 'admin') return true;
+
               if (!post.audience || post.audience === 'All') return true;
+
               return post.audience === `${userRole}s`;
             }).map((post) => (
               <AnnouncementItem 

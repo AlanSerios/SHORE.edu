@@ -26,6 +26,7 @@ const StatusBadge = ({ status }) => {
     'Afternoon Only': 'bg-orange-500/10 text-orange-700',
     'No Record':      'bg-gray-100 text-gray-400',
   };
+
   return (
     <span className={cn('px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider whitespace-nowrap', styles[status] || styles['No Record'])}>
       {status}
@@ -39,6 +40,7 @@ const RoleBadge = ({ role }) => {
     'Volunteer': 'bg-purple-500/10 text-purple-700',
     'Admin':     'bg-gray-200 text-gray-600',
   };
+
   return (
     <span className={cn('px-2 py-0.5 rounded text-[10px] font-bold whitespace-nowrap', styles[role] || styles['Student'])}>
       {role}
@@ -81,11 +83,13 @@ const AttendanceAdminView = () => {
   const fetchAll = useCallback(async () => {
     setLoading(true);
     setLoadError('');
+
     try {
       const [attendanceResponse, usersResponse] = await Promise.all([
         fetch('/api/attendance'),
         fetch('/api/users'),
       ]);
+
       if (!attendanceResponse.ok || !usersResponse.ok) throw new Error('Attendance data request failed.');
       const [attData, usrData] = await Promise.all([attendanceResponse.json(), usersResponse.json()]);
       setAttendance((attData.attendance || []).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)));
@@ -102,6 +106,7 @@ const AttendanceAdminView = () => {
   const getUserInfo = useCallback((email) => {
     const u = users.find(u => u.email === email);
     const roleMap = { admin: 'Admin', volunteer: 'Volunteer', student: 'Student' };
+
     return {
       role: roleMap[u?.role] || 'Student',
       name: u?.name || email.split('@')[0]
@@ -121,23 +126,34 @@ const AttendanceAdminView = () => {
           logIds: []
         };
       }
+
       const entry = byEmail[log.email];
+
       if (log.id) entry.logIds.push(log.id);
       const sess = log.session || 'Morning';
+
       const assignTime = (key, timestamp, keepEarliest) => {
-        if (!entry[key]) { entry[key] = timestamp; return; }
+        if (!entry[key]) { entry[key] = timestamp;
+
+ return; }
+
         const next = new Date(timestamp).getTime();
         const current = new Date(entry[key]).getTime();
+
         if ((keepEarliest && next < current) || (!keepEarliest && next > current)) entry[key] = timestamp;
       };
+
       if (sess === 'Morning') {
         if (log.type === 'Time In') assignTime('morning_in', log.timestamp, true);
+
         if (log.type === 'Time Out') assignTime('morning_out', log.timestamp, false);
       } else {
         if (log.type === 'Time In') assignTime('afternoon_in', log.timestamp, true);
+
         if (log.type === 'Time Out') assignTime('afternoon_out', log.timestamp, false);
       }
     });
+
     return Object.values(byEmail).map(e => ({
       ...e,
       status: (e.morning_in && e.afternoon_in) ? 'Full Day'
@@ -150,8 +166,10 @@ const AttendanceAdminView = () => {
     return trackerData.filter(row => {
       const matchesSearch = row.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                             row.email.toLowerCase().includes(searchTerm.toLowerCase());
+
       const matchesRole = roleFilter === "All" || row.role === roleFilter;
       const matchesStatus = statusFilter === "All" || row.status === statusFilter;
+
       return matchesSearch && matchesRole && matchesStatus;
     });
   }, [trackerData, searchTerm, roleFilter, statusFilter]);
@@ -159,13 +177,17 @@ const AttendanceAdminView = () => {
   // ── GENERAL REPORT DATA ──────────────────────────────────
   const generalData = useMemo(() => {
     const happenedEvents = [...new Set(attendance.map(l => l.event))];
+
     return [...new Set(attendance.map(l => l.email))].map(email => {
       const { role, name } = getUserInfo(email);
+
       const attended = happenedEvents.filter(ev =>
         attendance.some(l => l.email === email && l.event === ev && l.type === 'Time In')
       ).length;
+
       const absent = happenedEvents.length - attended;
       const rate = happenedEvents.length > 0 ? Math.round(attended / happenedEvents.length * 100) : 0;
+
       return { email, name, role, attended, absent, total: happenedEvents.length, rate };
     }).sort((a, b) => b.rate - a.rate);
   }, [attendance, getUserInfo]);
@@ -173,6 +195,7 @@ const AttendanceAdminView = () => {
   // ── STATISTICS DATA ──────────────────────────────────────
   const statsData = useMemo(() => {
     const happened = EVENTS.filter(ev => attendance.some(l => l.event === ev));
+
     return happened.map((ev, idx) => {
       const logs = attendance.filter(l => l.event === ev);
       const uniq     = new Set(logs.filter(l => l.type === 'Time In').map(l => l.email));
@@ -180,10 +203,12 @@ const AttendanceAdminView = () => {
       const aftn     = new Set(logs.filter(l => l.session === 'Afternoon' && l.type === 'Time In').map(l => l.email));
       const fullDay  = [...morn].filter(e => aftn.has(e)).length;
       let trend = null;
+
       if (idx > 0) {
         const prev = new Set(attendance.filter(l => l.event === happened[idx - 1] && l.type === 'Time In').map(l => l.email)).size;
         trend = uniq.size > prev ? 'up' : uniq.size < prev ? 'down' : 'same';
       }
+
       return { event: ev, attendees: uniq.size, morning: morn.size, afternoon: aftn.size, fullDay, trend };
     });
   }, [attendance]);
@@ -191,37 +216,49 @@ const AttendanceAdminView = () => {
   const downloadCSV = () => {
     if (filteredTrackerData.length === 0) {
       toast.error("No data to download");
+
       return;
     }
+
     const header = "Name,Email,Role,Morning In,Morning Out,Afternoon In,Afternoon Out,Status";
+
     const rows = filteredTrackerData.map(r => 
       `"${r.name}","${r.email}","${r.role}","${fmtTime(r.morning_in)}","${fmtTime(r.morning_out)}","${fmtTime(r.afternoon_in)}","${fmtTime(r.afternoon_out)}","${r.status}"`
     );
+
     downloadCsv(`${selectedEvent}_Attendance.csv`, rows, header);
   };
 
   // ── CAMERA LOGIC ──────────────────────────────────────────
   const stopCamera = useCallback(() => {
     if (animFrameRef.current) { cancelAnimationFrame(animFrameRef.current); animFrameRef.current = null; }
+
     if (cameraReadyTimeoutRef.current) { clearTimeout(cameraReadyTimeoutRef.current); cameraReadyTimeoutRef.current = null; }
+
     if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
+
     if (videoRef.current) videoRef.current.srcObject = null;
   }, []);
 
   const startCamera = useCallback(async () => {
     setCameraError(null);
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } } });
       streamRef.current = stream;
+
       if (videoRef.current) { videoRef.current.srcObject = stream; await videoRef.current.play(); }
+
       return true;
     } catch (err) {
       const msg = err.name === 'NotAllowedError' ? "Camera access denied. Please allow permissions."
                 : err.name === 'NotFoundError'    ? "No camera found on your device."
                 : "Could not start the camera. Please try again.";
+
       setCameraError(msg);
       setIsScannerActive(false);
       stopCamera();
+
       return false;
     }
   }, [stopCamera]);
@@ -229,16 +266,20 @@ const AttendanceAdminView = () => {
   const scanLoop = useCallback(() => {
     const video = videoRef.current;
     const canvas = canvasRef.current;
+
     if (!video || !canvas || video.readyState !== video.HAVE_ENOUGH_DATA) {
       animFrameRef.current = requestAnimationFrame(scanLoop);
+
       return;
     }
+
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
     const ctx = canvas.getContext('2d');
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'dontInvert' });
+
     if (code && !processingRef.current) {
       processingRef.current = true;
       handleScanSuccessRef.current(
@@ -250,39 +291,52 @@ const AttendanceAdminView = () => {
         setTimeout(() => { processingRef.current = false; }, 2500);
       });
     }
+
     animFrameRef.current = requestAnimationFrame(scanLoop);
   }, []);
 
   useEffect(() => {
     let cancelled = false;
+
     if (isScannerActive && activeTab === 'scanner') {
       startCamera().then(started => {
         if (!started || cancelled) return;
+
         const check = () => {
           if (cancelled || !streamRef.current) return;
+
           if (videoRef.current?.readyState >= 2) animFrameRef.current = requestAnimationFrame(scanLoop);
           else cameraReadyTimeoutRef.current = setTimeout(check, 100);
         };
+
         check();
       });
     } else {
       stopCamera();
     }
+
     return () => { cancelled = true; stopCamera(); };
   }, [isScannerActive, activeTab, scanLoop, startCamera, stopCamera]);
 
   const handleScanSuccess = async (email, event, session, type) => {
     const normalizedEmail = email?.trim().toLowerCase();
-    if (!normalizedEmail || !/^\S+@\S+\.\S+$/.test(normalizedEmail)) { toast.error('Enter a valid email address.'); return false; }
+
+    if (!normalizedEmail || !/^\S+@\S+\.\S+$/.test(normalizedEmail)) { toast.error('Enter a valid email address.');
+
+ return false; }
+
     const payload = { email: normalizedEmail, event, session, type, timestamp: new Date().toISOString() };
     setIsSaving(true);
+
     try {
       const res = await fetch('/api/attendance', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
+
       const data = await res.json().catch(() => ({}));
+
       if (res.ok && data.success) {
         toast.success(
           <div className="flex flex-col gap-0.5">
@@ -291,12 +345,16 @@ const AttendanceAdminView = () => {
           </div>
         );
         await fetchAll();
+
         return true;
       } else {
         toast.error(data.error || "Failed to record.");
+
         return false;
       }
-    } catch { toast.error("Network error."); return false; }
+    } catch { toast.error("Network error.");
+
+ return false; }
     finally { setIsSaving(false); }
   };
 
@@ -304,9 +362,12 @@ const AttendanceAdminView = () => {
 
   const handleDeleteAll = async (logIds) => {
     if (!logIds || logIds.length === 0) return;
+
     if (!window.confirm(`Delete ${logIds.length} records?`)) return;
+
     try {
       const results = await Promise.all(logIds.map(logId => fetch(`/api/attendance/${logId}`, { method: 'DELETE' })));
+
       if (results.some(response => !response.ok)) throw new Error('Some records could not be deleted.');
       toast.success("Records deleted.");
       await fetchAll();
@@ -322,6 +383,7 @@ const AttendanceAdminView = () => {
 
   const generateInsights = useCallback((data) => {
     if (!data || data.length === 0) return "Not enough data to form an insight yet.";
+
     if (data.length === 1) return `The program has kicked off with ${data[0].attendees} attendees in ${data[0].event}.`;
     
     const first = data[0].attendees;
@@ -330,6 +392,7 @@ const AttendanceAdminView = () => {
     const maxEvents = data.filter(d => d.attendees === max).map(d => d.event).join(' and ');
     
     let trendText = "";
+
     if (last > first) {
       trendText = "Overall attendance has shown positive growth compared to the initial session.";
     } else if (last < first) {
@@ -344,11 +407,11 @@ const AttendanceAdminView = () => {
   const showControls = activeTab === 'scanner' || activeTab === 'sheet';
 
   return (
-    <div className="h-full overflow-y-auto bg-canvas">
-      <div className="max-w-7xl mx-auto pb-32 px-4 sm:px-6 lg:px-8 space-y-5">
+    <div className="h-full overflow-y-auto bg-canvas overscroll-contain">
+      <div className="max-w-7xl mx-auto pt-[max(1.25rem,calc(0.75rem+env(safe-area-inset-top,0px)))] pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] md:pb-12 px-4 sm:px-6 lg:px-8 space-y-5">
 
         {/* HEADER */}
-        <header className="pt-6 sm:pt-8 pb-1">
+        <header className="sm:pt-4 pb-1">
           <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-fg">Event Attendance</h1>
           <p className="mt-1 text-sm text-muted">Scan attendees, review sessions, and track participation.</p>
         </header>
@@ -489,6 +552,7 @@ const AttendanceAdminView = () => {
                     onSubmit={async event => {
                       event.preventDefault();
                       const saved = await handleScanSuccess(manualEmail, selectedEvent, selectedSession, selectedType);
+
                       if (saved) setManualEmail('');
                     }}
                     className="border-t border-border bg-canvas/50 px-5 py-4 sm:px-6"

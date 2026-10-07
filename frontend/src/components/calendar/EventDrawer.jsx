@@ -37,6 +37,7 @@ function formFromEvent(event, initialDate, initialTime) {
   if (!event) {
     const startMinutes = initialTime ? Number(initialTime.slice(0, 2)) * 60 + Number(initialTime.slice(3, 5)) : 540;
     const endMinutes = Math.min(1439, startMinutes + 60);
+
     return {
       ...EMPTY_FORM,
       date: initialDate || format(new Date(), 'yyyy-MM-dd'),
@@ -45,6 +46,7 @@ function formFromEvent(event, initialDate, initialTime) {
       endTime: `${String(Math.floor(endMinutes / 60)).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`,
     };
   }
+
   return {
     title: event.title || '',
     date: event.seriesDate || event.date,
@@ -90,22 +92,29 @@ export default function EventDrawer({
 
   useEffect(() => {
     if (!isOpen) return undefined;
+
     if (!previousFocusRef.current) previousFocusRef.current = document.activeElement;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
+
     const onKeyDown = keyEvent => {
       if (keyEvent.key === 'Escape' && !isBusy) {
         keyEvent.preventDefault();
         onClose();
+
         return;
       }
+
       if (keyEvent.key !== 'Tab' || !panelRef.current) return;
+
       const focusable = [...panelRef.current.querySelectorAll(
         'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
       )].filter(element => element.offsetParent !== null);
+
       if (!focusable.length) return;
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
+
       if (keyEvent.shiftKey && (document.activeElement === first || document.activeElement === panelRef.current)) {
         keyEvent.preventDefault();
         last.focus();
@@ -114,13 +123,16 @@ export default function EventDrawer({
         first.focus();
       }
     };
+
     document.addEventListener('keydown', onKeyDown);
     requestAnimationFrame(() => {
       const initialFocus = isForm
         ? panelRef.current?.querySelector('input:not([disabled]), select:not([disabled]), textarea:not([disabled])')
         : panelRef.current;
+
       initialFocus?.focus();
     });
+
     return () => {
       document.body.style.overflow = previousOverflow;
       document.removeEventListener('keydown', onKeyDown);
@@ -136,12 +148,17 @@ export default function EventDrawer({
 
   const handleSubmit = submitEvent => {
     submitEvent.preventDefault();
+
     if (!form.title.trim()) return toast.error('Add an event title.');
+
     if (form.endDate && form.endDate < form.date) return toast.error('End date cannot be before the start date.');
+
     if (!form.allDay && (!form.startTime || !form.endTime)) return toast.error('Add a start and end time.');
+
     if (!form.allDay && (!form.endDate || form.endDate === form.date) && form.endTime <= form.startTime) {
       return toast.error('End time must be after the start time.');
     }
+
     if (form.recurrenceUntil && form.recurrenceUntil < form.date) return toast.error('Recurrence cannot end before the event starts.');
 
     onSave({

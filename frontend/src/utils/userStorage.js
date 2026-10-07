@@ -1,10 +1,12 @@
 // Shared helpers for localStorage user persistence
 export const USER_KEY = 'shore_user';
+
 export const TOKEN_KEY = 'shore_token';
 
 export function loadStoredUser() {
   try {
     const raw = localStorage.getItem(USER_KEY);
+
     return raw ? JSON.parse(raw) : null;
   } catch {
     return null;

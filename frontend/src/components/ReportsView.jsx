@@ -6,10 +6,15 @@ import { ALL_SUBJ, MATH_SUBJ, SCI_SUBJ } from '../utils/analytics';
 import { PageHeader, PageShell } from './ui/page';
 
 const MAX_PER_SUBJ = 100;
+
 const MAX_TOTAL = ALL_SUBJ.length * MAX_PER_SUBJ;
+
 const MAX_MATH = MATH_SUBJ.length * MAX_PER_SUBJ;
+
 const MAX_SCI = SCI_SUBJ.length * MAX_PER_SUBJ;
+
 const MAX_ENG = 100;
+
 const MAX_LOGIC = 100;
 
 export default function ReportsView({ parsedData, students }) {
@@ -23,6 +28,7 @@ export default function ReportsView({ parsedData, students }) {
     
     // We prefer post-test data for final awards and rankings, fallback to pre
     const activeData = Object.keys(post).length > 0 ? post : pre;
+
     if (Object.keys(activeData).length === 0) return null;
 
     // 1. Leaderboards
@@ -36,6 +42,7 @@ export default function ReportsView({ parsedData, students }) {
 
     // 2. Growth Leaderboard (only if both pre and post exist)
     let mostImproved = [];
+
     if (Object.keys(pre).length > 0 && Object.keys(post).length > 0) {
       const growthList = Object.keys(post)
         .filter(name => pre[name])
@@ -46,6 +53,7 @@ export default function ReportsView({ parsedData, students }) {
         .filter(s => s.growth > 0)
         .sort((a, b) => b.growth - a.growth)
         .slice(0, 10);
+
       mostImproved = growthList;
     }
 
@@ -59,6 +67,7 @@ export default function ReportsView({ parsedData, students }) {
           count++;
         }
       });
+
       return {
         name: subj,
         average: count > 0 ? (sum / count) : 0
@@ -75,6 +84,7 @@ export default function ReportsView({ parsedData, students }) {
     const findTopIn = (subjectGroup, topN = 10) => {
       return [...studentList].map(s => {
         const sum = subjectGroup.reduce((acc, curr) => acc + (s.subjects[curr] || 0), 0);
+
         return { name: s.name, score: sum };
       }).sort((a, b) => b.score - a.score).slice(0, topN);
     };
@@ -132,6 +142,7 @@ export default function ReportsView({ parsedData, students }) {
     hidden: { opacity: 0 },
     show: { opacity: 1, transition: { staggerChildren: 0.1 } }
   };
+
   const itemVariants = {
     hidden: { opacity: 0, y: 15 },
     show: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 300, damping: 24 } }
@@ -144,7 +155,7 @@ export default function ReportsView({ parsedData, students }) {
         {/* HEADER */}
         <PageHeader
           title="Cohort Analytics"
-          description={`Analyzing ${analytics.totalStudents} students across the entire cohort.`}
+          description={`Performance summary and cohort rankings for ${analytics.totalStudents} students.`}
         />
 
         {/* TOP AWARDS ROW */}
