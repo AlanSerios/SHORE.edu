@@ -778,6 +778,8 @@ export function AuthFormSplitScreen({
           registrationFocusRef.current = "pin";
           setRegistrationStep(3);
         }
+      } else if (error.code === "recovery_not_configured" || error.code === "reset_save_failed") {
+        form.setError("root", { type: "manual", message: msg });
       } else {
         form.setError("root", { type: "manual", message: msg });
       }
@@ -1589,7 +1591,7 @@ export function AuthFormSplitScreen({
                     >
                       <div className="flex items-center gap-2 min-w-0">
                         <AlertCircle className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0" aria-hidden="true" />
-                        <span className="truncate">{form.formState.errors.root.message}</span>
+                        <span className="min-w-0 break-words text-left">{form.formState.errors.root.message}</span>
                       </div>
                       {(form.formState.errors.root.message.toLowerCase().includes("no account") || form.formState.errors.email?.message?.toLowerCase().includes("no account")) && !isRegister && (
                         <button

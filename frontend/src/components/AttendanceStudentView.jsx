@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Clock, AlertTriangle, CheckCircle2, QrCode } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import { cn } from '../utils';
 import QRPassModal from './settings/QRPassModal';
 import { PageHeader } from './ui/page';

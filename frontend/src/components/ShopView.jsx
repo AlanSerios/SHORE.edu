@@ -1,447 +1,457 @@
-import React, { useState, useEffect } from 'react';
-import { ShoppingBag, CheckCircle, Info, Edit, Plus, Trash2, Save, X, Banknote, Pizza, PenTool, CupSoda, Smartphone, StickyNote, Candy, Cookie, Soup, Gift, Flame, Hexagon, Crown, Shield } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import {
+  ArrowRight, Banknote, CheckCircle2, Cookie, Crown, CupSoda, Edit3, Flame,
+  Gift, Hexagon, Info, Loader2, PenTool, Plus, Shield, ShoppingBag, Smartphone,
+  Soup, Sparkles, StickyNote, Trash2, Waves, X,
+} from 'lucide-react';
 import { toast } from 'sonner';
-import { PageHeader } from './ui/page';
+import { PageHeader, PageShell } from './ui/page';
 
-// Map icon strings to actual Lucide components
-const IconMap = {
-  Banknote, Pizza, PenTool, CupSoda, Smartphone, StickyNote, Candy, Cookie, Soup, Gift, Flame, Hexagon, Crown, Shield
+const ICONS = {
+  Banknote, Cookie, Crown, CupSoda, Flame, Gift, Hexagon, PenTool,
+  Shield, ShoppingBag, Smartphone, Soup, Sparkles, StickyNote, Waves,
 };
 
+const BUILT_IN_IDS = new Set(['1', '2', '3', '4', '5', '6', 'border_fire', 'border_cyber', 'border_gold', 'border_shore', 'border_nebula']);
+
+const COIN_IMAGE = '/shore-coin.png';
+
+function CoinAmount({ amount, className = '' }) {
+  return (
+    <span className={`inline-flex items-center gap-1.5 font-semibold tabular-nums ${className}`}>
+      <img src={COIN_IMAGE} alt="" className="h-5 w-5" />
+      {Number(amount || 0).toLocaleString()} <span className="font-normal">coins</span>
+    </span>
+  );
+}
+
+function RewardArt({ item, large = false }) {
+  const Icon = ICONS[item.iconType] || Gift;
+
+  return (
+    <div className={`flex items-center justify-center overflow-hidden bg-slate-100/70 ${large ? 'h-48' : 'w-28 shrink-0 sm:h-36 sm:w-full'}`}>
+      {item.imageUrl ? (
+        <img src={item.imageUrl} alt="" className={`${large ? 'max-h-40 max-w-[75%]' : 'max-h-24 max-w-20 sm:max-h-28 sm:max-w-[72%]'} object-contain`} style={{ imageRendering: 'pixelated' }} />
+      ) : (
+        <div className="grid h-20 w-20 place-items-center rounded-2xl bg-blue-50 text-primary">
+          <Icon className="h-10 w-10" aria-hidden="true" />
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ShopView({ userEmail, userRole }) {
-  const [balance, setBalance] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [purchasingItem, setPurchasingItem] = useState(null);
-  const [showSuccess, setShowSuccess] = useState(false);
+  const isAdmin = userRole === 'admin';
   const [inventory, setInventory] = useState([]);
-  
-  // Border State
+  const [balance, setBalance] = useState(0);
   const [ownedBorders, setOwnedBorders] = useState([]);
   const [equippedBorder, setEquippedBorder] = useState(null);
-  
-  // Admin State
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [selectedItem, setSelectedItem] = useState(null);
+  const [receiptItem, setReceiptItem] = useState(null);
+  const [isPurchasing, setIsPurchasing] = useState(false);
+  const [equippingId, setEquippingId] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editInventory, setEditInventory] = useState([]);
+  const [savingInventory, setSavingInventory] = useState(false);
+  const [inventoryError, setInventoryError] = useState('');
+  const closeButtonRef = useRef(null);
+  const openerRef = useRef(null);
+  const modalOpen = Boolean(selectedItem || receiptItem || isEditing);
+  const hasInventoryDraft = editInventory.length > 0 && JSON.stringify(editInventory) !== JSON.stringify(inventory);
 
   useEffect(() => {
-    fetchData();
+    loadShop({ initial: true });
   }, [userEmail]);
 
-  const fetchData = async () => {
+  useEffect(() => {
+    if (!modalOpen) return undefined;
+
+    const oldOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    closeButtonRef.current?.focus();
+
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape' && !isPurchasing && !savingInventory) closeModal();
+
+      if (event.key === 'Tab') {
+        const dialog = document.querySelector('[role="dialog"]');
+        const controls = [...(dialog?.querySelectorAll('button:not(:disabled), input:not(:disabled), select:not(:disabled)') || [])];
+        const first = controls[0];
+        const last = controls[controls.length - 1];
+
+        if (!first) return;
+
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      }
+    };
+
+    document.addEventListener('keydown', onKeyDown);
+
+    return () => {
+      document.body.style.overflow = oldOverflow;
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [modalOpen, isPurchasing, savingInventory]);
+
+  const loadShop = async ({ initial = false } = {}) => {
+    if (initial) setLoading(true);
+
+    if (initial) setLoadError('');
+
     try {
-      const [attRes, recRes, invRes, purRes, usersRes] = await Promise.all([
-        fetch('/api/attendance'),
-        fetch('/api/recitations'),
-        fetch('/api/inventory'),
-        fetch('/api/purchases'),
-        fetch('/api/users')
+      const responses = await Promise.all([
+        fetch('/api/attendance'), fetch('/api/recitations'), fetch('/api/inventory'),
+        fetch('/api/purchases'), fetch('/api/users'),
       ]);
 
-      const attData = await attRes.json();
-      const recData = await recRes.json();
-      const invData = await invRes.json();
-      const purData = await purRes.json();
-      const usersData = await usersRes.json();
+      if (responses.some((response) => !response.ok)) throw new Error('Shop information is unavailable.');
 
-      setInventory(invData.inventory || []);
+      const [attendanceData, recitationsData, inventoryData, purchasesData, usersData] = await Promise.all(responses.map((response) => response.json()));
+      const items = Array.isArray(inventoryData.inventory) ? inventoryData.inventory : [];
+      const currentUser = (usersData.users || []).find((user) => user.email === userEmail);
+      const checkIns = (attendanceData.attendance || []).filter((entry) => entry.email === userEmail && entry.type === 'Time In').length;
+      const recitationPoints = (recitationsData.recitations || []).filter((entry) => entry.studentEmail === userEmail).reduce((sum, entry) => sum + Number(entry.score || 0), 0);
+      const spent = (purchasesData.purchases || []).filter((purchase) => purchase.studentEmail === userEmail).reduce((sum, purchase) => sum + Number(purchase.price || 0), 0);
 
-      // Find user data for borders
-      const currentUser = (usersData.users || []).find(u => u.email === userEmail);
+      setInventory(items);
+      setBalance(Math.max(0, checkIns * 10 + recitationPoints * 5 - spent));
+      setOwnedBorders(currentUser?.ownedBorders || []);
+      setEquippedBorder(currentUser?.equippedBorder || null);
+      setLoadError('');
 
-      if (currentUser) {
-        setOwnedBorders(currentUser.ownedBorders || []);
-        setEquippedBorder(currentUser.equippedBorder || null);
-      }
-
-      let attCount = 0;
-      (attData.attendance || []).forEach(log => {
-        if (log.email === userEmail && log.type === 'Time In') {
-          attCount += 1;
-        }
-      });
-
-      let recScore = 0;
-      (recData.recitations || []).forEach(rec => {
-        if (rec.studentEmail === userEmail) {
-          recScore += rec.score;
-        }
-      });
-
-      let spentCoins = 0;
-      (purData.purchases || []).forEach(p => {
-        if (p.studentEmail === userEmail) {
-          spentCoins += p.price;
-        }
-      });
-
-      const totalEarned = (attCount * 10) + (recScore * 5);
-      setBalance(Math.max(0, totalEarned - spentCoins));
-      setLoading(false);
+      return true;
     } catch {
-      toast.error('Failed to load shop data.');
-      setLoading(false);
+      if (initial) setLoadError('We could not load the rewards shop. Check your connection and try again.');
+
+      return false;
+    } finally {
+      if (initial) setLoading(false);
     }
   };
 
-  const handlePurchase = async (item) => {
-    if (balance < item.price) {
-      toast.error("Not enough SHORE coins!");
-
-      return;
-    }
-
-    if (item.stock <= 0 && item.itemType !== 'border') {
-      toast.error("This item is out of stock!");
-
-      return;
-    }
-
-    try {
-      const res = await fetch('/api/inventory/purchase', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userEmail, itemId: item.id })
-      });
-
-      const data = await res.json();
-      
-      if (!res.ok) {
-        toast.error(data.error || "Failed to purchase item.");
-
-        return;
-      }
-
-      setPurchasingItem(item);
-      setBalance(prev => prev - item.price);
-      
-      // Update local stock immediately
-      if (item.itemType !== 'border') {
-        setInventory(prev => prev.map(i => i.id === item.id ? { ...i, stock: i.stock - 1 } : i));
-        setShowSuccess(true);
-        setTimeout(() => {
-          setShowSuccess(false);
-          setPurchasingItem(null);
-        }, 3000);
-      } else {
-        // Automatically equip if it's a border purchase
-        setOwnedBorders(prev => [...prev, item.id]);
-        toast.success(`Purchased ${item.name}!`);
-        handleEquip(item.id);
-      }
-
-    } catch {
-      toast.error("Network error during purchase.");
-    }
+  const openItem = (item, event) => {
+    openerRef.current = event.currentTarget;
+    setSelectedItem(item);
   };
 
-  const handleEquip = async (borderId) => {
-    try {
-      const res = await fetch('/api/inventory/equip', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userEmail, borderId })
-      });
+  const openInventory = (event) => {
+    openerRef.current = event.currentTarget;
 
-      const data = await res.json();
-
-      if (res.ok) {
-        setEquippedBorder(borderId);
-        toast.success("Avatar border equipped!");
-      } else {
-        toast.error(data.error || "Failed to equip border.");
-      }
-    } catch {
-      toast.error("Network error.");
-    }
-  };
-
-  const startEditing = () => {
-    setEditInventory(JSON.parse(JSON.stringify(inventory)));
+    if (!hasInventoryDraft) setEditInventory(inventory.map((item) => ({ ...item })));
+    setInventoryError('');
     setIsEditing(true);
   };
 
-  const saveInventory = async () => {
+  const closeModal = () => {
+    if (isPurchasing || savingInventory) return;
+    setSelectedItem(null);
+    setReceiptItem(null);
+    setIsEditing(false);
+    requestAnimationFrame(() => openerRef.current?.focus());
+  };
+
+  const confirmPurchase = async () => {
+    const item = selectedItem;
+
+    if (!item || isPurchasing) return;
+
+    if (!isAdmin && balance < Number(item.price)) return;
+
+    setIsPurchasing(true);
+
     try {
-      const res = await fetch('/api/inventory', {
+      const response = await fetch('/api/inventory/purchase', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(editInventory)
+        body: JSON.stringify({ userEmail, itemId: item.id }),
       });
 
-      if (res.ok) {
-        setInventory(editInventory);
-        setIsEditing(false);
-        toast.success("Inventory updated successfully!");
-      } else {
-        toast.error("Failed to update inventory.");
-      }
-    } catch {
-      toast.error("Network error saving inventory.");
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok || !data.success) throw new Error(data.error || 'Redemption failed. Please try again.');
+
+      setInventory((current) => current.map((entry) => String(entry.id) === String(item.id) ? { ...entry, stock: Math.max(0, Number(entry.stock) - 1) } : entry));
+      setBalance((current) => Math.max(0, current - Number(item.price)));
+
+      if (item.itemType === 'border') setOwnedBorders((current) => [...new Set([...current, item.id])]);
+      setSelectedItem(null);
+      setReceiptItem(item);
+      loadShop();
+    } catch (error) {
+      toast.error(error.message || 'Redemption failed. Please try again.');
+    } finally {
+      setIsPurchasing(false);
     }
   };
 
-  const handleEditChange = (id, field, value) => {
-    setEditInventory(prev => prev.map(item => 
-      item.id === id ? { ...item, [field]: value } : item
-    ));
+  const equipBorder = async (item) => {
+    if (equippingId) return;
+    setEquippingId(item.id);
+
+    try {
+      const response = await fetch('/api/inventory/equip', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userEmail, borderId: item.id }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok || !data.success) throw new Error(data.error || 'Could not equip this border.');
+
+      setEquippedBorder(item.id);
+      toast.success('Avatar border equipped.');
+      closeModal();
+    } catch (error) {
+      toast.error(error.message || 'Could not equip this border.');
+    } finally {
+      setEquippingId(null);
+    }
   };
 
-  const deleteEditItem = (id) => {
-    setEditInventory(prev => prev.filter(item => item.id !== id));
+  const updateEditItem = (id, field, value) => {
+    setEditInventory((current) => current.map((item) => String(item.id) === String(id) ? { ...item, [field]: value } : item));
+    setInventoryError('');
   };
 
   const addEditItem = () => {
-    const newItem = {
-      id: Date.now(),
-      name: "New Item",
+    setEditInventory((current) => [...current, {
+      id: `custom_${Date.now()}`,
+      name: '',
       price: 100,
       stock: 10,
-      iconType: "Gift",
-      color: "bg-gray-100 text-gray-600"
-    };
-
-    setEditInventory([...editInventory, newItem]);
+      iconType: 'Gift',
+    }]);
   };
 
+  const saveInventory = async () => {
+    const invalid = editInventory.some((item) => !String(item.name || '').trim()
+      || item.price === '' || item.stock === ''
+      || !Number.isInteger(Number(item.price)) || Number(item.price) < 0
+      || !Number.isInteger(Number(item.stock)) || Number(item.stock) < 0);
+
+    if (invalid) {
+      setInventoryError('Each reward needs a name, a whole-number price, and a stock count of zero or more.');
+
+      return;
+    }
+
+    const cleaned = editInventory.map((item) => ({ ...item, name: item.name.trim(), price: Number(item.price), stock: Number(item.stock) }));
+    setSavingInventory(true);
+    setInventoryError('');
+
+    try {
+      const response = await fetch('/api/inventory', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(cleaned),
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok || !data.success) throw new Error(data.error || 'Could not save inventory.');
+
+      setInventory(cleaned);
+      setEditInventory(cleaned.map((item) => ({ ...item })));
+      setIsEditing(false);
+      requestAnimationFrame(() => openerRef.current?.focus());
+      toast.success('Inventory updated.');
+    } catch (error) {
+      setInventoryError(error.message || 'Could not save inventory. Try again.');
+    } finally {
+      setSavingInventory(false);
+    }
+  };
+
+  const physicalItems = inventory.filter((item) => item.itemType !== 'border');
+  const borderItems = inventory.filter((item) => item.itemType === 'border');
+
   const renderItem = (item) => {
-    const IconComp = IconMap[item.iconType] || Gift;
     const isBorder = item.itemType === 'border';
-    const isOutOfStock = !isBorder && item.stock <= 0;
-    const isOwned = isBorder && ownedBorders.includes(item.id);
-    const isEquipped = isBorder && equippedBorder === item.id;
-    
+    const isOwned = isBorder && ownedBorders.some((id) => String(id) === String(item.id));
+    const isEquipped = isBorder && String(equippedBorder) === String(item.id);
+    const shortfall = Math.max(0, Number(item.price) - balance);
+
     return (
-      <div 
-        key={item.id} 
-        className={`bg-white rounded-3xl border border-border/60 shadow-sm overflow-hidden flex flex-col relative transition-all duration-300 ${isOutOfStock ? 'opacity-75 grayscale-[0.5]' : 'hover:shadow-md'} ${isEquipped ? 'ring-2 ring-primary ring-offset-2' : ''}`}
-      >
-        {isOutOfStock && (
-          <div className="absolute top-4 right-4 z-20 px-3 py-1 bg-red-500 text-white text-[10px] font-black uppercase tracking-widest rounded-full shadow-sm">
-            Out of Stock
-          </div>
-        )}
-        {isEquipped && (
-          <div className="absolute top-4 right-4 z-20 px-3 py-1 bg-primary text-white text-[10px] font-black uppercase tracking-widest rounded-full shadow-sm">
-            Equipped
-          </div>
-        )}
-        
-        <div className={`h-48 ${item.color || 'bg-gray-100 text-gray-600'} flex items-center justify-center relative overflow-hidden`}>
-          {item.imageUrl ? (
-            <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover relative z-10 pixelated" style={{ imageRendering: 'pixelated' }} />
-          ) : (
-            <IconComp className="w-16 h-16 relative z-10 drop-shadow-md" />
-          )}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/5 to-transparent pointer-events-none"></div>
-        </div>
-        
-        <div className="p-6 flex-1 flex flex-col justify-between">
-          <div>
-            <h3 className="text-lg font-bold text-fg mb-1">{item.name}</h3>
-            {!isOwned && (
-              <div className="flex items-center gap-1.5 mb-2">
-                <img src="/shore-coin.png" alt="coin" className="w-4 h-4 opacity-70" />
-                <span className="font-bold text-sm text-muted">{item.price} Coins</span>
-              </div>
-            )}
-            <div className="text-xs font-semibold text-muted/70 mb-4 uppercase tracking-wider">
-              {isBorder ? 'Digital Cosmetic' : `${item.stock} Available`}
+      <li key={item.id}>
+        <article className="flex h-full overflow-hidden rounded-xl border border-border bg-white transition-shadow hover:shadow-md sm:flex-col">
+          <RewardArt item={item} />
+          <div className="flex min-w-0 flex-1 flex-col p-3 sm:p-5">
+            <div className="flex items-start justify-between gap-3">
+              <h3 className="text-base font-bold leading-snug text-fg">{item.name}</h3>
+              {isEquipped && <span className="shrink-0 text-xs font-semibold text-primary">Equipped</span>}
+            </div>
+            <p className="mt-1 text-xs text-muted">{isBorder ? 'Avatar border' : Number(item.stock) > 0 ? `${item.stock} available` : 'Out of stock'}</p>
+            <div className="mt-auto pt-2 sm:pt-5">
+              <CoinAmount amount={item.price} className="text-sm text-fg" />
+              <p className="mt-1 min-h-5 text-xs text-muted">
+                {isOwned ? 'Already yours' : !isAdmin && shortfall > 0 ? `Need ${shortfall.toLocaleString()} more coins` : ' '}
+              </p>
+              <button type="button" onClick={(event) => openItem(item, event)} className="mt-2 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-primary px-2 text-sm font-semibold text-primary transition-colors hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 sm:mt-3 sm:px-3">
+                {isOwned ? 'View border' : 'View reward'} <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              </button>
             </div>
           </div>
-          
-          {isBorder ? (
-            isOwned ? (
-              <button
-                onClick={() => handleEquip(item.id)}
-                disabled={isEquipped}
-                className={`w-full py-3 px-4 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2
-                  ${isEquipped ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed' : 'bg-fg text-white hover:bg-fg/90 active:scale-95 shadow-sm'}`}
-              >
-                <Shield className="w-4 h-4" />
-                {isEquipped ? 'Equipped' : 'Equip Border'}
-              </button>
-            ) : (
-              <button
-                onClick={() => handlePurchase(item)}
-                disabled={balance < item.price}
-                className={`w-full py-3 px-4 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2
-                  ${balance >= item.price ? 'bg-fg text-white hover:bg-fg/90 active:scale-95 shadow-sm' : 'bg-canvas text-muted border border-border/60 cursor-not-allowed'}`}
-              >
-                <ShoppingBag className="w-4 h-4" />
-                {balance >= item.price ? 'Unlock Border' : 'Not Enough Coins'}
-              </button>
-            )
-          ) : (
-            <button
-              onClick={() => handlePurchase(item)}
-              disabled={showSuccess || isOutOfStock || balance < item.price}
-              className={`w-full py-3 px-4 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2
-                ${isOutOfStock ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200' :
-                  balance >= item.price 
-                  ? 'bg-fg text-white hover:bg-fg/90 active:scale-95 shadow-sm' 
-                  : 'bg-canvas text-muted border border-border/60 cursor-not-allowed'
-                }`}
-            >
-              <ShoppingBag className="w-4 h-4" />
-              {isOutOfStock ? 'Out of Stock' : (balance >= item.price ? 'Redeem Item' : 'Not Enough Coins')}
-            </button>
-          )}
-        </div>
-      </div>
+        </article>
+      </li>
     );
   };
 
-  if (loading) return <div className="p-8">Loading Rewards Shop...</div>;
+  if (loading) return (
+    <PageShell width="default" aria-busy="true" contentClassName="space-y-5">
+      <div className="h-10 w-48 animate-pulse rounded bg-border/70 motion-reduce:animate-none" />
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {[0, 1, 2].map((number) => <div key={number} className="h-72 animate-pulse rounded-xl border border-border bg-white motion-reduce:animate-none" />)}
+      </div>
+    </PageShell>
+  );
+
+  if (loadError) return (
+    <PageShell width="default" contentClassName="grid min-h-[55vh] place-items-center" role="alert">
+      <div className="max-w-sm text-center">
+        <ShoppingBag className="mx-auto h-9 w-9 text-primary" aria-hidden="true" />
+        <h1 className="mt-3 text-xl font-bold text-fg">Rewards are unavailable</h1>
+        <p className="mt-2 text-sm leading-6 text-muted">{loadError}</p>
+        <button type="button" onClick={() => loadShop({ initial: true })} className="mt-5 min-h-11 rounded-lg bg-primary px-5 text-sm font-semibold text-white">Try again</button>
+      </div>
+    </PageShell>
+  );
 
   return (
-    <div className="h-full overflow-y-auto bg-canvas pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] md:pb-12 relative overscroll-contain">
-      {/* Success Popup */}
-      {showSuccess && (
-        <div
-          onClick={() => {
-            setShowSuccess(false);
-            setPurchasingItem(null);
-          }}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm cursor-pointer p-4 animate-in fade-in duration-200"
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-sm bg-white rounded-3xl shadow-2xl flex flex-col items-center justify-center p-8 border border-border/50 animate-in zoom-in-95 duration-200 text-center relative"
-          >
-            <button
-              onClick={() => {
-                setShowSuccess(false);
-                setPurchasingItem(null);
-              }}
-              className="absolute top-4 right-4 p-1.5 text-muted hover:text-fg rounded-full hover:bg-slate-100 transition-colors"
-            >
-              <X className="w-4 h-4" />
-            </button>
-            <CheckCircle className="w-16 h-16 text-emerald-500 mb-3" />
-            <h2 className="text-xl font-black text-fg">Purchase Successful!</h2>
-            <p className="text-xs text-muted text-center mt-2 font-medium leading-relaxed">
-              You have redeemed your coins for <strong className="text-fg">{purchasingItem?.name}</strong>. Please claim it at the admin desk.
-            </p>
-            <button
-              onClick={() => {
-                setShowSuccess(false);
-                setPurchasingItem(null);
-              }}
-              className="mt-5 px-6 py-2 rounded-xl bg-primary text-white font-bold text-xs shadow-sm hover:bg-primaryHover transition-all active:scale-95"
-            >
-              Done
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Admin Edit Modal */}
-      {isEditing && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-3xl w-full max-w-4xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95">
-            <div className="px-6 py-4 border-b border-border/50 flex justify-between items-center bg-slate-50 shrink-0">
-              <h2 className="text-xl font-bold text-fg flex items-center gap-2">
-                <Edit className="w-5 h-5 text-primary" /> Manage Inventory
-              </h2>
-              <button onClick={() => setIsEditing(false)} className="p-2 hover:bg-slate-200 rounded-full transition-colors"><X className="w-5 h-5" /></button>
+    <PageShell width="default" contentClassName="space-y-7">
+      <PageHeader
+        title="Rewards shop"
+        description="Use your SHORE coins for supplies and avatar styles."
+        actions={(
+          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+            <div id="balance-container" className="flex min-h-11 items-center gap-2 rounded-lg border border-border bg-white px-3.5" aria-label={`${balance} SHORE coins available`}>
+              <img src={COIN_IMAGE} alt="" className="h-6 w-6" />
+              <span className="text-xs text-muted">Your balance</span>
+              <strong className="text-lg tabular-nums text-fg">{balance.toLocaleString()}</strong>
             </div>
-            
-            <div className="p-6 overflow-y-auto flex-1 space-y-4">
-              {editInventory.map(item => (
-                <div key={item.id} className="flex flex-wrap items-center gap-4 bg-white border border-border/60 p-4 rounded-xl shadow-sm">
-                  <div className="flex-1 min-w-[200px]">
-                    <label className="text-xs font-bold text-muted uppercase tracking-wider mb-1 block">Item Name</label>
-                    <input type="text" value={item.name} onChange={(e) => handleEditChange(item.id, 'name', e.target.value)} className="w-full px-3 py-2 rounded-lg border border-border/60 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-primary/20 outline-none transition-all font-medium text-sm" />
-                  </div>
-                  <div className="w-24">
-                    <label className="text-xs font-bold text-muted uppercase tracking-wider mb-1 block">Price</label>
-                    <input type="number" value={item.price} onChange={(e) => handleEditChange(item.id, 'price', parseInt(e.target.value) || 0)} className="w-full px-3 py-2 rounded-lg border border-border/60 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-primary/20 outline-none transition-all font-medium text-sm" />
-                  </div>
-                  <div className="w-24">
-                    <label className="text-xs font-bold text-muted uppercase tracking-wider mb-1 block">Stock</label>
-                    <input type="number" value={item.stock} onChange={(e) => handleEditChange(item.id, 'stock', parseInt(e.target.value) || 0)} className="w-full px-3 py-2 rounded-lg border border-border/60 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-primary/20 outline-none transition-all font-medium text-sm" />
-                  </div>
-                  <div className="w-32">
-                    <label className="text-xs font-bold text-muted uppercase tracking-wider mb-1 block">Icon Type</label>
-                    <select value={item.iconType} onChange={(e) => handleEditChange(item.id, 'iconType', e.target.value)} className="w-full px-3 py-2 rounded-lg border border-border/60 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-primary/20 outline-none transition-all font-medium text-sm">
-                      {Object.keys(IconMap).map(k => <option key={k} value={k}>{k}</option>)}
-                    </select>
-                  </div>
-                  <button onClick={() => deleteEditItem(item.id)} className="mt-6 p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"><Trash2 className="w-5 h-5" /></button>
-                </div>
-              ))}
-              
-              <button onClick={addEditItem} className="w-full py-4 border-2 border-dashed border-border/60 rounded-xl text-muted font-bold hover:bg-slate-50 hover:text-fg transition-colors flex items-center justify-center gap-2">
-                <Plus className="w-5 h-5" /> Add New Item
+            {isAdmin && (
+              <button type="button" onClick={openInventory} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-border bg-white px-3.5 text-sm font-semibold text-fg transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+                <Edit3 className="h-4 w-4" aria-hidden="true" /> {hasInventoryDraft ? 'Continue edits' : 'Manage inventory'}
               </button>
-            </div>
-            
-            <div className="p-4 border-t border-border/50 bg-slate-50 flex justify-end gap-3 shrink-0">
-              <button onClick={() => setIsEditing(false)} className="px-5 py-2.5 rounded-lg font-bold text-sm text-muted hover:text-fg hover:bg-slate-200 transition-colors">Cancel</button>
-              <button onClick={saveInventory} className="px-5 py-2.5 rounded-lg font-bold text-sm bg-primary text-white hover:bg-primary/90 transition-colors flex items-center gap-2 shadow-sm"><Save className="w-4 h-4" /> Save Changes</button>
-            </div>
+            )}
           </div>
-        </div>
-      )}
+        )}
+      />
 
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-[max(1.25rem,calc(0.75rem+env(safe-area-inset-top,0px)))] sm:pt-8 space-y-6">
-        
-        {/* Header & Balance */}
-        <PageHeader
-          title="Rewards Shop"
-          description="Redeem earned coins for school supplies and rewards."
-          actions={(
-            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-              <div id="balance-container" className="flex min-h-11 items-center justify-center gap-3 rounded-xl border border-border bg-white px-4 shadow-sm">
-                <img src="/shore-coin.png" alt="" className="h-7 w-7" />
-                <span className="text-sm font-semibold text-muted">Balance</span>
-                <span className="text-lg font-bold tabular-nums text-fg">{balance}</span>
+      <div className="flex flex-col gap-2 border-y border-border py-3 text-sm text-muted sm:flex-row sm:items-center sm:justify-between">
+        <p><strong className="text-fg">Earn coins:</strong> 10 per attendance check-in and 5 per recitation point.</p>
+        <div className="flex gap-4 font-semibold text-primary">
+          <a href="#attendance" className="rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">Attendance</a>
+          <a href="#recitations" className="rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">Recitations</a>
+        </div>
+      </div>
+
+      <div className="space-y-9 pb-4">
+        <section aria-labelledby="physical-rewards-title">
+          <div className="mb-4 flex items-baseline justify-between gap-3">
+            <h2 id="physical-rewards-title" className="text-lg font-bold text-fg sm:text-xl">Physical rewards</h2>
+            <span className="text-sm text-muted">{physicalItems.length} items</span>
+          </div>
+          {physicalItems.length ? <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{physicalItems.map(renderItem)}</ul> : <p className="rounded-xl border border-dashed border-border px-5 py-8 text-sm text-muted">No physical rewards are available yet.</p>}
+        </section>
+
+        <section aria-labelledby="avatar-borders-title">
+          <div className="mb-4 flex items-baseline justify-between gap-3">
+            <h2 id="avatar-borders-title" className="text-lg font-bold text-fg sm:text-xl">Avatar borders</h2>
+            <span className="text-sm text-muted">{borderItems.length} styles</span>
+          </div>
+          {borderItems.length ? <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{borderItems.map(renderItem)}</ul> : <p className="rounded-xl border border-dashed border-border px-5 py-8 text-sm text-muted">No avatar borders are available yet.</p>}
+        </section>
+      </div>
+
+      {modalOpen && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/70 p-3 sm:p-6" onMouseDown={(event) => { if (event.target === event.currentTarget) closeModal(); }}>
+          {isEditing ? (
+            <div role="dialog" aria-modal="true" aria-labelledby="inventory-dialog-title" className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-3xl flex-col overflow-hidden rounded-xl bg-white shadow-xl sm:max-h-[90dvh]">
+              <div className="flex items-start justify-between gap-4 border-b border-border px-4 py-4 sm:px-6">
+                <div>
+                  <h2 id="inventory-dialog-title" className="text-xl font-bold text-fg">Manage inventory</h2>
+                  <p className="mt-1 text-sm text-muted">Update prices and stock, then save all changes together.</p>
+                </div>
+                <button ref={closeButtonRef} type="button" aria-label="Close inventory editor" onClick={closeModal} disabled={savingInventory} className="grid h-11 w-11 shrink-0 place-items-center rounded-lg text-muted hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"><X className="h-5 w-5" /></button>
               </div>
-              {userRole === 'admin' && (
-                <button type="button" onClick={startEditing} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-border bg-white px-4 text-sm font-bold text-fg shadow-sm transition-colors hover:bg-canvas focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
-                  <Edit className="w-4 h-4" /> Manage Inventory
-                </button>
-              )}
+              <div className="space-y-3 overflow-y-auto px-4 py-4 sm:px-6">
+                {editInventory.map((item) => (
+                  <div key={item.id} className="grid gap-3 rounded-lg border border-border p-3 sm:grid-cols-[minmax(0,1fr)_6rem_6rem_8rem_auto] sm:items-end">
+                    <label className="text-xs font-semibold text-muted">Name<input value={item.name} onChange={(event) => updateEditItem(item.id, 'name', event.target.value)} className="mt-1 block min-h-11 w-full rounded-lg border border-border px-3 text-sm text-fg outline-none focus:border-primary" /></label>
+                    <div className="grid grid-cols-2 gap-3 sm:contents">
+                      <label className="text-xs font-semibold text-muted">Price<input type="number" min="0" step="1" value={item.price} onChange={(event) => updateEditItem(item.id, 'price', event.target.value)} className="mt-1 block min-h-11 w-full rounded-lg border border-border px-3 text-sm text-fg outline-none focus:border-primary" /></label>
+                      <label className="text-xs font-semibold text-muted">Stock<input type="number" min="0" step="1" value={item.stock} onChange={(event) => updateEditItem(item.id, 'stock', event.target.value)} className="mt-1 block min-h-11 w-full rounded-lg border border-border px-3 text-sm text-fg outline-none focus:border-primary" /></label>
+                    </div>
+                    <label className="text-xs font-semibold text-muted">Icon<select value={item.iconType || 'Gift'} onChange={(event) => updateEditItem(item.id, 'iconType', event.target.value)} className="mt-1 block min-h-11 w-full rounded-lg border border-border px-2 text-sm text-fg outline-none focus:border-primary">{Object.keys(ICONS).map((name) => <option key={name} value={name}>{name}</option>)}</select></label>
+                    {BUILT_IN_IDS.has(String(item.id)) ? <span className="pb-3 text-center text-xs text-muted">Built-in</span> : <button type="button" aria-label={`Remove ${item.name || 'new reward'}`} onClick={() => setEditInventory((current) => current.filter((entry) => String(entry.id) !== String(item.id)))} className="grid h-11 w-11 place-items-center rounded-lg text-red-600 hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"><Trash2 className="h-4 w-4" /></button>}
+                  </div>
+                ))}
+                <button type="button" onClick={addEditItem} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-dashed border-border px-4 text-sm font-semibold text-primary hover:bg-blue-50"><Plus className="h-4 w-4" /> Add reward</button>
+              </div>
+              <div className="border-t border-border bg-white px-4 py-3 sm:px-6">
+                {inventoryError && <p role="alert" className="mb-2 text-sm font-medium text-red-600">{inventoryError}</p>}
+                <div className="flex items-center justify-between gap-2">
+                  <button type="button" onClick={() => { setEditInventory(inventory.map((item) => ({ ...item }))); setInventoryError(''); }} disabled={!hasInventoryDraft || savingInventory} className="min-h-11 text-sm font-semibold text-muted disabled:opacity-50">Discard draft</button>
+                  <div className="flex items-center gap-2">
+                    <button type="button" onClick={closeModal} disabled={savingInventory} className="min-h-11 rounded-lg px-3 text-sm font-semibold text-muted">Close</button>
+                    <button type="button" onClick={saveInventory} disabled={!hasInventoryDraft || savingInventory} className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white disabled:opacity-50">{savingInventory && <Loader2 className="h-4 w-4 animate-spin" />} Save changes</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : receiptItem ? (
+            <div role="dialog" aria-modal="true" aria-labelledby="receipt-dialog-title" className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl sm:p-6">
+              <div className="flex justify-end"><button ref={closeButtonRef} type="button" aria-label="Close confirmation" onClick={closeModal} className="grid h-11 w-11 place-items-center rounded-lg text-muted hover:bg-slate-100"><X className="h-5 w-5" /></button></div>
+              <CheckCircle2 className="h-11 w-11 text-emerald-600" aria-hidden="true" />
+              <h2 id="receipt-dialog-title" className="mt-3 text-xl font-bold text-fg">Reward redeemed</h2>
+              <p className="mt-2 text-sm leading-6 text-muted">{receiptItem.name} is yours. {receiptItem.itemType === 'border' ? 'You can equip it now from your avatar borders.' : 'Claim it at the SHORE admin desk.'}</p>
+              <div className="mt-5 flex justify-end gap-2">
+                {receiptItem.itemType === 'border' && <button type="button" onClick={() => equipBorder(receiptItem)} disabled={Boolean(equippingId)} className="min-h-11 rounded-lg border border-primary px-4 text-sm font-semibold text-primary">Equip now</button>}
+                <button type="button" onClick={closeModal} className="min-h-11 rounded-lg bg-primary px-5 text-sm font-semibold text-white">Done</button>
+              </div>
+            </div>
+          ) : selectedItem && (
+            <div role="dialog" aria-modal="true" aria-labelledby="reward-dialog-title" className="max-h-[calc(100dvh-1.5rem)] w-full max-w-md overflow-y-auto rounded-xl bg-white shadow-xl">
+              <div className="relative"><RewardArt item={selectedItem} large /><button ref={closeButtonRef} type="button" aria-label="Close reward details" onClick={closeModal} disabled={isPurchasing} className="absolute right-3 top-3 grid h-11 w-11 place-items-center rounded-lg bg-white text-fg shadow-sm"><X className="h-5 w-5" /></button></div>
+              <div className="p-5 sm:p-6">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted">{selectedItem.itemType === 'border' ? 'Avatar border' : 'Physical reward'}</p>
+                <h2 id="reward-dialog-title" className="mt-1 text-xl font-bold text-fg">{selectedItem.name}</h2>
+                <p className="mt-1 text-sm text-muted">{selectedItem.itemType === 'border' ? 'A style for your profile avatar.' : Number(selectedItem.stock) > 0 ? `${selectedItem.stock} available · Collect at the SHORE admin desk after redeeming.` : 'Currently out of stock.'}</p>
+                <div className="mt-5 grid grid-cols-2 gap-3 border-y border-border py-4 text-sm">
+                  <div><span className="block text-muted">Cost</span><CoinAmount amount={selectedItem.price} className="mt-1 text-fg" /></div>
+                  <div><span className="block text-muted">Your balance</span><CoinAmount amount={balance} className="mt-1 text-fg" /></div>
+                </div>
+                {!isAdmin && balance < Number(selectedItem.price) && !ownedBorders.some((id) => String(id) === String(selectedItem.id)) && (
+                  <div className="mt-4 rounded-lg bg-blue-50 p-3 text-sm text-blue-950"><Info className="mr-2 inline h-4 w-4" aria-hidden="true" />You need <strong>{(Number(selectedItem.price) - balance).toLocaleString()} more coins</strong>. Attendance and recitations help you earn them.</div>
+                )}
+                {isAdmin && balance < Number(selectedItem.price) && <p className="mt-3 text-xs text-muted">Administrators can redeem even when their coin balance is lower than the cost.</p>}
+                <div className="mt-5 flex flex-wrap justify-end gap-2">
+                  <button type="button" onClick={closeModal} className="min-h-11 rounded-lg px-4 text-sm font-semibold text-muted">Close</button>
+                  {selectedItem.itemType === 'border' && ownedBorders.some((id) => String(id) === String(selectedItem.id)) ? (
+                    <button type="button" onClick={() => equipBorder(selectedItem)} disabled={String(equippedBorder) === String(selectedItem.id) || Boolean(equippingId)} className="min-h-11 rounded-lg bg-primary px-4 text-sm font-semibold text-white disabled:opacity-50">{String(equippedBorder) === String(selectedItem.id) ? 'Equipped' : equippingId ? 'Equipping…' : 'Equip border'}</button>
+                  ) : (
+                    <button type="button" onClick={confirmPurchase} disabled={isPurchasing || Number(selectedItem.stock) <= 0 || (!isAdmin && balance < Number(selectedItem.price))} className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">
+                      {isPurchasing && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+                      {Number(selectedItem.stock) <= 0 ? 'Out of stock' : !isAdmin && balance < Number(selectedItem.price) ? 'Not enough coins' : isPurchasing ? 'Redeeming…' : isAdmin ? 'Redeem as admin' : 'Confirm redemption'}
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
           )}
-        />
-
-        {/* Info Banner */}
-        <div className="bg-blue-50/50 border border-blue-100 rounded-2xl p-4 flex items-start gap-3">
-          <Info className="w-5 h-5 text-primary shrink-0 mt-0.5" />
-          <div className="text-sm text-blue-900 leading-relaxed font-medium">
-            Earn <strong className="font-bold">10 coins</strong> for every attendance 'Time In' and <strong className="font-bold">5 coins</strong> for every point earned in recitations. Keep participating to unlock more rewards!
-          </div>
-        </div>
-
-        {/* Categories */}
-        <div className="space-y-12 pb-12">
-          
-          {/* Section: Physical Rewards */}
-          <div>
-            <h2 className="text-xl font-bold text-fg mb-6 flex items-center gap-2">
-              <Gift className="w-6 h-6 text-primary" />
-              Physical Rewards
-            </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {inventory.filter(i => i.itemType !== 'border').map(renderItem)}
-            </div>
-          </div>
-
-          {/* Section: Digital Cosmetics */}
-          <div>
-            <h2 className="text-xl font-bold text-fg mb-6 flex items-center gap-2">
-              <Crown className="w-6 h-6 text-primary" />
-              Digital Cosmetics
-            </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {inventory.filter(i => i.itemType === 'border').map(renderItem)}
-            </div>
-          </div>
-
-        </div>
-
-      </div>
-    </div>
+        </div>, document.body,
+      )}
+    </PageShell>
   );
 }

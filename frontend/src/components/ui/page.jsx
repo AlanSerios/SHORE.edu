@@ -3,6 +3,7 @@ import { cn } from '../../utils';
 
 const WIDTHS = {
   narrow: 'max-w-4xl',
+  reading: 'max-w-[52rem]',
   default: 'max-w-5xl',
   wide: 'max-w-7xl',
 };

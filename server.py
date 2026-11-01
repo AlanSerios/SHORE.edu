@@ -948,6 +948,12 @@ def reset_password():
     elif matched_user.get('pin'):
         pin_valid = safe_str_compare(str(matched_user['pin']), pin)
 
+    if not matched_user.get('pin_hash') and not matched_user.get('pin'):
+        return jsonify({
+            "error": "Password recovery is not set up for this account. Contact a SHORE administrator to verify your identity and restore access.",
+            "code": "recovery_not_configured"
+        }), 409
+
     if pin_valid:
         matched_user['password_hash'] = generate_password_hash(new_password)
         matched_user['password_changed_at'] = int(time.time())
@@ -956,7 +962,14 @@ def reset_password():
         if not matched_user.get('pin_hash') and pin:
             matched_user['pin_hash'] = generate_password_hash(pin)
             matched_user.pop('pin', None)
-        save_json(USERS_FILE, users)
+        # Password recovery must not report success until Firebase confirms the write.
+        try:
+            db.reference(USERS_FILE).set(users)
+        except Exception as exc:
+            print("Password reset persistence error:", exc)
+            return jsonify({"error": "Could not save your new password. Please try again.", "code": "reset_save_failed"}), 503
+        with _CACHE_LOCK:
+            _CACHE[USERS_FILE] = (users, time.time())
         clear_failed_login(email)
         return jsonify({"success": True, "message": "Password reset successful."}), 200
     return jsonify({"error": "Incorrect 4-digit PIN.", "code": "invalid_pin"}), 400

@@ -8,6 +8,7 @@
     "build": "vite build",
     "lint": "oxlint",
     "test:calendar": "node scripts/verify-calendar.mjs",
+    "test:attendance": "node scripts/verify-attendance-view.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

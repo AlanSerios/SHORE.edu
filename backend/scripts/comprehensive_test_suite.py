@@ -54,18 +54,28 @@ def test_login_valid_or_upsert():
 
 def test_password_reset():
     test_email = f"student_{uuid.uuid4().hex[:6]}@test.com"
+    no_pin_email = f"student_{uuid.uuid4().hex[:6]}@test.com"
     try:
-        requests.put(f"{BASE_URL}/api/users/{test_email}", json={"name": "PIN Student", "password": "OldPass!", "pin": "1234", "role": "student"})
+        requests.put(f"{BASE_URL}/api/users/{test_email}", json={"name": "PIN Student", "password": "OldPass1!", "pin": "1234", "role": "student"})
+        requests.put(f"{BASE_URL}/api/users/{no_pin_email}", json={"name": "No PIN Student", "password": "OldPass1!", "role": "student"})
         
         # Reset with wrong PIN -> should fail 400
-        res_wrong = requests.post(f"{BASE_URL}/api/users/reset-password", json={"email": test_email, "pin": "9999", "new_password": "NewPass!"})
+        res_wrong = requests.post(f"{BASE_URL}/api/users/reset-password", json={"email": test_email, "pin": "9999", "new_password": "NewPass1!"})
         assert res_wrong.status_code == 400, f"Expected 400 on wrong PIN, got {res_wrong.status_code}"
         
         # Reset with correct PIN -> should succeed
-        res_correct = requests.post(f"{BASE_URL}/api/users/reset-password", json={"email": test_email, "pin": "1234", "new_password": "NewPass!"})
+        res_correct = requests.post(f"{BASE_URL}/api/users/reset-password", json={"email": test_email, "pin": "1234", "new_password": "NewPass1!"})
         assert res_correct.status_code == 200, f"Expected 200, got {res_correct.status_code}"
+        assert requests.post(f"{BASE_URL}/api/users/login", json={"email": test_email, "password": "NewPass1!"}).status_code == 200
+
+        # Accounts without a recovery PIN must fail clearly and never silently change passwords.
+        res_no_pin = requests.post(f"{BASE_URL}/api/users/reset-password", json={"email": no_pin_email, "pin": "1234", "new_password": "NewPass1!"})
+        assert res_no_pin.status_code == 409, f"Expected 409 for missing recovery setup, got {res_no_pin.status_code}"
+        assert res_no_pin.json().get("code") == "recovery_not_configured"
+        assert requests.post(f"{BASE_URL}/api/users/login", json={"email": no_pin_email, "password": "OldPass1!"}).status_code == 200
     finally:
         requests.delete(f"{BASE_URL}/api/users/{test_email}")
+        requests.delete(f"{BASE_URL}/api/users/{no_pin_email}")
 
 # -------------------------------------------------------------
 # 2. ATTENDANCE WORKFLOW & VALIDATION
