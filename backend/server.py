@@ -385,7 +385,9 @@ def _async_save_firebase(collection_name, data):
     except Exception as e:
         print(f"Firebase Async Save Error ({collection_name}):", e)
 
-def load_json(collection_name, bypass_cache=False):
+def load_json(collection_name, bypass_cache=False, require_fresh=False):
+    if require_fresh:
+        bypass_cache = True
     now = time.time()
     if not bypass_cache:
         with _CACHE_LOCK:
@@ -417,6 +419,8 @@ def load_json(collection_name, bypass_cache=False):
             return result
         except Exception as e:
             print(f"Firebase Load Error ({collection_name}):", e)
+            if require_fresh:
+                raise
             if collection_name in _CACHE:
                 return _CACHE[collection_name][0]
             return []
@@ -571,6 +575,21 @@ def register():
     return jsonify({"success": True, "user": safe_user, "token": token}), 201
 
 
+def find_account_for_sign_in(records, email, input_user):
+    alias_match = None
+    for user in records:
+        if not isinstance(user, dict):
+            continue
+        user_email = (user.get('email') or '').strip().lower()
+        if user_email == email:
+            return user
+        user_name = " ".join((user.get('name') or '').strip().lower().split())
+        user_username = user_email.replace('@shoreskwela.com', '').strip().lower()
+        if alias_match is None and input_user and input_user in (user_username, user_name):
+            alias_match = user
+    return alias_match
+
+
 @app.route('/api/users/login', methods=['POST'])
 def login():
     client_ip = request.headers.get('X-Forwarded-For', request.remote_addr or '127.0.0.1').split(',')[0].strip()
@@ -594,16 +613,16 @@ def login():
             "retry_after": lock_seconds
         }), 429
 
-    users = load_json(USERS_FILE)
-    matched_user = None
+    try:
+        users = load_json(USERS_FILE, require_fresh=True)
+    except Exception:
+        return jsonify({
+            "error": "Sign-in is temporarily unavailable. Please try again.",
+            "code": "auth_storage_unavailable",
+        }), 503
+
     input_user = email.replace('@shoreskwela.com', '').strip().lower()
-    for user in users:
-        user_email = (user.get('email') or '').strip().lower()
-        user_name = " ".join((user.get('name') or '').strip().lower().split())
-        user_username = user_email.replace('@shoreskwela.com', '').strip().lower()
-        if user_email == email or user_username == input_user or (user_name and user_name == input_user):
-            matched_user = user
-            break
+    matched_user = find_account_for_sign_in(users, email, input_user)
 
     if not matched_user:
         # Check if this name exists on the school roster to give a specific, helpful hint
@@ -898,6 +917,13 @@ def change_password():
             
     return jsonify({"error": "User account not found."}), 404
 
+class PasswordResetRejected(Exception):
+    def __init__(self, message, code, status):
+        super().__init__(message)
+        self.code = code
+        self.status = status
+
+
 @app.route('/api/users/reset-password', methods=['POST'])
 def reset_password():
     data = request.json or {}
@@ -928,51 +954,53 @@ def reset_password():
             "code": "weak_password"
         }), 400
 
-    users = load_json(USERS_FILE)
-    matched_user = None
     input_user = email.replace('@shoreskwela.com', '').strip().lower()
-    for user in users:
-        user_email = (user.get('email') or '').strip().lower()
-        user_name = " ".join((user.get('name') or '').strip().lower().split())
-        user_username = user_email.replace('@shoreskwela.com', '').strip().lower()
-        if user_email == email or user_username == input_user or (user_name and user_name == input_user):
-            matched_user = user
-            break
 
-    if not matched_user:
-        return jsonify({"error": "No account with this name.", "code": "account_not_found"}), 404
+    def update_password(current):
+        if isinstance(current, dict):
+            records = current.values()
+        elif isinstance(current, list) or current is None:
+            records = current or []
+        else:
+            raise ValueError("Unexpected users data format.")
 
-    pin_valid = False
-    if matched_user.get('pin_hash'):
-        pin_valid = check_password_hash(matched_user['pin_hash'], pin)
-    elif matched_user.get('pin'):
-        pin_valid = safe_str_compare(str(matched_user['pin']), pin)
+        matched_user = find_account_for_sign_in(records, email, input_user)
+        if matched_user is None:
+            raise PasswordResetRejected("No account with this name.", "account_not_found", 404)
 
-    if not matched_user.get('pin_hash') and not matched_user.get('pin'):
-        return jsonify({
-            "error": "Password recovery is not set up for this account. Contact a SHORE administrator to verify your identity and restore access.",
-            "code": "recovery_not_configured"
-        }), 409
+        pin_hash = matched_user.get('pin_hash')
+        legacy_pin = matched_user.get('pin')
+        if not pin_hash and not legacy_pin:
+            raise PasswordResetRejected(
+                "Password recovery is not set up for this account. Contact a SHORE administrator to verify your identity and restore access.",
+                "recovery_not_configured",
+                409,
+            )
 
-    if pin_valid:
+        pin_valid = check_password_hash(pin_hash, pin) if pin_hash else safe_str_compare(legacy_pin, pin)
+        if not pin_valid:
+            raise PasswordResetRejected("Incorrect 4-digit PIN.", "invalid_pin", 400)
+
         matched_user['password_hash'] = generate_password_hash(new_password)
         matched_user['password_changed_at'] = int(time.time())
         matched_user.pop('password', None)
-        # Upgrade PIN to hash if it was plaintext
-        if not matched_user.get('pin_hash') and pin:
+        if not pin_hash:
             matched_user['pin_hash'] = generate_password_hash(pin)
-            matched_user.pop('pin', None)
-        # Password recovery must not report success until Firebase confirms the write.
-        try:
-            db.reference(USERS_FILE).set(users)
-        except Exception as exc:
-            print("Password reset persistence error:", exc)
-            return jsonify({"error": "Could not save your new password. Please try again.", "code": "reset_save_failed"}), 503
-        with _CACHE_LOCK:
-            _CACHE[USERS_FILE] = (users, time.time())
-        clear_failed_login(email)
-        return jsonify({"success": True, "message": "Password reset successful."}), 200
-    return jsonify({"error": "Incorrect 4-digit PIN.", "code": "invalid_pin"}), 400
+        matched_user.pop('pin', None)
+        return current
+
+    try:
+        db.reference(USERS_FILE).transaction(update_password)
+    except PasswordResetRejected as exc:
+        return jsonify({"error": str(exc), "code": exc.code}), exc.status
+    except Exception:
+        app.logger.exception("Password reset could not reach or update Firebase")
+        return jsonify({"error": "Could not save your new password. Please try again.", "code": "reset_save_failed"}), 503
+
+    with _CACHE_LOCK:
+        _CACHE.pop(USERS_FILE, None)
+    clear_failed_login(email)
+    return jsonify({"success": True, "message": "Password reset successful."}), 200
 
 
 @app.route('/api/users/<path:email>', methods=['PUT'])
