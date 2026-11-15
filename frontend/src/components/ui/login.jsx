@@ -750,6 +750,10 @@ export function AuthFormSplitScreen({
         if (isRegister) {
           registrationFocusRef.current = "email";
           setRegistrationStep(1);
+        } else if (isForgot) {
+          setStepDirection(-1);
+          setForgotStep(1);
+          requestAnimationFrame(() => form.setFocus("email"));
         } else {
           requestAnimationFrame(() => form.setFocus("email"));
         }
@@ -777,6 +781,12 @@ export function AuthFormSplitScreen({
         if (isRegister) {
           registrationFocusRef.current = "pin";
           setRegistrationStep(3);
+        } else if (isForgot) {
+          setStepDirection(-1);
+          setForgotStep(1);
+          requestAnimationFrame(() => {
+            formElementRef.current?.querySelector('[aria-label="Security PIN digit 1"]')?.focus();
+          });
         }
       } else if (error.code === "recovery_not_configured" || error.code === "reset_save_failed") {
         form.setError("root", { type: "manual", message: msg });
@@ -1668,7 +1678,13 @@ export function AuthFormSplitScreen({
                           transition={{ duration: 0.12, ease: "easeOut" }}
                           className="inline-flex items-center justify-center truncate"
                         >
-                          {lockoutSeconds > 0
+                          {isLoading
+                            ? isForgot
+                              ? "Resetting password…"
+                              : isRegister
+                              ? "Creating account…"
+                              : "Signing in…"
+                            : lockoutSeconds > 0
                             ? `Locked (${lockoutSeconds}s)`
                             : isForgot
                             ? forgotStep === 1
