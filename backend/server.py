@@ -35,6 +35,7 @@ ALLOWED_ORIGIN_PATTERNS = [
     r'^http://10\.\d+\.\d+\.\d+(:\d+)?$',
     r'^http://172\.(1[6-9]|2\d|3[01])\.\d+\.\d+(:\d+)?$',
     r'^https?://.*\.shoreskwela\.com$',
+    r'^https://shore-edu\.vercel\.app$',
     r'^https?://.*\.firebaseapp\.com$',
     r'^https?://.*\.web\.app$',
 ]
