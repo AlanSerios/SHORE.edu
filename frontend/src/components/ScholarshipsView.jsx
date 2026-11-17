@@ -1,11 +1,44 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Edit2, Trash2, ExternalLink, GraduationCap, MapPin, CheckCircle2, Sparkles, RefreshCw, Clock, ShieldCheck, BookmarkPlus, Check, Calendar, FileText, AlertCircle, Search, X } from 'lucide-react';
 import { cn } from '../utils';
 import { toast } from 'sonner';
-import anime from 'animejs';
 import { getAllVaultDocuments, findVaultDocForReq } from '../utils/vaultStorage';
 import { PageHeader, PageShell } from './ui/page';
+
+const TIMELINE_DATES = [
+  ['opensOn', 'Registration opens'],
+  ['deadline', 'Registration closes'],
+  ['examDate', 'Entrance or qualifying exam'],
+  ['resultsDate', 'Results'],
+  ['enrollmentDate', 'Enrollment'],
+];
+
+const ADMISSION_PORTALS = [
+  ['USTP', 'Application form', 'https://prisms.ustp.edu.ph/padmission'],
+  ['Central Mindanao University (CMU)', 'CMUCAT registration', 'https://sis.cmu.edu.ph/doorstep/user/cmucat_admission_application'],
+  ['Bukidnon State University (BukSU)', 'Admissions portal', 'https://admissions.buksu.edu.ph/'],
+  ['Mindanao State University (MSU)', 'SASE advisory', 'https://msunaawan.edu.ph/your-msun-jouney-starts-here/'],
+  ['Xavier University', 'Admissions page', 'https://www.xu.edu.ph/admissions'],
+  ['Liceo de Cagayan University', 'Admissions page', 'https://www.liceo.edu.ph/UserPanel/Admission'],
+  ['PHINMA Cagayan de Oro College', 'Admissions page', 'https://coc.phinma.edu.ph/admission/'],
+  ['City College of Cagayan de Oro', 'Admissions page', 'https://citycollegecdo.edu.ph/apply'],
+  ['Lourdes College', 'Enrollment portal', 'https://enroll.lccdo.edu.ph/'],
+];
+
+function registrationLink(listing) {
+  return listing.registrationVerified === true && listing.verified === true ? httpsLink(listing.registrationUrl) : '';
+}
+
+function httpsLink(value) {
+  try {
+    const url = new URL(value);
+
+    return url.protocol === 'https:' && !url.username && !url.password && (!url.port || url.port === '443') ? url.href : '';
+  } catch {
+    return '';
+  }
+}
 
 export default function ScholarshipsView({ userEmail, userRole }) {
   const [scholarships, setScholarships] = useState([]);
@@ -19,10 +52,15 @@ export default function ScholarshipsView({ userEmail, userRole }) {
   const [parseError, setParseError] = useState('');
   const [autoFillSummary, setAutoFillSummary] = useState(null);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [discovery, setDiscovery] = useState({ drafts: null, error: '' });
+  const [discoverySchool, setDiscoverySchool] = useState('');
+  const discoveryDialog = useRef(null);
+  const [listingKind, setListingKind] = useState('scholarship');
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState('all'); // 'all' | 'verified' | 'closing'
   const [isLoadingScholarships, setIsLoadingScholarships] = useState(true);
   const [scholarshipLoadError, setScholarshipLoadError] = useState('');
+  const [syncState, setSyncState] = useState({ status: 'not_run', lastSuccessAt: '' });
 
   const [currentScholarship, setCurrentScholarship] = useState({
     id: '',
@@ -35,22 +73,15 @@ export default function ScholarshipsView({ userEmail, userRole }) {
     requirements: [''],
     applyLink: '',
     officialDomain: '',
-    verified: true
+    kind: 'scholarship',
+    verified: false
   });
 
-  useEffect(() => {
-    fetchScholarships();
-
-    if (userEmail) {
-      fetchUserTrackedScholarships();
+  const fetchScholarships = useCallback(async ({ quiet = false } = {}) => {
+    if (!quiet) {
+      setIsLoadingScholarships(true);
+      setScholarshipLoadError('');
     }
-  }, [userEmail]);
-
-
-
-  const fetchScholarships = async () => {
-    setIsLoadingScholarships(true);
-    setScholarshipLoadError('');
 
     try {
       const res = await fetch('/api/scholarships');
@@ -58,12 +89,38 @@ export default function ScholarshipsView({ userEmail, userRole }) {
       if (!res.ok) throw new Error('Request failed');
       const data = await res.json();
       setScholarships(data.scholarships || []);
+      setSyncState(data.sync || { status: 'not_run', lastSuccessAt: '' });
     } catch {
       setScholarshipLoadError('Scholarships could not be loaded. Check your connection and try again.');
     } finally {
-      setIsLoadingScholarships(false);
+      if (!quiet) setIsLoadingScholarships(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchScholarships();
+
+    if (userEmail) {
+      fetchUserTrackedScholarships();
+    }
+  }, [userEmail, fetchScholarships]);
+
+  useEffect(() => {
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') fetchScholarships({ quiet: true });
+    };
+    const isFirstCheckPending = !syncState.lastSuccessAt && ['not_run', 'running'].includes(syncState.status);
+    const interval = window.setInterval(refreshWhenVisible, isFirstCheckPending ? 45 * 1000 : 15 * 60 * 1000);
+
+    window.addEventListener('focus', refreshWhenVisible);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', refreshWhenVisible);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+    };
+  }, [fetchScholarships, syncState.status, syncState.lastSuccessAt]);
 
   const fetchUserTrackedScholarships = async () => {
     try {
@@ -84,30 +141,24 @@ export default function ScholarshipsView({ userEmail, userRole }) {
     }
   };
 
-  const handleSyncOfficialPortals = async (e) => {
+  const handleSyncOfficialPortals = async () => {
     setIsSyncing(true);
-
-    if (e) {
-      anime({
-        targets: e.currentTarget.querySelector('svg'),
-        rotate: '+=720deg',
-        duration: 1000,
-        easing: 'easeInOutQuad'
-      });
-    }
+    setDiscovery({ drafts: null, error: '' });
 
     try {
-      const res = await fetch('/api/scholarships/seed', { method: 'POST' });
+      const res = await fetch('/api/scholarships/discover', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ school: discoverySchool.trim() }),
+      });
+
       const data = await res.json();
 
-      if (res.ok) {
-        setScholarships(data.scholarships || []);
-        toast.success("Successfully synchronized verified scholarships from official portals!");
-      } else {
-        toast.error("Failed to sync scholarships");
-      }
-    } catch {
-      toast.error("Network error during sync");
+      if (!res.ok) throw new Error(data.error || 'Could not check university notices.');
+
+      setDiscovery({ drafts: data.drafts || [], error: '' });
+    } catch (error) {
+      setDiscovery({ drafts: null, error: error instanceof SyntaxError ? 'University search is unavailable. Try again.' : error.message });
     } finally {
       setIsSyncing(false);
     }
@@ -144,7 +195,7 @@ export default function ScholarshipsView({ userEmail, userRole }) {
           benefits: data.parsed.benefits || currentScholarship.benefits,
           officialDomain: data.parsed.officialDomain || currentScholarship.officialDomain,
           requirements: data.parsed.requirements?.length ? data.parsed.requirements : [''],
-          verified: data.parsed.verified ?? false
+          verified: false
         });
         setAutoFillSummary({
           fields: data.meta?.fieldsDetected || [],
@@ -199,7 +250,7 @@ export default function ScholarshipsView({ userEmail, userRole }) {
       title: scholarship.title,
       provider: scholarship.provider,
       deadline: scholarship.deadline || '',
-      applyLink: scholarship.applyLink || '',
+      applyLink: registrationLink(scholarship) || scholarship.applyLink || '',
       requirements: defaultReqs
     };
 
@@ -223,7 +274,7 @@ export default function ScholarshipsView({ userEmail, userRole }) {
     }
   };
 
-  const openModal = (scholarship = null) => {
+  const openModal = (scholarship = null, draft = null) => {
     if (scholarship) {
       setCurrentScholarship({
         ...scholarship,
@@ -242,10 +293,12 @@ export default function ScholarshipsView({ userEmail, userRole }) {
         deadline: '',
         description: '',
         benefits: '',
-        requirements: [''],
         applyLink: '',
         officialDomain: '',
-        verified: true
+        kind: listingKind,
+        ...draft,
+        requirements: draft?.requirements?.length ? draft.requirements : [''],
+        verified: false
       });
       setIsEditing(false);
       setActiveModalTab('manual');
@@ -277,13 +330,20 @@ export default function ScholarshipsView({ userEmail, userRole }) {
 
   const handleSave = async () => {
     if (!currentScholarship.title || !currentScholarship.provider || !currentScholarship.applyLink) {
-      toast.error("Please fill in the title, provider, and apply link.");
+      toast.error('Enter the title, school or provider, and source link.');
+
+      return;
+    }
+
+    if (currentScholarship.sourceUrl && !currentScholarship.verified) {
+      toast.error('Check the source announcement and confirm it before publishing.');
 
       return;
     }
 
     const payload = {
       ...currentScholarship,
+      registrationUrl: currentScholarship.registrationUrl?.trim() || '',
       requirements: currentScholarship.requirements.filter(r => (r?.name ? r.name.trim() : String(r || '').trim()) !== '')
     };
 
@@ -298,11 +358,15 @@ export default function ScholarshipsView({ userEmail, userRole }) {
       });
 
       if (res.ok) {
-        toast.success(isEditing ? 'Scholarship updated!' : 'Scholarship added!');
+        setListingKind(payload.kind === 'admission' ? 'admission' : 'scholarship');
+        setActiveFilter('all');
+        toast.success(isEditing ? 'Listing updated.' : 'Listing published.');
         fetchScholarships();
         setIsModalOpen(false);
       } else {
-        toast.error('Failed to save scholarship');
+        const data = await res.json().catch(() => ({}));
+
+        toast.error(data.error || 'Could not save the listing.');
       }
     } catch {
       toast.error('An error occurred');
@@ -326,6 +390,16 @@ export default function ScholarshipsView({ userEmail, userRole }) {
 
   const [isChecklistModalOpen, setIsChecklistModalOpen] = useState(false);
   const [selectedScholarshipDetail, setSelectedScholarshipDetail] = useState(null);
+  const closeDetailsRef = useRef(null);
+
+  useEffect(() => {
+    if (!selectedScholarshipDetail) return undefined;
+
+    const trigger = document.activeElement;
+    closeDetailsRef.current?.focus();
+
+    return () => { if (trigger instanceof HTMLElement && trigger.isConnected) trigger.focus(); };
+  }, [selectedScholarshipDetail]);
 
   const universalDocuments = [
     { name: "Grade 12 Report Card (Form 137 / 138)", note: "General Weighted Average (GWA) typically 85%+" },
@@ -363,14 +437,21 @@ export default function ScholarshipsView({ userEmail, userRole }) {
     return { label: `${diffDays}d remaining`, color: 'bg-emerald-50 text-emerald-700 border-emerald-200 font-semibold', days: diffDays };
   };
 
-  const filteredScholarships = scholarships.filter(s => {
-    const q = searchQuery.toLowerCase();
+  const isAdmissions = listingKind === 'admission';
+  const query = searchQuery.trim().toLowerCase();
 
+  const visiblePortals = isAdmissions && activeFilter === 'all'
+    ? ADMISSION_PORTALS.filter(([school, label]) => `${school} ${label}`.toLowerCase().includes(query))
+    : [];
+
+  const categoryListings = scholarships.filter(s => (s.kind === 'admission' ? 'admission' : 'scholarship') === listingKind);
+
+  const filteredScholarships = categoryListings.filter(s => {
     const matchesQuery = (
-      s.title?.toLowerCase().includes(q) ||
-      s.provider?.toLowerCase().includes(q) ||
-      s.location?.toLowerCase().includes(q) ||
-      s.description?.toLowerCase().includes(q)
+      s.title?.toLowerCase().includes(query) ||
+      s.provider?.toLowerCase().includes(query) ||
+      s.location?.toLowerCase().includes(query) ||
+      s.description?.toLowerCase().includes(query)
     );
 
     if (!matchesQuery) return false;
@@ -388,14 +469,6 @@ export default function ScholarshipsView({ userEmail, userRole }) {
     return true;
   });
 
-  const verifiedCount = scholarships.filter(s => s.verified === true).length;
-
-  const closingSoonCount = scholarships.filter(s => {
-    const badge = getDeadlineBadge(s.deadline);
-
-    return badge && badge.days >= 0 && badge.days <= 14;
-  }).length;
-
   const formatDeadline = (deadline) => {
     if (!deadline) return '';
     const parsed = new Date(`${deadline}T00:00:00`);
@@ -405,93 +478,113 @@ export default function ScholarshipsView({ userEmail, userRole }) {
     return parsed.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
+  const syncStatusLabel = syncState.status === 'running'
+    ? 'Checking official sources now'
+    : syncState.status === 'error'
+    ? 'Automatic check failed. Showing saved listings.'
+    : syncState.lastSuccessAt
+      ? 'Last checked ' + new Date(syncState.lastSuccessAt).toLocaleString('en-PH', {
+        timeZone: 'Asia/Manila',
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+      })
+      : 'First automatic check is pending';
+
   return (
     <PageShell width="wide">
       <PageHeader
-        title="Scholarships"
-        description="Compare verified programs, prepare documents, and track application deadlines."
-        actions={(
+        title="College Admissions & Scholarships"
+        className="sm:flex-col sm:items-start lg:flex-row lg:items-center"
+        actions={userRole === 'admin' && (
           <>
             <button
-              onClick={() => setIsChecklistModalOpen(true)}
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-border bg-card px-3.5 text-sm font-semibold text-fg shadow-sm transition-colors hover:bg-slate-50"
+              type="button"
+              onClick={() => discoveryDialog.current?.showModal()}
+              aria-haspopup="dialog"
+              className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 text-[13px] font-semibold text-fg hover:bg-canvas sm:gap-2 sm:px-3 sm:text-sm"
             >
-              <ShieldCheck className="h-4 w-4 text-emerald-600" />
-              Document kit
+              <RefreshCw aria-hidden="true" className="h-4 w-4" />
+              Find updates
             </button>
-            {userRole === 'admin' && (
-              <button
-                onClick={handleSyncOfficialPortals}
-                disabled={isSyncing}
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-border bg-card px-3.5 text-sm font-semibold text-fg shadow-sm transition-colors hover:bg-slate-50 disabled:opacity-60"
-              >
-                <RefreshCw className={`h-4 w-4 text-primary ${isSyncing ? 'animate-spin' : ''}`} />
-                Sync
-              </button>
-            )}
-            {userRole === 'admin' && (
-              <button
-                onClick={() => openModal()}
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-bold text-white shadow-sm transition-colors hover:bg-primaryHover"
-              >
-                <Plus className="h-4 w-4" />
-                Add scholarship
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => openModal()}
+              className="inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-primary px-2.5 text-[13px] font-semibold text-white hover:bg-primaryHover sm:gap-2 sm:px-3 sm:text-sm"
+            >
+              <Plus aria-hidden="true" className="h-4 w-4" />
+              {isAdmissions ? 'Add admission' : 'Add scholarship'}
+            </button>
           </>
         )}
       />
 
-      <section className="mt-7 overflow-hidden rounded-2xl border border-border bg-card shadow-sm" aria-label="Scholarship search and filters">
-        <div className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center">
-          <label className="relative min-w-0 flex-1">
-            <span className="sr-only">Search scholarships</span>
-            <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-            <input
-              type="search"
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Search programs, providers, or locations"
-              className="h-11 w-full rounded-xl border border-border bg-canvas pl-10 pr-4 text-sm text-fg outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15"
-            />
-          </label>
-          <div className="flex overflow-x-auto rounded-xl bg-canvas p-1" role="tablist" aria-label="Scholarship filters">
-            {[
-              { id: 'all', label: 'All', count: scholarships.length },
-              { id: 'verified', label: 'Verified', count: verifiedCount },
-              { id: 'closing', label: 'Closing soon', count: closingSoonCount },
-            ].map(filter => (
-              <button
-                key={filter.id}
-                type="button"
-                role="tab"
-                aria-selected={activeFilter === filter.id}
-                onClick={() => setActiveFilter(filter.id)}
-                className={cn(
-                  'h-9 shrink-0 rounded-lg px-3 text-xs font-semibold transition-colors sm:text-sm',
-                  activeFilter === filter.id
-                    ? 'bg-card text-primary shadow-sm ring-1 ring-border'
-                    : 'text-muted hover:text-fg'
-                )}
-              >
-                {filter.label} <span className="ml-1 text-[11px] opacity-70">{filter.count}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      </section>
+      <p className="mt-1 text-xs text-muted" role="status">
+        SHORE checks official school sources after sign-in, at most once every 24 hours. {syncStatusLabel} · Philippine time
+      </p>
 
-      <div className="mb-4 mt-5 flex items-center justify-between gap-3">
-        <p className="text-sm text-muted">
-          <span className="font-semibold text-fg">{filteredScholarships.length}</span>{' '}
-          {filteredScholarships.length === 1 ? 'program' : 'programs'} available
-        </p>
-        <p className="hidden text-xs text-muted sm:block">Deadlines use Philippine time</p>
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-x-2 border-b border-border sm:mt-5 sm:gap-x-4">
+        <div role="group" aria-label="Opportunity type" className="flex gap-3 sm:gap-6">
+          {[['scholarship', 'Scholarships'], ['admission', 'Admissions']].map(([kind, label]) => (
+            <button
+              key={kind}
+              type="button"
+              aria-pressed={listingKind === kind}
+              onClick={() => {
+                if (kind === listingKind) return;
+                setListingKind(kind);
+                setSearchQuery('');
+                setActiveFilter('all');
+              }}
+              className={cn(
+                'min-h-12 border-b-2 px-1 text-sm font-semibold outline-offset-[-3px] transition-colors focus-visible:outline-2 focus-visible:outline-primary sm:text-base',
+                listingKind === kind ? 'border-primary text-primary' : 'border-transparent text-muted hover:text-fg',
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={() => setIsChecklistModalOpen(true)}
+          className="inline-flex min-h-11 items-center gap-1.5 text-xs font-semibold text-muted underline-offset-4 hover:text-fg hover:underline sm:text-sm"
+        >
+          <FileText aria-hidden="true" className="hidden size-4 sm:block" />
+          Document kit
+        </button>
+      </div>
+
+      <div className="mb-4 mt-4 flex flex-wrap items-center gap-2 sm:mb-5">
+        <label className="relative min-w-0 flex-1 max-[359px]:basis-full">
+          <span className="sr-only">{isAdmissions ? 'Find a school' : 'Find a scholarship'}</span>
+          <Search aria-hidden="true" className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted" />
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={event => setSearchQuery(event.target.value)}
+            placeholder={isAdmissions ? 'Find a school' : 'Find a scholarship'}
+            className="min-h-11 w-full rounded-lg border border-border bg-card pl-10 pr-3 text-sm text-fg focus-visible:outline-2 focus-visible:outline-primary"
+          />
+        </label>
+        {categoryListings.length > 0 && (
+          <select
+            aria-label="Filter listings"
+            value={activeFilter}
+            onChange={event => setActiveFilter(event.target.value)}
+            className="min-h-11 max-w-full rounded-lg border border-border bg-card px-3 text-sm font-medium text-fg focus-visible:outline-2 focus-visible:outline-primary"
+          >
+            <option value="all">All listings</option>
+            <option value="verified">Verified</option>
+            <option value="closing">Closing soon</option>
+          </select>
+        )}
       </div>
 
       {isLoadingScholarships && (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3" aria-label="Loading scholarships">
-          {[0, 1, 2, 3, 4, 5].map(item => (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3" role="status" aria-label="Loading listings">
+          {[0, 1, 2].map(item => (
             <div key={item} className="h-80 animate-pulse rounded-2xl border border-border bg-card p-5">
               <div className="h-4 w-24 rounded bg-slate-200" />
               <div className="mt-6 h-6 w-4/5 rounded bg-slate-200" />
@@ -505,7 +598,7 @@ export default function ScholarshipsView({ userEmail, userRole }) {
       {!isLoadingScholarships && scholarshipLoadError && (
         <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-center">
           <AlertCircle className="mx-auto h-6 w-6 text-red-600" />
-          <h2 className="mt-3 font-bold text-fg">Unable to load scholarships</h2>
+          <h2 className="mt-3 font-bold text-fg">Unable to load {isAdmissions ? 'admissions' : 'scholarships'}</h2>
           <p className="mt-1 text-sm text-muted">{scholarshipLoadError}</p>
           <button onClick={fetchScholarships} className="mt-4 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-white hover:bg-primaryHover">Try again</button>
         </div>
@@ -515,6 +608,8 @@ export default function ScholarshipsView({ userEmail, userRole }) {
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 items-stretch">
         {filteredScholarships.map((scholarship) => {
           const deadlineBadge = getDeadlineBadge(scholarship.deadline);
+          const directLink = registrationLink(scholarship);
+          const canRegister = directLink && !(deadlineBadge?.days < 0) && !(getDeadlineBadge(scholarship.opensOn)?.days > 0);
 
           const isTracked = trackedScholarships.some(item => {
             const title = item?.title ?? item;
@@ -522,14 +617,12 @@ export default function ScholarshipsView({ userEmail, userRole }) {
             return title?.toLowerCase() === scholarship.title.toLowerCase();
           });
 
-          const reqCount = scholarship.requirements?.length || 0;
-
           return (
             <article
               key={scholarship.id} 
-              className="group flex h-full flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-sm transition hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md"
+              className="flex h-full min-w-0 flex-col overflow-hidden rounded-xl border border-border bg-card"
             >
-              <div className="flex flex-1 flex-col p-5">
+                <div className="flex flex-1 flex-col p-4 sm:p-5">
                 <div className="flex min-h-8 items-start justify-between gap-3">
                   <div className="flex flex-wrap items-center gap-2">
                     {scholarship.verified && (
@@ -549,14 +642,14 @@ export default function ScholarshipsView({ userEmail, userRole }) {
                   <div className="flex shrink-0 items-center gap-1">
                     <button 
                       onClick={() => openModal(scholarship)} 
-                      className="rounded-lg p-2 text-muted transition-colors hover:bg-canvas hover:text-fg"
+                      className="grid size-11 place-items-center rounded-lg text-muted transition-colors hover:bg-canvas hover:text-fg sm:size-9"
                       aria-label={`Edit ${scholarship.title}`}
                     >
                       <Edit2 className="h-4 w-4" />
                     </button>
                     <button 
                       onClick={() => handleDelete(scholarship.id)} 
-                      className="rounded-lg p-2 text-muted transition-colors hover:bg-red-50 hover:text-red-600"
+                      className="grid size-11 place-items-center rounded-lg text-muted transition-colors hover:bg-red-50 hover:text-red-600 sm:size-9"
                       aria-label={`Delete ${scholarship.title}`}
                     >
                       <Trash2 className="h-4 w-4" />
@@ -565,18 +658,18 @@ export default function ScholarshipsView({ userEmail, userRole }) {
                 )}
               </div>
 
-                <p className="mt-4 line-clamp-2 text-sm font-semibold leading-5 text-primary">{scholarship.provider}</p>
-              <h3 className="mt-2 line-clamp-2 text-lg font-bold leading-snug text-fg">
-                {scholarship.title}
+                <p className="mt-3 line-clamp-2 [overflow-wrap:anywhere] text-sm font-semibold leading-5 text-primary">{scholarship.provider}</p>
+              <h3 className="mt-2 break-words text-lg font-bold leading-snug text-fg">
+                <button type="button" className="max-w-full [overflow-wrap:anywhere] text-left underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary" onClick={() => setSelectedScholarshipDetail(scholarship)}>{scholarship.title}</button>
               </h3>
               
               {scholarship.description && (
-                  <p className="mt-2 line-clamp-3 text-sm leading-6 text-muted">
+                  <p className="mt-2 line-clamp-3 [overflow-wrap:anywhere] text-sm leading-6 text-muted">
                   {scholarship.description}
                 </p>
               )}
 
-                <dl className="mt-5 grid grid-cols-1 gap-2 text-sm text-muted sm:grid-cols-2">
+                <dl className="mt-4 grid grid-cols-1 gap-2 text-sm text-muted sm:grid-cols-2">
                   {scholarship.location && (
                     <div className="flex min-w-0 items-center gap-2">
                       <MapPin className="h-4 w-4 shrink-0 text-primary" />
@@ -586,41 +679,42 @@ export default function ScholarshipsView({ userEmail, userRole }) {
                 {scholarship.deadline && (
                     <div className="flex items-center gap-2">
                       <Calendar className="h-4 w-4 shrink-0 text-primary" />
-                      <dd>{formatDeadline(scholarship.deadline)}</dd>
+                      <dd>Closes {formatDeadline(scholarship.deadline)}</dd>
                   </div>
                 )}
                 </dl>
 
               {scholarship.benefits && (
-                  <div className="mt-5 border-t border-border pt-4">
-                    <p className="text-xs font-bold text-muted">Benefits and coverage</p>
-                    <p className="mt-1 line-clamp-2 text-sm font-medium leading-6 text-fg">
+                  <div className="mt-4 border-t border-border pt-3">
+                    <p className="text-xs font-bold text-muted">Benefits and Coverage</p>
+                    <p className="mt-1 line-clamp-2 [overflow-wrap:anywhere] text-sm font-medium leading-6 text-fg">
                     {scholarship.benefits}
                   </p>
                 </div>
               )}
 
-              <button
-                type="button"
-                onClick={() => setSelectedScholarshipDetail(scholarship)}
-                  className="mt-4 flex w-full items-center justify-between rounded-xl bg-primary/5 px-3 py-2.5 text-sm font-semibold text-primary transition-colors hover:bg-primary/10"
-              >
-                  <span className="flex items-center gap-2">
-                    <FileText className="h-4 w-4" />
-                    Required documents
-                </span>
-                  <span>{reqCount}</span>
-              </button>
               </div>
 
-              <div className="flex items-center gap-2 border-t border-border bg-canvas/50 p-4">
+              <div className="flex flex-wrap items-center gap-2 border-t border-border px-4 py-2">
+                {canRegister && (
+                  <a href={directLink} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-primary px-3 text-sm font-semibold text-white hover:bg-primaryHover">
+                    Register <ExternalLink aria-hidden="true" className="size-4" />
+                  </a>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setSelectedScholarshipDetail(scholarship)}
+                  className={cn('inline-flex min-h-11 items-center rounded-lg px-3 text-sm font-semibold', canRegister ? 'text-primary hover:bg-canvas' : 'bg-primary text-white hover:bg-primaryHover')}
+                >
+                  View details
+                </button>
                 <button
                   onClick={() => handleTrackScholarship(scholarship)}
                   disabled={isTracked}
-                  className={`inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl px-3 text-sm font-bold transition-colors ${
+                  className={`ml-auto inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-2 text-sm font-semibold transition-colors ${
                     isTracked 
-                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 cursor-default'
-                      : 'bg-primary text-white hover:bg-primaryHover shadow-sm'
+                      ? 'cursor-default text-emerald-700'
+                      : 'text-muted hover:bg-canvas hover:text-fg'
                   }`}
                 >
                   {isTracked ? (
@@ -635,39 +729,94 @@ export default function ScholarshipsView({ userEmail, userRole }) {
                     </>
                   )}
                 </button>
-
-                <a 
-                  href={scholarship.applyLink} 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-border bg-card px-3 text-sm font-bold text-fg transition-colors hover:bg-slate-50"
-                  aria-label={`Open official application for ${scholarship.title}`}
-                >
-                  Apply <ExternalLink className="h-4 w-4" />
-                </a>
               </div>
             </article>
           );
         })}
 
-        {filteredScholarships.length === 0 && (
-          <div className="col-span-full py-16 flex flex-col items-center justify-center text-center">
-            <div className="bg-canvas p-4 rounded-full mb-3 border border-border">
-              <GraduationCap className="w-8 h-8 text-muted" />
-            </div>
-            <h3 className="text-base font-bold text-fg mb-1">No Matching Scholarships</h3>
-            <p className="text-muted text-xs max-w-sm mb-4">Try adjusting your search query or reset the filter.</p>
-            {userRole === 'admin' && (
-              <button
-                onClick={handleSyncOfficialPortals}
-                className="bg-primary text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm"
-              >
-                <RefreshCw className="w-3.5 h-3.5" /> Re-sync Official Portals
+        {filteredScholarships.length === 0 && visiblePortals.length === 0 && (
+          <div className="col-span-full rounded-xl border border-border bg-card p-5 sm:p-6">
+            <h2 className="font-semibold text-fg">
+              {query || activeFilter !== 'all' ? 'No Matches' : isAdmissions ? 'No Admission Notices Yet' : 'No Scholarships Yet'}
+            </h2>
+            {(query || activeFilter !== 'all') && (
+              <button type="button" onClick={() => { setSearchQuery(''); setActiveFilter('all'); }} className="mt-1 min-h-11 text-sm font-semibold text-primary underline underline-offset-4">
+                Clear search and filters
               </button>
             )}
           </div>
         )}
       </div>
+      )}
+
+      {visiblePortals.length > 0 && (
+        <section aria-labelledby="official-portal-heading" className={cn('overflow-hidden rounded-xl border border-border bg-card', filteredScholarships.length > 0 || scholarshipLoadError ? 'mt-6' : '')}>
+          <header className="border-b border-border px-4 py-3.5 sm:px-5">
+            <h2 id="official-portal-heading" className="font-semibold text-fg">Official School Portals</h2>
+            <p className="mt-0.5 text-sm text-muted">Check each school for its current application dates.</p>
+          </header>
+          <ul className="grid xl:grid-cols-2">
+            {visiblePortals.map(([school, label, url]) => (
+              <li key={url} className="min-w-0 border-b border-border xl:odd:border-r xl:last:odd:col-span-2 xl:last:odd:border-r-0">
+                <a href={url} target="_blank" rel="noreferrer" className="flex min-h-14 items-center justify-between gap-3 px-4 py-2.5 focus-visible:outline-2 focus-visible:outline-offset-[-3px] focus-visible:outline-primary hover:bg-canvas sm:px-5">
+                  <div className="min-w-0">
+                    <p className="break-words text-sm font-semibold text-fg">{school}</p>
+                    <p className="text-xs leading-5 text-muted">{label}</p>
+                  </div>
+                  <ExternalLink aria-hidden="true" className="size-4 shrink-0 text-primary" />
+                </a>
+              </li>
+            ))}
+          </ul>
+          <a href="https://sites.google.com/ched.gov.ph/ro10/directory/directory-of-heis" target="_blank" rel="noreferrer" className="flex min-h-11 items-center gap-2 px-4 text-sm font-semibold text-primary underline-offset-4 hover:underline sm:px-5">
+            CHED school directory <ExternalLink aria-hidden="true" className="size-3.5" />
+          </a>
+        </section>
+      )}
+
+      {userRole === 'admin' && (
+        <dialog ref={discoveryDialog} aria-labelledby="university-updates-title" className="m-auto max-h-[85dvh] w-[calc(100%-2rem)] max-w-xl overflow-y-auto rounded-xl border border-border bg-card p-5 text-fg backdrop:bg-slate-950/50 sm:p-6">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 id="university-updates-title" className="text-xl font-bold">Find University Updates</h2>
+              <p className="mt-1 text-sm text-muted">Search for admissions and scholarships. Review each result before publishing.</p>
+            </div>
+            <button type="button" aria-label="Close university updates" onClick={() => discoveryDialog.current?.close()} className="-mr-2 -mt-2 grid size-11 shrink-0 place-items-center rounded-lg text-muted hover:bg-canvas">
+              <X aria-hidden="true" className="size-5" />
+            </button>
+          </div>
+          <form className="mt-5 flex flex-col gap-2 sm:flex-row sm:items-end" onSubmit={event => { event.preventDefault(); handleSyncOfficialPortals(); }}>
+            <label className="min-w-0 flex-1 text-sm font-medium">
+              School name (optional)
+              <input value={discoverySchool} maxLength={100} onChange={event => setDiscoverySchool(event.target.value)} placeholder="All schools" className="mt-1 block min-h-11 w-full rounded-lg border border-border bg-canvas px-3" />
+            </label>
+            <button type="submit" disabled={isSyncing} className="min-h-11 rounded-lg bg-primary px-4 text-sm font-semibold text-white hover:bg-primaryHover disabled:opacity-60">
+              {isSyncing ? 'Searching…' : 'Search updates'}
+            </button>
+          </form>
+          <p className={cn('mt-3 text-sm empty:mt-0', discovery.error ? 'text-red-700' : 'text-muted')} role={discovery.error ? 'alert' : 'status'}>
+            {isSyncing ? 'Checking school websites and public Facebook posts.' : discovery.error || (discovery.drafts?.length === 0 ? 'No current notices found. Try another school or check its official page.' : '')}
+          </p>
+          {discovery.drafts?.map(draft => {
+            const listed = scholarships.some(item => item.title?.trim().toLowerCase() === draft.title.toLowerCase()
+              && (item.sourceUrl === draft.sourceUrl || item.provider?.toLowerCase() === draft.provider.toLowerCase()));
+
+            return (
+              <div key={`${draft.sourceUrl}-${draft.title}`} className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
+                <div className="min-w-0 [overflow-wrap:anywhere]">
+                  <h3 className="text-sm font-bold text-fg">{draft.title}</h3>
+                  <p className="text-sm text-muted">{draft.kind === 'admission' ? 'Admission' : 'Scholarship'} · {draft.deadline ? formatDeadline(draft.deadline) : 'Deadline needs checking'}</p>
+                </div>
+                <div className="flex flex-wrap items-center gap-3 text-sm font-semibold">
+                  <a href={draft.sourceUrl} target="_blank" rel="noreferrer" className="text-primary underline underline-offset-4">Open source</a>
+                  {listed ? <span className="text-muted">Already listed</span> : (
+                    <button type="button" onClick={() => { discoveryDialog.current?.close(); openModal(null, draft); }} className="min-h-11 rounded-lg border border-border px-3 text-fg hover:bg-canvas">Review draft</button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </dialog>
       )}
 
       {/* Universal Standard Document Kit Modal */}
@@ -792,24 +941,56 @@ export default function ScholarshipsView({ userEmail, userRole }) {
               initial={{ scale: 0.95, opacity: 0, y: 10 }} 
               animate={{ scale: 1, opacity: 1, y: 0 }} 
               exit={{ scale: 0.95, opacity: 0, y: 10 }}
-              className="bg-card border border-border rounded-3xl w-full max-w-xl p-5 sm:p-6 relative z-10 shadow-2xl max-h-[82vh] flex flex-col my-auto overflow-hidden"
+              className="bg-card border border-border rounded-2xl w-full max-w-xl p-4 sm:p-6 relative z-10 shadow-2xl max-h-[82dvh] flex flex-col my-auto overflow-hidden"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="opportunity-details-heading"
+              onKeyDown={event => {
+                if (event.key === 'Escape') setSelectedScholarshipDetail(null);
+
+                if (event.key !== 'Tab') return;
+
+                const controls = [...event.currentTarget.querySelectorAll('button:not([disabled]), a[href]')];
+                const first = controls[0];
+                const last = controls.at(-1);
+
+                if (event.shiftKey && document.activeElement === first) {
+                  event.preventDefault();
+                  last?.focus();
+                } else if (!event.shiftKey && document.activeElement === last) {
+                  event.preventDefault();
+                  first?.focus();
+                }
+              }}
             >
-              <div className="flex justify-between items-start mb-3 pb-2 border-b border-border/60 shrink-0">
-                <div>
-                  <span className="text-xs font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-md mb-1.5 inline-block">
+              <div className="mb-3 flex shrink-0 items-start justify-between gap-2 border-b border-border/60 pb-3">
+                <div className="min-w-0 [overflow-wrap:anywhere]">
+                  <span className="mb-1.5 block text-xs font-bold text-primary">
                     {selectedScholarshipDetail.provider}
                   </span>
-                  <h2 className="text-base sm:text-lg font-bold text-fg leading-snug">{selectedScholarshipDetail.title}</h2>
+                  <h2 id="opportunity-details-heading" className="text-base sm:text-lg font-bold text-fg leading-snug">{selectedScholarshipDetail.title}</h2>
                 </div>
-                <button 
+                <button ref={closeDetailsRef} type="button" aria-label="Close application details"
                   onClick={() => setSelectedScholarshipDetail(null)} 
-                  className="p-1.5 text-muted hover:text-fg rounded-xl hover:bg-canvas transition-colors text-sm font-bold"
+                  className="grid size-11 shrink-0 place-items-center rounded-lg text-muted transition-colors hover:bg-canvas hover:text-fg"
                 >
-                  ✕
+                  <X aria-hidden="true" className="size-5" />
                 </button>
               </div>
 
-              <div className="flex-1 overflow-y-auto pr-1 space-y-4">
+              <div className="flex-1 space-y-4 overflow-y-auto [overflow-wrap:anywhere]">
+                <section aria-label="Application timeline" className="rounded-xl border border-border bg-canvas p-3 sm:p-4">
+                  <h3 className="flex items-center gap-2 text-sm font-bold text-fg"><Calendar className="h-4 w-4 text-primary" aria-hidden="true" /> Application Timeline</h3>
+                  <ol className="mt-2 divide-y divide-border">
+                    {TIMELINE_DATES.map(([key, label]) => (
+                      <li key={key} className="flex flex-wrap justify-between gap-x-3 gap-y-0.5 py-2 text-sm">
+                        <span className="text-fg">{label}</span>
+                        {selectedScholarshipDetail[key] ? <time dateTime={selectedScholarshipDetail[key]} className="font-semibold">{formatDeadline(selectedScholarshipDetail[key])}</time> : <span className="text-muted">{key === 'examDate' && selectedScholarshipDetail.examDetails ? 'See schedule below' : 'No date listed'}</span>}
+                      </li>
+                    ))}
+                  </ol>
+                  {selectedScholarshipDetail.examDetails && <p className="mt-2 whitespace-pre-line text-sm text-muted">{selectedScholarshipDetail.examDetails}</p>}
+                </section>
                 {selectedScholarshipDetail.benefits && (
                   <div className="bg-canvas border border-border/80 rounded-2xl p-3 text-xs">
                     <span className="font-bold text-primary block text-[10px] uppercase tracking-wider mb-1">Benefits & Financial Coverage</span>
@@ -833,26 +1014,27 @@ export default function ScholarshipsView({ userEmail, userRole }) {
                 </div>
               </div>
 
-              <div className="flex items-center gap-3 pt-3 border-t border-border shrink-0 mt-3">
+              <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-border shrink-0 mt-3">
                 <button
                   onClick={() => {
                     handleTrackScholarship(selectedScholarshipDetail);
                     setSelectedScholarshipDetail(null);
                   }}
-                  className="flex-1 py-2.5 px-4 rounded-xl bg-primary text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm hover:bg-primaryHover transition-colors"
+                  className="flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-xl bg-primary px-3 text-xs font-bold text-white transition-colors hover:bg-primaryHover"
                 >
                   <BookmarkPlus className="w-4 h-4" />
-                  <span>Track to My Dashboard</span>
+                  <span>Track</span>
                 </button>
                 <a
-                  href={selectedScholarshipDetail.applyLink}
+                  href={selectedScholarshipDetail.sourceUrl || selectedScholarshipDetail.applyLink}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="py-2.5 px-4 rounded-xl bg-fg text-canvas font-bold text-xs flex items-center justify-center gap-1.5 hover:bg-fg/90 transition-colors"
+                  className="flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-border px-3 text-xs font-bold text-fg transition-colors hover:bg-canvas"
                 >
-                  <span>Portal</span>
+                  <span>Source</span>
                   <ExternalLink className="w-3.5 h-3.5" />
                 </a>
+                {registrationLink(selectedScholarshipDetail) && <a href={registrationLink(selectedScholarshipDetail)} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-primary/30 px-3 text-sm font-semibold text-primary">Registration portal <ExternalLink className="h-4 w-4" /></a>}
               </div>
             </motion.div>
           </div>
@@ -885,12 +1067,12 @@ export default function ScholarshipsView({ userEmail, userRole }) {
                   </div>
                   <div>
                     <h2 className="text-lg sm:text-xl font-bold text-fg tracking-tight">
-                      {isEditing ? 'Edit Scholarship Program' : 'Add Scholarship Program'}
+                      {isEditing ? 'Edit Listing' : currentScholarship.kind === 'admission' ? 'Add Admission Notice' : 'Add Scholarship'}
                     </h2>
                     <p className="text-xs text-muted mt-0.5">
                       {isEditing 
                         ? 'Update program details, eligibility criteria, and requirements.' 
-                        : 'Publish a new financial aid program with requirement checklist.'}
+                        : 'Review the details before publishing.'}
                     </p>
                   </div>
                 </div>
@@ -1040,10 +1222,26 @@ export default function ScholarshipsView({ userEmail, userRole }) {
                         </p>
                       </div>
                     )}
+                    {currentScholarship.sourceUrl && (
+                      <p className="rounded-lg border border-border bg-canvas px-3 py-2 text-sm text-muted">
+                        Check the <a href={currentScholarship.sourceUrl} target="_blank" rel="noreferrer" className="font-semibold text-primary underline underline-offset-4">source announcement</a> before publishing this draft.
+                      </p>
+                    )}
+                    <label className="block text-xs font-semibold text-fg">
+                      Opportunity type
+                      <select value={currentScholarship.kind || 'scholarship'} onChange={e => setCurrentScholarship({ ...currentScholarship, kind: e.target.value })} className="mt-1.5 block min-h-11 w-full rounded-lg border border-border bg-canvas px-3 text-sm">
+                        <option value="scholarship">Scholarship</option>
+                        <option value="admission">Admission</option>
+                      </select>
+                    </label>
+                    <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm font-medium text-fg">
+                      <input type="checkbox" checked={currentScholarship.verified === true} onChange={e => setCurrentScholarship({ ...currentScholarship, verified: e.target.checked, registrationVerified: e.target.checked && currentScholarship.registrationVerified === true })} className="h-4 w-4 accent-primary" />
+                      I checked the official announcement.
+                    </label>
                     {/* Title */}
                     <div>
                       <label className="block text-xs font-semibold text-fg mb-1.5">
-                        Scholarship Title <span className="text-primary">*</span>
+                        Listing title <span className="text-primary">*</span>
                       </label>
                       <input 
                         type="text" 
@@ -1099,17 +1297,50 @@ export default function ScholarshipsView({ userEmail, userRole }) {
 
                       <div>
                         <label className="block text-xs font-semibold text-fg mb-1.5">
-                          Official Portal Link <span className="text-primary">*</span>
+                          Official announcement or information link <span className="text-primary">*</span>
                         </label>
                         <input 
                           type="url" 
                           value={currentScholarship.applyLink} 
-                          onChange={e => setCurrentScholarship({ ...currentScholarship, applyLink: e.target.value })}
+                          onChange={e => setCurrentScholarship({
+                            ...currentScholarship,
+                            applyLink: e.target.value,
+                            sourceUrl: e.target.value,
+                            verified: false,
+                            registrationVerified: false,
+                          })}
                           placeholder="https://..."
                           className="w-full px-3.5 py-2 rounded-xl border border-border/80 bg-canvas/60 text-xs sm:text-sm text-fg placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary/15 focus:border-primary transition-all"
                         />
                       </div>
                     </div>
+
+                    <fieldset className="min-w-0 rounded-xl border border-border p-3">
+                      <legend className="px-1 text-sm font-semibold">Registration and Schedule</legend>
+                      <label className="block text-xs font-semibold text-fg">
+                        Direct registration URL
+                        <input type="url" value={currentScholarship.registrationUrl || ''} onChange={e => setCurrentScholarship({ ...currentScholarship, registrationUrl: e.target.value, registrationVerified: false })} placeholder="https://…" className="mt-1 block min-h-11 w-full rounded-lg border border-border bg-canvas px-3 text-sm" />
+                      </label>
+                      {httpsLink(currentScholarship.registrationUrl) && (
+                        <a href={httpsLink(currentScholarship.registrationUrl)} target="_blank" rel="noreferrer" className="mt-1 inline-flex min-h-10 items-center text-sm font-semibold text-primary underline underline-offset-4">Open registration form to check it</a>
+                      )}
+                      <label className="flex min-h-11 items-center gap-2 text-sm font-medium">
+                        <input type="checkbox" checked={currentScholarship.registrationVerified === true} disabled={!currentScholarship.verified || !currentScholarship.registrationUrl?.trim()} onChange={e => setCurrentScholarship({ ...currentScholarship, registrationVerified: e.target.checked })} className="h-4 w-4 accent-primary" />
+                        I opened this link and confirmed it is the official registration form.
+                      </label>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        {TIMELINE_DATES.map(([key, label]) => key === 'deadline' ? null : (
+                          <label key={key} className="block text-xs font-semibold text-fg">
+                            {label}
+                            <input type="date" value={currentScholarship[key] || ''} onChange={e => setCurrentScholarship({ ...currentScholarship, [key]: e.target.value })} className="mt-1 block min-h-11 w-full min-w-0 rounded-lg border border-border bg-canvas px-3 text-sm" />
+                          </label>
+                        ))}
+                      </div>
+                      <label className="mt-3 block text-xs font-semibold text-fg">
+                        Exam schedule or next steps
+                        <textarea rows={2} value={currentScholarship.examDetails || ''} onChange={e => setCurrentScholarship({ ...currentScholarship, examDetails: e.target.value })} className="mt-1 block w-full rounded-lg border border-border bg-canvas p-2.5 text-sm" />
+                      </label>
+                    </fieldset>
 
                     {/* Benefits & Financial Coverage */}
                     <div>
@@ -1165,7 +1396,7 @@ export default function ScholarshipsView({ userEmail, userRole }) {
                               value={req?.name ?? req} 
                               onChange={e => handleRequirementChange(index, e.target.value)}
                               placeholder="e.g. PSA Authenticated Birth Certificate"
-                              className="flex-1 px-3 py-1.5 rounded-xl border border-border/80 bg-canvas/60 text-xs text-fg placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary/15 focus:border-primary transition-all"
+                              className="min-h-11 min-w-0 flex-1 rounded-xl border border-border/80 bg-canvas/60 px-3 text-sm text-fg placeholder:text-muted focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15"
                             />
                             {currentScholarship.requirements.length > 1 && (
                               <button 
@@ -1202,7 +1433,7 @@ export default function ScholarshipsView({ userEmail, userRole }) {
                 >
                   {activeModalTab === 'bot' && !isEditing ? (
                     <><Sparkles className={cn('h-4 w-4', isParsingBot && 'animate-spin')} />{isParsingBot ? 'Extracting details…' : 'Extract details'}</>
-                  ) : (isEditing ? 'Save Changes' : 'Publish Scholarship')}
+                  ) : (isEditing ? 'Save changes' : 'Publish listing')}
                 </button>
               </div>
             </motion.div>

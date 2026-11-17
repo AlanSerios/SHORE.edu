@@ -348,6 +348,7 @@ RESULTS: 16/16 PASSED (100.0%) | 0 FAILED
 ### Backend (Render / Railway / Cloud Run)
 1. Environment Variables:
    - `FIREBASE_CREDENTIALS`: *(Raw JSON string of `firebase_key.json`)*
+   - `GEMINI_API_KEY`: Optional server secret from [Google AI Studio](https://aistudio.google.com/app/apikey) for campus notice discovery. Set it in Render or the local Flask process environment and restart the backend.
    - `PORT`: `5000`
 2. Build Command: `pip install -r requirements.txt`
 3. Start Command: `gunicorn server:app` or `python server.py`
@@ -357,6 +358,10 @@ RESULTS: 16/16 PASSED (100.0%) | 0 FAILED
 2. Root Directory: `frontend`
 3. Build Command: `npm run build`
 4. Output Directory: `dist`
+
+### Scholarship and admissions discovery
+
+In **Scholarships & Admissions**, an administrator can open **Check university updates** and search all tracked sources or enter a school name. Gemini searches public school sites and discoverable Facebook posts. Review the source, confirm any direct registration form, and publish through the listing editor. The timeline shows the application window, exam, results, and enrollment dates when available. The official admission portal links work without a Gemini key.
 
 ---
 

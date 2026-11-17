@@ -252,10 +252,10 @@ function TicketCard({ ticket, userRole, onDelete, replyingTo, setReplyingTo, rep
   const isResolved = ticket.status === 'resolved';
   
   return (
-    <div className={`p-5 rounded-2xl border transition-all ${isResolved ? 'bg-canvas border-border/40' : 'bg-white border-border shadow-sm'}`}>
+    <div className={`min-w-0 rounded-2xl border p-4 [overflow-wrap:anywhere] transition-all sm:p-5 ${isResolved ? 'bg-canvas border-border/40' : 'bg-white border-border shadow-sm'}`}>
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-3">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
+        <div className="min-w-0">
+          <div className="mb-1 flex flex-wrap items-center gap-x-2 gap-y-1">
             <span className={`text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full ${
               ticket.category === 'Bug' ? 'bg-red-50 text-red-600' :
               ticket.category === 'Feedback' ? 'bg-blue-50 text-blue-600' :
@@ -271,14 +271,14 @@ function TicketCard({ ticket, userRole, onDelete, replyingTo, setReplyingTo, rep
         
         <div className="flex items-center gap-2 shrink-0">
           {userRole === 'admin' && (
-            <button onClick={onDelete} className="p-2 text-muted hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+            <button onClick={onDelete} aria-label="Delete ticket" className="grid size-11 place-items-center rounded-lg text-muted transition-colors hover:bg-red-50 hover:text-red-500">
               <Trash2 className="w-4 h-4" />
             </button>
           )}
           {userRole === 'admin' && !isResolved && replyingTo !== ticket.id && (
             <button 
               onClick={() => { setReplyingTo(ticket.id); setReplyText(''); }}
-              className="px-4 py-1.5 bg-primary/10 text-primary text-xs font-bold rounded-lg hover:bg-primary/20 transition-colors"
+              className="min-h-11 rounded-lg bg-primary/10 px-4 text-xs font-bold text-primary transition-colors hover:bg-primary/20"
             >
               Reply & Resolve
             </button>
@@ -296,7 +296,7 @@ function TicketCard({ ticket, userRole, onDelete, replyingTo, setReplyingTo, rep
       {isResolved && ticket.reply && (
         <div className="mt-4 bg-green-50/50 border border-green-100 rounded-xl p-4 flex gap-3">
           <MessageSquare className="w-4 h-4 text-green-600 shrink-0 mt-0.5" />
-          <div>
+          <div className="min-w-0">
             <p className="text-xs font-bold text-green-700 mb-0.5">Admin Reply</p>
             <p className="text-sm text-green-900/80">{ticket.reply}</p>
           </div>

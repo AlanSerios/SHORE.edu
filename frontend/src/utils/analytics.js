@@ -1,116 +1,167 @@
-/**
- * Pure compute helpers — no React, no side effects.
- * Extracted from App.jsx to keep the component lean.
- */
+/** Pure compute helpers — no React, no side effects. */
+import {
+  PRETEST_BLUEPRINT,
+  PRETEST_SUBJECTS,
+  PRETEST_SUBJECT_MAX,
+  PRETEST_TOTAL_ITEMS,
+} from './assessmentBlueprint';
 
-export const ALL_SUBJ = [
-  "Arithmetic", "Algebra", "Geometry", "Calculus", "Trigonometry",
-  "Logic", "Chemistry", "Biology", "Earth Science", "Physics", "English"
-];
+export const ALL_SUBJ = PRETEST_SUBJECTS;
 
-export const MATH_SUBJ = ["Arithmetic", "Algebra", "Geometry", "Calculus", "Trigonometry"];
+export const MATH_SUBJ = ['Mathematics'];
 
-export const SCI_SUBJ = ["Chemistry", "Biology", "Earth Science", "Physics"];
+export const SCI_SUBJ = ['Science'];
+
+export const REASONING_SUBJ = ['Abstract Reasoning'];
+
+export const ENGLISH_SUBJ = ['English Proficiency'];
 
 /**
  * Compute dashboard analytics for a selected student.
  * Returns null when no data is available.
  */
-export function computeStats(selectedStudent, reportType, parsedData) {
+export function computeStats(selectedStudent, reportType, parsedData, userRole = 'student') {
   if (!selectedStudent) return null;
-  const pre = parsedData.pre[selectedStudent];
-  const post = parsedData.post[selectedStudent];
+  const pre = parsedData?.pre?.[selectedStudent];
+  const post = parsedData?.post?.[selectedStudent];
 
-  const activeType = reportType === 'pre' ? 'pre' : 'post';
-  const fallbackType = activeType === 'post' && !post ? 'pre' : activeType;
-  const activeData = parsedData[fallbackType];
+  const activeType = reportType === 'post' || (reportType === 'both' && post) ? 'post' : 'pre';
+  const activeData = parsedData?.[activeType] || {};
 
   const studentData = activeData?.[selectedStudent];
 
   if (!studentData) return null;
 
-  let rank = 1;
-  let totalStudents = 0;
-  const cohortTotals = Object.values(activeData || {}).map(s => s.total);
-  cohortTotals.forEach(t => {
-    totalStudents++;
+  const isAdmin = userRole === 'admin';
+  const cohort = isAdmin ? Object.values(activeData || {}) : [];
+  const totalStudents = cohort.length;
+  const totalMax = Number(studentData.totalMax) || PRETEST_TOTAL_ITEMS;
+  const totalPercent = totalMax > 0 ? (Number(studentData.total || 0) / totalMax) * 100 : 0;
+  let rank = null;
 
-    if (t > studentData.total) rank++;
-  });
+  if (isAdmin && totalStudents) {
+    rank = 1 + cohort.filter(record => {
+      const max = Number(record.totalMax) || PRETEST_TOTAL_ITEMS;
 
-  const cohortAverages = {};
+      return (Number(record.total || 0) / max) > (Number(studentData.total || 0) / totalMax);
+    }).length;
+  }
 
-  if (totalStudents > 0) {
-    ALL_SUBJ.forEach(subj => {
-      let sum = 0;
-      Object.values(activeData).forEach(s => (sum += s.subjects[subj] || 0));
-      cohortAverages[subj] = sum / totalStudents;
+  const subjectRankings = ALL_SUBJ
+    .filter(name => studentData.subjects?.[name] !== undefined)
+    .map(name => {
+      const max = Number(studentData.subjectMax?.[name]) || PRETEST_SUBJECT_MAX[name] || 0;
+      const score = Number(studentData.subjects[name]) || 0;
+      const percent = max ? (score / max) * 100 : 0;
+
+      const cohortScores = cohort
+        .filter(record => record.subjects?.[name] !== undefined)
+        .map(record => {
+          const cohortMax = Number(record.subjectMax?.[name]) || PRETEST_SUBJECT_MAX[name] || 0;
+
+          return cohortMax ? (Number(record.subjects[name]) / cohortMax) * 100 : 0;
+        });
+
+      const cohortAvg = cohortScores.length
+        ? cohortScores.reduce((sum, value) => sum + value, 0) / cohortScores.length
+        : null;
+
+      return {
+        name,
+        score,
+        max,
+        percent,
+        cohortAvg,
+        diff: cohortAvg === null ? null : percent - cohortAvg,
+      };
     });
-  }
 
-  const radarData = ALL_SUBJ.map(subj => ({
-    subject: subj,
-    score: studentData.subjects[subj] || 0,
-    cohort: Math.round(cohortAverages[subj] || 0),
+  const vsCohortData = subjectRankings.map(subject => ({
+    subject: subject.name,
+    student: Math.round(subject.percent),
+    cohort: subject.cohortAvg === null ? null : Math.round(subject.cohortAvg),
   }));
 
-  const vsCohortData = ALL_SUBJ.map(subj => ({
-    subject: subj,
-    student: studentData.subjects[subj] || 0,
-    cohort: Math.round(cohortAverages[subj] || 0),
+  const radarData = subjectRankings.map(subject => ({
+    subject: subject.name,
+    score: Math.round(subject.percent),
+    cohort: subject.cohortAvg === null ? null : Math.round(subject.cohortAvg),
   }));
 
-  let preVsPostData = null;
+  const subtopicRankings = PRETEST_BLUEPRINT.flatMap(subject =>
+    subject.subtopics.flatMap(topic => {
+      const scoreData = studentData.subtopics?.[subject.name]?.[topic.name];
 
-  if (pre && post && reportType === 'both') {
-    preVsPostData = ALL_SUBJ.map(subj => ({
-      subject: subj,
-      pre: pre.subjects[subj] || 0,
-      post: post.subjects[subj] || 0,
-    }));
-  }
+      if (!scoreData) return [];
 
-  const subjectRankings = Object.entries(studentData.subjects || {})
-    .map(([name, score]) => {
-      const cohortAvg = Math.round(cohortAverages[name] || 0);
+      const max = Number(scoreData.max) || topic.maxScore;
+      const score = Number(scoreData.score) || 0;
+      const percent = max ? (score / max) * 100 : 0;
 
-      return { name, score, cohortAvg, diff: score - cohortAvg };
+      const cohortScores = cohort
+        .map(record => record.subtopics?.[subject.name]?.[topic.name])
+        .filter(Boolean)
+        .map(record => {
+          const cohortMax = Number(record.max) || topic.maxScore;
+
+          return cohortMax ? (Number(record.score) / cohortMax) * 100 : 0;
+        });
+
+      const cohortAvg = cohortScores.length
+        ? cohortScores.reduce((sum, value) => sum + value, 0) / cohortScores.length
+        : null;
+
+      return [{
+        name: topic.name,
+        subject: subject.name,
+        score,
+        max,
+        percent,
+        cohortAvg,
+        diff: cohortAvg === null ? null : percent - cohortAvg,
+      }];
     })
-    .sort((a, b) => b.score - a.score);
+  );
 
   const strongest = subjectRankings.length > 0
-    ? subjectRankings[0]
-    : { name: 'N/A', score: 0, cohortAvg: 0 };
+    ? [...subjectRankings].sort((a, b) => b.percent - a.percent)[0]
+    : { name: 'N/A', score: 0, max: 0, percent: 0, cohortAvg: null, diff: null };
 
-  const weaknesses = [...subjectRankings].reverse().slice(0, 3);
+  const weaknesses = [...subjectRankings].sort((a, b) => a.percent - b.percent).slice(0, 3);
 
-  let growth = null;
+  const preVsPostData = reportType === 'both' && pre && post ? ALL_SUBJ.flatMap(subject => {
+    if (pre.subjects?.[subject] == null || post.subjects?.[subject] == null) return [];
 
-  if (pre && post) growth = post.total - pre.total;
+    const preMax = Number(pre.subjectMax?.[subject]) || PRETEST_SUBJECT_MAX[subject];
+    const postMax = Number(post.subjectMax?.[subject]) || PRETEST_SUBJECT_MAX[subject];
 
-  let mostImproved = { name: 'N/A', diff: -Infinity };
+    return [{
+      subject,
+      pre: Math.round(pre.subjects[subject] / preMax * 100),
+      post: Math.round(post.subjects[subject] / postMax * 100),
+    }];
+  }) : [];
 
-  if (pre && post) {
-    Object.keys(pre.subjects).forEach(subj => {
-      const diff = (post.subjects[subj] || 0) - (pre.subjects[subj] || 0);
-
-      if (diff > mostImproved.diff) mostImproved = { name: subj, diff };
-    });
-  }
+  const growth = preVsPostData.length && (Number(pre.totalMax) || PRETEST_TOTAL_ITEMS) === totalMax
+    ? Number(post.total) - Number(pre.total)
+    : null;
 
   return {
     rank,
     totalStudents,
-    total: studentData.total,
+    total: Number(studentData.total) || 0,
+    totalMax,
+    totalPercent,
     growth,
     strongest,
     weaknesses,
     subjectRankings,
-    mostImproved: mostImproved.diff !== -Infinity ? mostImproved : null,
-    activeType: fallbackType,
+    subtopicRankings,
+    mostImproved: null,
+    activeType,
     radarData,
     vsCohortData,
-    preVsPostData,
+    preVsPostData: preVsPostData.length ? preVsPostData : null,
   };
 }
 

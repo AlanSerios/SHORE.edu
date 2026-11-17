@@ -9,6 +9,7 @@
     "lint": "oxlint",
     "test:calendar": "node scripts/verify-calendar.mjs",
     "test:attendance": "node scripts/verify-attendance-view.mjs",
+    "test:tracker": "node scripts/verify-tracker-blueprint.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

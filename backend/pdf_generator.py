@@ -3,7 +3,7 @@ import openpyxl
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-from reportlab.lib.pagesizes import letter
+from reportlab.lib.pagesizes import letter, A4
 from reportlab.lib.units import inch
 from reportlab.lib.colors import HexColor, white
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -129,6 +129,8 @@ def generate_pdf_bytes(excel_bytes, student_name, report_type='both'):
 
 def generate_pdf_from_data(data, student_name, report_type='both'):
     """Generate the report card PDF from parsed data and return it as a byte stream."""
+    if data.get('schemaVersion') == 2:
+        return generate_pretest_pdf_from_data(data, student_name)
     
     pre_raw = data['pre'].get(student_name, {})
     post_raw = data['post'].get(student_name, {})
@@ -348,3 +350,74 @@ def generate_pdf_from_data(data, student_name, report_type='both'):
     # Return raw bytes
     pdf_buffer.seek(0)
     return pdf_buffer.read()
+
+
+def generate_pretest_pdf_from_data(data, student_name):
+    """Create a compact report using the current printed 160-item pre-test sections."""
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+
+    record = (data.get('pre') or {}).get(student_name)
+    if not record:
+        raise ValueError(f"Student '{student_name}' has no published pre-test result.")
+
+    blueprint = [
+        ('Mathematics', 40, [('Arithmetic', 8), ('Algebra', 9), ('Geometry', 11), ('Trigonometry', 6), ('Statistics & Probability', 6)]),
+        ('Science', 40, [('Biology', 10), ('Chemistry', 10), ('Physics', 10), ('Earth & Space', 10)]),
+        ('Abstract Reasoning', 40, [('Pattern Series', 11), ('Spatial Reasoning', 10), ('Mechanical Reasoning', 10), ('Logical Reasoning', 9)]),
+        ('English Proficiency', 40, [('Grammar & Syntax', 12), ('Vocabulary', 10), ('Error Identification', 8), ('Reading Comprehension', 10)]),
+    ]
+    buffer = io.BytesIO()
+    page_width = A4[0] - inch
+    doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=0.5 * inch, rightMargin=0.5 * inch, topMargin=0.45 * inch, bottomMargin=0.45 * inch)
+    styles = getSampleStyleSheet()
+    title = ParagraphStyle('shoreTitle', parent=styles['Title'], fontName='Helvetica-Bold', fontSize=17, textColor=HexColor(MARINE), alignment=TA_LEFT, spaceAfter=4)
+    muted = ParagraphStyle('shoreMuted', parent=styles['Normal'], fontSize=9, textColor=HexColor(MUTED), spaceAfter=10)
+    section = ParagraphStyle('shoreSection', parent=styles['Heading2'], fontSize=11, textColor=HexColor(MARINE), spaceBefore=9, spaceAfter=5)
+    body = ParagraphStyle('shoreBody', parent=styles['Normal'], fontSize=9, textColor=HexColor(SLATE))
+
+    elements = [
+        Paragraph('SHORE SKWELA 5.0 · PRE-TEST REPORT', title),
+        Paragraph('Current 160-item diagnostic · scores are correct answers', muted),
+        Paragraph(str(student_name), ParagraphStyle('shoreStudent', parent=styles['Heading1'], fontSize=14, textColor=HexColor(SLATE), spaceAfter=8)),
+    ]
+    total = int(record.get('total') or 0)
+    total_max = int(record.get('totalMax') or 160)
+    percent = round(total / total_max * 100) if total_max else 0
+    elements.extend([Paragraph(f'<b>Total score:</b> {total} / {total_max} ({percent}%)', body), Spacer(1, 8)])
+
+    domain_rows = [['Domain', 'Score', 'Percent']]
+    for domain, maximum, _ in blueprint:
+        score = int((record.get('subjects') or {}).get(domain) or 0)
+        domain_rows.append([domain, f'{score} / {maximum}', f'{round(score / maximum * 100)}%'])
+    domain_table = Table(domain_rows, colWidths=[page_width * 0.56, page_width * 0.22, page_width * 0.22], repeatRows=1)
+    domain_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), HexColor(MARINE)), ('TEXTCOLOR', (0, 0), (-1, 0), white),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'), ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 0), (-1, -1), 9), ('TEXTCOLOR', (0, 1), (-1, -1), HexColor(SLATE)),
+        ('ALIGN', (1, 0), (-1, -1), 'CENTER'), ('GRID', (0, 0), (-1, -1), 0.35, HexColor('#D7E0E7')),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [white, HexColor(LIGHT_MARINE)]),
+        ('TOPPADDING', (0, 0), (-1, -1), 6), ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+    ]))
+    elements.extend([Paragraph('DOMAIN SCORES', section), domain_table])
+
+    for domain, _, topics in blueprint:
+        elements.append(Paragraph(domain, section))
+        topic_rows = [['Printed section', 'Score']]
+        for topic, maximum in topics:
+            entry = ((record.get('subtopics') or {}).get(domain) or {}).get(topic) or {}
+            score = int(entry.get('score') or 0)
+            topic_rows.append([topic, f'{score} / {maximum}'])
+        topic_table = Table(topic_rows, colWidths=[page_width * 0.72, page_width * 0.28], repeatRows=1)
+        topic_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), HexColor(LIGHT_MARINE)),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'), ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 0), (-1, -1), 8.5), ('TEXTCOLOR', (0, 0), (-1, -1), HexColor(SLATE)),
+            ('ALIGN', (1, 0), (-1, -1), 'CENTER'), ('GRID', (0, 0), (-1, -1), 0.35, HexColor('#D7E0E7')),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [white, HexColor('#F7FAFC')]),
+            ('TOPPADDING', (0, 0), (-1, -1), 4), ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ]))
+        elements.append(topic_table)
+
+    doc.build(elements)
+    return buffer.getvalue()

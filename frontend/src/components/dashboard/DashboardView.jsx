@@ -1,27 +1,34 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useEffect, useMemo } from 'react';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import {
   Download, Loader2, LayoutDashboard, TrendingUp, Trophy, Target,
   AlertTriangle, Flame, RefreshCw, X, Upload, GraduationCap, ChevronDown,
   ArrowUpRight
 } from 'lucide-react';
 import {
-  Radar, RadarChart, PolarGrid, PolarAngleAxis,
+  Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer,
 } from 'recharts';
 import { cn } from '../../utils';
-import { AnimatedNumber, CustomTooltip } from './DashboardPrimitives';
+import { CustomTooltip } from './DashboardPrimitives';
 import { LottieFire, getStreakTheme, StreakModalContent } from './StreakModal';
 import { TotalScoreContent, CohortRankContent, TopPerformerContent, PriorityFocusContent } from './ExpandedCardPanels';
 import { MATH_SUBJ, SCI_SUBJ } from '../../utils/analytics';
 import { PageHeader, PageShell } from '../ui/page';
+import { PRETEST_BLUEPRINT } from '../../utils/assessmentBlueprint';
 
 const REPORT_TYPES = [
   { id: 'pre', label: 'Pre-Test Only', shortLabel: 'Pre-Test' },
   { id: 'post', label: 'Post-Test Only', shortLabel: 'Post-Test' },
   { id: 'both', label: 'Progress Report', shortLabel: 'Progress' },
 ];
+
+const subjectTick = name => ({
+  Mathematics: 'Math',
+  'English Proficiency': 'English',
+  'Abstract Reasoning': 'Reasoning',
+})[name] || name;
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -59,7 +66,7 @@ function renderCustomRadarTick({ payload, x, y, cx, cy }) {
         fontWeight={600}
         fontFamily="Inter, sans-serif"
       >
-        {val}
+        {subjectTick(val)}
       </text>
     </g>
   );
@@ -69,7 +76,7 @@ export default function DashboardView({
   userRole, userName,
   students, stats,
   selectedStudent, setSelectedStudent,
-  reportType, setReportType,
+  reportType, setReportType, hasPretest,
   isGenerating, handleGenerate,
   studentStreak,
   expandedCard, handleSetExpandedCard,
@@ -77,7 +84,8 @@ export default function DashboardView({
   onUploadTracker, trackerFile,
 }) {
   const { color: streakCardColor, filter: streakCardFilter } = getStreakTheme(studentStreak);
-  const [domainFilter, setDomainFilter] = useState('all');
+  const reduceMotion = useReducedMotion();
+  const isAdmin = userRole === 'admin';
 
   const EXPANDED_TITLES = {
     total: 'Diagnostic Score Summary & Subject Benchmarks',
@@ -98,24 +106,11 @@ export default function DashboardView({
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [expandedCard, handleSetExpandedCard]);
 
-  // Filter rankings by domain
-  const filteredRankings = useMemo(() => {
-    if (!stats?.subjectRankings) return [];
-
-    if (domainFilter === 'math') return stats.subjectRankings.filter(s => MATH_SUBJ.includes(s.name));
-
-    if (domainFilter === 'science') return stats.subjectRankings.filter(s => SCI_SUBJ.includes(s.name));
-
-    if (domainFilter === 'humanities') return stats.subjectRankings.filter(s => !MATH_SUBJ.includes(s.name) && !SCI_SUBJ.includes(s.name));
-
-    return stats.subjectRankings;
-  }, [stats?.subjectRankings, domainFilter]);
-
   // Calculate cohort percentile tier
   const cohortPercentile = useMemo(() => {
     if (!stats?.rank || !stats?.totalStudents) return 100;
 
-    return Math.max(1, Math.round((1 - (stats.rank - 1) / stats.totalStudents) * 100));
+    return Math.max(1, Math.ceil(stats.rank / stats.totalStudents * 100));
   }, [stats?.rank, stats?.totalStudents]);
 
   // Average growth calculation for header insight badge
@@ -132,7 +127,7 @@ export default function DashboardView({
 
   // Cohort benchmark gap summary for header insight badge
   const benchmarkSummary = useMemo(() => {
-    if (!stats?.vsCohortData?.length) return null;
+    if (!isAdmin || !stats?.vsCohortData?.length) return null;
     const totalDelta = stats.vsCohortData.reduce((acc, cur) => acc + (cur.student - cur.cohort), 0);
     const avg = totalDelta / stats.vsCohortData.length;
 
@@ -140,7 +135,7 @@ export default function DashboardView({
       pts: Math.abs(avg).toFixed(1),
       isAbove: avg >= 0,
     };
-  }, [stats?.vsCohortData]);
+  }, [isAdmin, stats?.vsCohortData]);
 
   return (
     <>
@@ -217,12 +212,12 @@ export default function DashboardView({
               <button
                 type="button"
                 onClick={handleGenerate}
-                disabled={!selectedStudent || isGenerating}
+                disabled={!hasPretest || isGenerating}
                 aria-label="Export student performance report as PDF"
                 className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-card border border-border px-3.5 py-2 text-xs sm:text-sm font-semibold text-fg shadow-xs transition-all hover:bg-canvas hover:border-primary/40 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary active:scale-[0.98] shrink-0 touch-manipulation select-none"
               >
                 {isGenerating ? <Loader2 className="w-4 h-4 animate-spin text-primary" /> : <Download className="w-4 h-4 text-primary" />}
-                <span>Export PDF</span>
+                <span>{stats?.activeType === 'post' ? 'Export Pre-Test PDF' : 'Export PDF'}</span>
               </button>
 
               {userRole === 'admin' && onUploadTracker && (
@@ -244,10 +239,10 @@ export default function DashboardView({
         {students.length > 0 && (
           <section className="mt-5 mb-6 rounded-2xl border border-border bg-card p-3 sm:p-3.5 shadow-xs" aria-label="Dashboard controls">
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+              <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3">
                 {/* Student selector */}
                 {userRole === 'admin' || userRole === 'volunteer' ? (
-                  <div className="relative w-full sm:w-auto sm:min-w-[220px]">
+                  <div className="relative w-full sm:w-64 min-w-0">
                     <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted pointer-events-none">
                       <GraduationCap className="w-4 h-4 text-primary" />
                     </div>
@@ -272,7 +267,7 @@ export default function DashboardView({
                 )}
 
                 {/* Segmented report switcher */}
-                <div className="grid grid-cols-3 bg-canvas p-1 rounded-xl border border-border/80 shadow-inner w-full sm:w-auto" role="tablist" aria-label="Report mode">
+                <div className="grid grid-cols-3 bg-canvas p-1 rounded-xl border border-border/80 shadow-inner w-full md:w-auto" role="tablist" aria-label="Report mode">
                   {REPORT_TYPES.map(type => {
                     const isActive = reportType === type.id;
 
@@ -282,6 +277,7 @@ export default function DashboardView({
                         key={type.id}
                         role="tab"
                         aria-selected={isActive}
+                        aria-label={type.label}
                         onClick={() => setReportType(type.id)}
                         className={cn(
                           'relative px-3 sm:px-3.5 py-2 min-h-[38px] text-xs font-bold rounded-lg transition-colors text-center whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary touch-manipulation select-none active:scale-[0.98]',
@@ -292,7 +288,7 @@ export default function DashboardView({
                           <motion.div
                             layoutId="reportTypePill"
                             className="absolute inset-0 bg-card rounded-lg shadow-xs border border-border/60"
-                            transition={{ type: 'spring', stiffness: 420, damping: 32 }}
+                            transition={reduceMotion ? { duration: 0 } : { type: 'spring', stiffness: 420, damping: 32 }}
                           />
                         )}
                         <span className="relative z-10 hidden sm:inline">{type.label}</span>
@@ -302,6 +298,9 @@ export default function DashboardView({
                   })}
                 </div>
               </div>
+              {reportType === 'both' && stats && !stats.preVsPostData && (
+                <p className="text-xs text-muted">Progress needs both tests. Showing {stats.activeType === 'post' ? 'post-test' : 'pre-test'} scores.</p>
+              )}
             </div>
           </section>
         )}
@@ -353,13 +352,14 @@ export default function DashboardView({
               )}
             </div>
           ) : !stats ? (
-            <div className="flex-1 flex items-center justify-center py-16 text-muted font-medium">
-              No assessment records found for this student and report mode.
+            <div className="rounded-2xl border border-border bg-card p-8 text-center">
+              <h2 className="text-lg font-bold text-fg">{reportType === 'post' ? 'No post-test score published' : 'Your pre-test score is not published yet'}</h2>
+              <p className="mt-1 text-sm text-muted">Results appear here once SHORE publishes the scores.</p>
             </div>
           ) : (
-            <motion.div variants={containerVariants} initial="hidden" animate="show" className="space-y-6">
+            <motion.div variants={containerVariants} initial={reduceMotion ? false : "hidden"} animate="show" className="space-y-6">
               {/* 5-Card Metrics Family — Bespoke Executive Metric Tiles */}
-              <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-2.5 sm:gap-4">
+              <div className={cn("grid grid-cols-2 gap-2.5 sm:gap-4", isAdmin ? "lg:grid-cols-3 xl:grid-cols-5" : "lg:grid-cols-4")}>
                 {/* 1. Total Score */}
                 <motion.button
                   type="button"
@@ -384,9 +384,9 @@ export default function DashboardView({
                   <div className="my-1">
                     <div className="flex items-baseline gap-1.5">
                       <h3 className="text-2xl sm:text-3xl font-extrabold text-fg font-mono tracking-tight tabular-nums">
-                        <AnimatedNumber value={stats.total} />
+                        {stats.total}
                       </h3>
-                      <span className="text-xs font-semibold text-muted">pts</span>
+                      <span className="text-xs font-semibold text-muted">/ {stats.totalMax} pts</span>
                     </div>
                   </div>
 
@@ -432,7 +432,7 @@ export default function DashboardView({
                   <div className="my-1 relative z-10">
                     <div className="flex items-baseline gap-1.5">
                       <h3 className={cn('text-2xl sm:text-3xl font-extrabold font-mono tracking-tight tabular-nums', studentStreak === 0 ? 'text-fg' : '')} style={studentStreak > 0 ? { color: streakCardColor } : {}}>
-                        <AnimatedNumber value={studentStreak} />
+                        {studentStreak}
                       </h3>
                       <span className="text-xs font-semibold text-muted">
                         {studentStreak === 1 ? 'Day' : 'Days'}
@@ -461,6 +461,7 @@ export default function DashboardView({
                 </motion.button>
 
                 {/* 3. Cohort Rank */}
+                {isAdmin && (
                 <motion.button
                   type="button"
                   aria-haspopup="dialog"
@@ -484,7 +485,7 @@ export default function DashboardView({
                   <div className="my-1">
                     <div className="flex items-baseline gap-1.5">
                       <h3 className="text-2xl sm:text-3xl font-extrabold text-fg font-mono tracking-tight tabular-nums">
-                        #<AnimatedNumber value={stats.rank} />
+                        #{stats.rank}
                       </h3>
                       <span className="text-xs font-semibold text-muted">of {stats.totalStudents}</span>
                     </div>
@@ -492,10 +493,12 @@ export default function DashboardView({
 
                   <div className="flex items-center pt-1 border-t border-slate-100">
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200/70 truncate">
-                      {100 - cohortPercentile < 10 ? 'Top 10% Standing' : `Top ${cohortPercentile}% Standing`}
+                      {`Top ${cohortPercentile}% Standing`}
                     </span>
                   </div>
                 </motion.button>
+
+                )}
 
                 {/* 4. Strongest Domain */}
                 <motion.button
@@ -526,7 +529,7 @@ export default function DashboardView({
 
                   <div className="flex items-center pt-1 border-t border-slate-100">
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold font-mono bg-emerald-50 text-emerald-700 border border-emerald-200/70 truncate tabular-nums">
-                      {stats.strongest.score} pts ({stats.strongest.diff >= 0 ? `+${stats.strongest.diff}` : stats.strongest.diff} vs avg)
+                      {stats.strongest.score}/{stats.strongest.max} · {Math.round(stats.strongest.percent)}%
                     </span>
                   </div>
                 </motion.button>
@@ -537,7 +540,7 @@ export default function DashboardView({
                   aria-haspopup="dialog"
                   aria-label="Open priority focus details"
                   variants={itemVariants}
-                  className="col-span-2 xl:col-span-1 bg-white border border-slate-200/90 hover:border-amber-400/80 rounded-2xl p-3.5 sm:p-5 shadow-xs hover:shadow-md transition-all text-left flex flex-col justify-between group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary relative overflow-hidden active:scale-[0.98] min-h-[142px] sm:min-h-[148px] touch-manipulation select-none"
+                  className={cn("bg-white border border-slate-200/90 hover:border-amber-400/80 rounded-2xl p-3.5 sm:p-5 shadow-xs hover:shadow-md transition-all text-left flex flex-col justify-between group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary relative overflow-hidden active:scale-[0.98] min-h-[142px] sm:min-h-[148px] touch-manipulation select-none", isAdmin ? "col-span-2 xl:col-span-1" : "col-span-1")}
                   onClick={() => handleSetExpandedCard('priority')}
                 >
                   <div className="flex items-center justify-between gap-1 mb-2">
@@ -558,7 +561,7 @@ export default function DashboardView({
                       {stats.weaknesses[0]?.name || 'N/A'}
                     </h3>
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold font-mono bg-amber-50 text-amber-700 border border-amber-200/70 shrink-0 tabular-nums">
-                      {stats.weaknesses[0]?.score || 0} pts ({Math.abs(stats.weaknesses[0]?.diff || 0)} pts deficit)
+                      {stats.weaknesses[0] ? `${stats.weaknesses[0].score}/${stats.weaknesses[0].max} · ${Math.round(stats.weaknesses[0].percent)}%` : '—'}
                     </span>
                   </div>
 
@@ -571,7 +574,7 @@ export default function DashboardView({
 
                   <div className="hidden xl:flex items-center pt-1 border-t border-slate-100">
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold font-mono bg-amber-50 text-amber-700 border border-amber-200/70 truncate tabular-nums">
-                      {stats.weaknesses[0]?.score || 0} pts ({Math.abs(stats.weaknesses[0]?.diff || 0)} pts deficit)
+                      {stats.weaknesses[0] ? `${stats.weaknesses[0].score}/${stats.weaknesses[0].max} · ${Math.round(stats.weaknesses[0].percent)}%` : '—'}
                     </span>
                   </div>
                 </motion.button>
@@ -580,15 +583,15 @@ export default function DashboardView({
               {/* Charts Section — Bespoke Visual Data Visualization */}
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6">
                 {/* 1. Bar Chart: Performance vs Cohort Benchmark */}
-                <motion.div variants={itemVariants} className="lg:col-span-7 bg-white border border-slate-200/90 rounded-2xl p-5 sm:p-6 shadow-xs flex flex-col">
+                <motion.div variants={itemVariants} className="lg:col-span-7 bg-white border border-slate-200/90 rounded-2xl p-5 sm:p-6 shadow-xs flex min-w-0 flex-col">
                   {/* Chart Header with Integrated Metrics & Legend */}
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-3 border-b border-slate-100">
                     <div>
                       <h3 className="text-base font-extrabold text-fg tracking-tight">
-                        {stats.preVsPostData ? 'Pre-Test vs Post-Test Growth' : 'Performance vs Cohort Average'}
+                        {stats.preVsPostData ? 'Pre-Test vs Post-Test Growth' : isAdmin ? 'Performance vs Cohort Average' : 'Subject Performance'}
                       </h3>
                       <p className="text-xs text-muted mt-0.5">
-                        {stats.preVsPostData ? 'Point changes across all 11 subject areas' : 'Subject scores compared with the class cohort average'}
+                        {stats.preVsPostData ? 'Percent correct in each subject' : isAdmin ? 'Subject scores compared with the class cohort average' : 'Percent correct in each subject'}
                       </p>
                     </div>
 
@@ -596,7 +599,7 @@ export default function DashboardView({
                     <div className="flex flex-wrap items-center gap-2.5 self-start sm:self-auto">
                       {averageGrowth && (
                         <span className="inline-flex items-center gap-1 text-[11px] font-bold font-mono px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200/70 tabular-nums">
-                          Avg: +{averageGrowth.pts} pts
+                          Avg: {averageGrowth.isPositive ? "+" : ""}{averageGrowth.pts} pp
                         </span>
                       )}
                       {benchmarkSummary && !stats.preVsPostData && (
@@ -604,17 +607,19 @@ export default function DashboardView({
                           'inline-flex items-center gap-1 text-[11px] font-bold font-mono px-2 py-0.5 rounded-md border tabular-nums',
                           benchmarkSummary.isAbove ? 'bg-emerald-50 text-emerald-700 border-emerald-200/70' : 'bg-amber-50 text-amber-700 border-amber-200/70'
                         )}>
-                          Avg: {benchmarkSummary.isAbove ? `+${benchmarkSummary.pts}` : `-${benchmarkSummary.pts}`} pts
+                          Avg: {benchmarkSummary.isAbove ? `+${benchmarkSummary.pts}` : `-${benchmarkSummary.pts}`} pp
                         </span>
                       )}
 
                       <div className="flex items-center gap-2.5 bg-slate-50 border border-slate-200/60 px-2.5 py-1 rounded-lg text-xs">
+                        {(isAdmin || stats.preVsPostData) && (
                         <div className="flex items-center gap-1.5">
                           <span className="w-2.5 h-2.5 rounded-sm bg-slate-400" />
                           <span className="text-slate-600 font-medium text-[11px]">
                             {stats.preVsPostData ? 'Baseline' : 'Cohort'}
                           </span>
                         </div>
+                        )}
                         <div className="flex items-center gap-1.5">
                           <span className="w-2.5 h-2.5 rounded-sm bg-blue-600" />
                           <span className="text-slate-900 font-bold text-[11px]">
@@ -630,7 +635,7 @@ export default function DashboardView({
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart
                         data={stats.preVsPostData || stats.vsCohortData}
-                        margin={{ top: 10, right: 10, left: -24, bottom: 25 }}
+                        margin={{ top: 10, right: 12, left: 0, bottom: 16 }}
                       >
                         <defs>
                           <linearGradient id="barGradPost" x1="0" y1="0" x2="0" y2="1">
@@ -645,6 +650,7 @@ export default function DashboardView({
                         <CartesianGrid stroke="#F1F5F9" vertical={false} />
                         <XAxis
                           dataKey="subject"
+                          tickFormatter={subjectTick}
                           tick={{ fill: '#64748B', fontSize: 11, fontWeight: 500 }}
                           interval={0}
                           angle={-32}
@@ -656,6 +662,9 @@ export default function DashboardView({
                           tickLine={false}
                         />
                         <YAxis
+                          domain={[0, 100]}
+                          unit="%"
+                          width={40}
                           tick={{ fill: '#94A3B8', fontSize: 11, fontFamily: 'monospace' }}
                           axisLine={false}
                           tickLine={false}
@@ -663,13 +672,13 @@ export default function DashboardView({
                         <Tooltip content={<CustomTooltip />} cursor={{ fill: '#F8FAFC' }} />
                         {stats.preVsPostData ? (
                           <>
-                            <Bar dataKey="pre" name="Pre-Test Baseline" fill="url(#barGradPre)" radius={[5, 5, 0, 0]} maxBarSize={26} />
-                            <Bar dataKey="post" name="Post-Test Final" fill="url(#barGradPost)" radius={[5, 5, 0, 0]} maxBarSize={26} />
+                            <Bar isAnimationActive={!reduceMotion} dataKey="pre" name="Pre-Test Baseline" fill="url(#barGradPre)" radius={[5, 5, 0, 0]} maxBarSize={26} />
+                            <Bar isAnimationActive={!reduceMotion} dataKey="post" name="Post-Test Final" fill="url(#barGradPost)" radius={[5, 5, 0, 0]} maxBarSize={26} />
                           </>
                         ) : (
                           <>
-                            <Bar dataKey="cohort" name="Cohort Average" fill="url(#barGradPre)" radius={[5, 5, 0, 0]} maxBarSize={26} />
-                            <Bar dataKey="student" name={selectedStudent || 'Student'} fill="url(#barGradPost)" radius={[5, 5, 0, 0]} maxBarSize={26} />
+                            {isAdmin && <Bar isAnimationActive={!reduceMotion} dataKey="cohort" name="Cohort Average" fill="url(#barGradPre)" radius={[5, 5, 0, 0]} maxBarSize={26} />}
+                            <Bar isAnimationActive={!reduceMotion} dataKey="student" name={selectedStudent || 'Student'} fill="url(#barGradPost)" radius={[5, 5, 0, 0]} maxBarSize={26} />
                           </>
                         )}
                       </BarChart>
@@ -678,15 +687,15 @@ export default function DashboardView({
                 </motion.div>
 
                 {/* 2. Radar Chart: Domain Mastery Profile */}
-                <motion.div variants={itemVariants} className="lg:col-span-5 bg-white border border-slate-200/90 rounded-2xl p-5 sm:p-6 shadow-xs flex flex-col">
+                <motion.div variants={itemVariants} className="lg:col-span-5 bg-white border border-slate-200/90 rounded-2xl p-5 sm:p-6 shadow-xs flex min-w-0 flex-col">
                   <div className="flex items-center justify-between mb-2 pb-3 border-b border-slate-100">
                     <div>
                       <h3 className="text-base font-extrabold text-fg tracking-tight">Domain Breakdown</h3>
-                      <p className="text-xs text-muted mt-0.5">Score balance across 11 subject areas</p>
+                      <p className="text-xs text-muted mt-0.5">Percent correct across four subjects</p>
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-[11px] font-bold text-primary bg-primary/10 border border-primary/20 px-2.5 py-0.5 rounded-full">
-                        11 Domains
+                        4 Subjects
                       </span>
                     </div>
                   </div>
@@ -698,10 +707,12 @@ export default function DashboardView({
                         <span className="w-2.5 h-2.5 rounded-full bg-blue-600" />
                         <span className="text-fg font-bold text-[11px]">{selectedStudent || 'Student'}</span>
                       </div>
+                      {isAdmin && (
                       <div className="flex items-center gap-1.5">
                         <span className="w-2.5 h-2.5 rounded-full bg-slate-400" />
                         <span className="text-muted font-medium text-[11px]">Cohort Avg</span>
                       </div>
+                      )}
                     </div>
                     <div className="hidden sm:flex items-center gap-2 text-[10px] text-muted">
                       <span className="inline-flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-blue-500" />Math</span>
@@ -716,7 +727,7 @@ export default function DashboardView({
                       <RadarChart
                         cx="50%"
                         cy="50%"
-                        outerRadius="46%"
+                        outerRadius="48%"
                         margin={{ top: 8, right: 18, bottom: 8, left: 18 }}
                         data={stats.radarData}
                       >
@@ -726,12 +737,14 @@ export default function DashboardView({
                             <stop offset="100%" stopColor="#2563EB" stopOpacity={0.12} />
                           </radialGradient>
                         </defs>
+                        <PolarRadiusAxis domain={[0, 100]} tick={false} axisLine={false} />
                         <PolarGrid stroke="#E2E8F0" strokeDasharray="2 2" />
                         <PolarAngleAxis
                           dataKey="subject"
                           tick={renderCustomRadarTick}
                         />
                         <Radar
+                          isAnimationActive={!reduceMotion}
                           name={selectedStudent || 'Student'}
                           dataKey="score"
                           stroke="#2563EB"
@@ -739,7 +752,9 @@ export default function DashboardView({
                           fill="url(#radarStudentGrad)"
                           dot={{ r: 3, fill: '#2563EB', stroke: '#FFFFFF', strokeWidth: 1.5 }}
                         />
+                        {isAdmin && (
                         <Radar
+                          isAnimationActive={!reduceMotion}
                           name="Cohort Avg"
                           dataKey="cohort"
                           stroke="#94A3B8"
@@ -749,6 +764,7 @@ export default function DashboardView({
                           fillOpacity={0.04}
                           dot={{ r: 2.5, fill: '#94A3B8' }}
                         />
+                        )}
                         <Tooltip content={<CustomTooltip />} />
                       </RadarChart>
                     </ResponsiveContainer>
@@ -756,178 +772,38 @@ export default function DashboardView({
                 </motion.div>
               </div>
 
-              {/* Subject rankings table with domain filter */}
-              <motion.div variants={itemVariants} className="bg-white border border-slate-200/90 rounded-2xl shadow-xs overflow-hidden">
-                <div className="px-5 sm:px-6 py-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white">
-                  <div>
-                    <h3 className="text-base font-extrabold text-fg tracking-tight">Subject Performance Breakdown</h3>
-                    <p className="text-xs text-muted mt-0.5">Detailed domain scores, cohort benchmarks, and gap analysis</p>
-                  </div>
+                <details className="group rounded-xl border border-slate-200 bg-white">
+                  <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset">
+                    <span>Detailed section scores <span className="ml-1 font-normal text-slate-500">({PRETEST_BLUEPRINT.reduce((count, domain) => count + domain.subtopics.length, 0)})</span></span>
+                    <ChevronDown className="h-4 w-4 shrink-0 text-slate-500 transition-transform group-open:rotate-180" aria-hidden="true" />
+                  </summary>
+                  <div className="grid gap-3 border-t border-slate-200 p-3 sm:grid-cols-2">
+                    {PRETEST_BLUEPRINT.map(domain => (
+                      <section key={domain.name} aria-labelledby={`topics-${domain.name.replace(/\s+/g, '-')}`} className="overflow-hidden rounded-lg border border-slate-200">
+                        <header className="flex items-center justify-between gap-3 bg-slate-50 px-3 py-2.5">
+                          <h3 id={`topics-${domain.name.replace(/\s+/g, '-')}`} className="text-sm font-semibold text-slate-900">{domain.name}</h3>
+                          <span className="text-xs text-slate-500">{domain.maxScore} items</span>
+                        </header>
+                        <div className="divide-y divide-slate-100">
+                          {domain.subtopics.map(topic => {
+                            const score = stats.subtopicRankings.find(item => item.subject === domain.name && item.name === topic.name);
+                            const percent = score?.percent ?? 0;
 
-                  {/* Filter Pills */}
-                  <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-border/60 self-start sm:self-auto">
-                    {[
-                      { id: 'all', label: 'All (11)' },
-                      { id: 'math', label: 'Math (5)' },
-                      { id: 'science', label: 'Science (4)' },
-                      { id: 'humanities', label: 'Humanities (2)' },
-                    ].map(f => (
-                      <button
-                        key={f.id}
-                        type="button"
-                        onClick={() => setDomainFilter(f.id)}
-                        className={cn(
-                          'px-3 py-1 text-xs font-semibold rounded-lg transition-all',
-                          domainFilter === f.id
-                            ? 'bg-white text-primary font-bold shadow-xs border border-border/40'
-                            : 'text-muted hover:text-fg'
-                        )}
-                      >
-                        {f.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Desktop Table */}
-                <div className="hidden md:block overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="bg-slate-50/70 border-b border-border/70">
-                        <th className="px-5 py-3 text-[11px] font-bold text-muted uppercase tracking-wider w-12 text-center">#</th>
-                        <th className="px-5 py-3 text-[11px] font-bold text-muted uppercase tracking-wider">Subject & Domain</th>
-                        <th className="px-5 py-3 text-[11px] font-bold text-muted uppercase tracking-wider w-64">Diagnostic Score & Benchmark</th>
-                        <th className="px-5 py-3 text-[11px] font-bold text-muted uppercase tracking-wider text-center w-28">Cohort Avg</th>
-                        <th className="px-5 py-3 text-[11px] font-bold text-muted uppercase tracking-wider w-36">Benchmark Gap</th>
-                        <th className="px-5 py-3 text-[11px] font-bold text-muted uppercase tracking-wider text-right w-44">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border/60 bg-white">
-                      {filteredRankings.map((subj, idx) => {
-                        const domain = MATH_SUBJ.includes(subj.name) ? 'Math' : SCI_SUBJ.includes(subj.name) ? 'Science' : 'Humanities';
-
-                        const domainColor = domain === 'Math'
-                          ? 'bg-blue-50 text-blue-700 border-blue-200/70'
-                          : domain === 'Science'
-                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200/70'
-                            : 'bg-purple-50 text-purple-700 border-purple-200/70';
-
-                        const maxScale = Math.max(100, ...filteredRankings.map(s => Math.max(s.score, s.cohortAvg)));
-                        const scorePercent = Math.min(100, Math.round((subj.score / maxScale) * 100));
-                        const cohortPercent = Math.min(100, Math.round((subj.cohortAvg / maxScale) * 100));
-
-                        return (
-                          <tr key={subj.name} className="hover:bg-slate-50/80 transition-colors group">
-                            <td className="px-5 py-3.5 text-center">
-                              <span className="font-mono text-xs font-semibold text-muted/70">{idx + 1}</span>
-                            </td>
-                            <td className="px-5 py-3.5">
-                              <div className="flex items-center gap-2.5">
-                                <span className="font-bold text-sm text-fg tracking-tight">{subj.name}</span>
-                                <span className={cn('text-[10px] font-bold px-2 py-0.5 rounded border', domainColor)}>
-                                  {domain}
-                                </span>
-                              </div>
-                            </td>
-                            <td className="px-5 py-3.5">
-                              <div className="flex items-center gap-3">
-                                <span className="font-mono font-extrabold text-sm text-fg w-8 tabular-nums">{subj.score}</span>
-                                <div className="flex-1 max-w-[150px] bg-slate-100 rounded-full h-2 relative overflow-visible flex items-center">
-                                  <div
-                                    className="bg-gradient-to-r from-blue-500 to-blue-600 h-full rounded-full transition-all duration-500"
-                                    style={{ width: `${scorePercent}%` }}
-                                  />
-                                  {/* Cohort average vertical tick mark */}
-                                  <div
-                                    className="absolute top-1/2 -translate-y-1/2 w-1 h-3 bg-slate-500 rounded-full shadow-xs pointer-events-none"
-                                    style={{ left: `${cohortPercent}%` }}
-                                    title={`Cohort Avg: ${subj.cohortAvg} pts`}
-                                  />
+                            return (
+                              <div key={topic.name} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 px-3 py-2.5 sm:grid-cols-[minmax(0,1fr)_minmax(80px,1fr)_auto]">
+                                <span className="text-sm text-slate-800">{topic.name}</span>
+                                <span className="font-mono text-xs font-semibold tabular-nums text-slate-700 sm:col-start-3 sm:row-start-1">{score ? `${score.score}/${topic.maxScore}` : '—'}</span>
+                                <div className="col-span-2 h-1.5 overflow-hidden rounded-full bg-slate-100 sm:col-span-1 sm:col-start-2 sm:row-start-1" role="img" aria-label={`${topic.name}: ${Math.round(percent)} percent`}>
+                                  <div className="h-full rounded-full bg-slate-500 motion-safe:transition-[width] motion-safe:duration-200" style={{ width: `${Math.min(100, percent)}%` }} />
                                 </div>
                               </div>
-                            </td>
-                            <td className="px-5 py-3.5 text-center">
-                              <span className="font-mono font-semibold text-sm text-slate-600 tabular-nums">
-                                {subj.cohortAvg} pts
-                              </span>
-                            </td>
-                            <td className="px-5 py-3.5">
-                              <span className={cn(
-                                'inline-flex items-center gap-1 font-mono font-bold text-xs px-2 py-0.5 rounded border tabular-nums',
-                                subj.diff >= 0
-                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200/70'
-                                  : 'bg-rose-50 text-rose-700 border-rose-200/70'
-                              )}>
-                                {subj.diff >= 0 ? `+${subj.diff}` : subj.diff} pts
-                              </span>
-                            </td>
-                            <td className="px-5 py-3.5 text-right">
-                              {subj.diff >= 0 ? (
-                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/70">
-                                  <TrendingUp className="w-3.5 h-3.5 text-emerald-600" /> Above Benchmark
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200/70">
-                                  <AlertTriangle className="w-3.5 h-3.5 text-amber-600" /> Needs Attention
-                                </span>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Mobile Cards */}
-                <div className="block md:hidden divide-y divide-border/60 bg-white">
-                  {filteredRankings.map((subj, idx) => {
-                    const domain = MATH_SUBJ.includes(subj.name) ? 'Math' : SCI_SUBJ.includes(subj.name) ? 'Science' : 'Humanities';
-                    const domainColor = domain === 'Math' ? 'bg-blue-50 text-blue-700 border-blue-200/60' : domain === 'Science' ? 'bg-emerald-50 text-emerald-700 border-emerald-200/60' : 'bg-purple-50 text-purple-700 border-purple-200/60';
-
-                    return (
-                      <div key={subj.name} className="p-4 flex flex-col gap-3">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <span className="w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center text-[11px] font-mono font-bold text-muted">
-                              {idx + 1}
-                            </span>
-                            <span className="font-bold text-fg text-sm">{subj.name}</span>
-                            <span className={cn('text-[9px] font-bold px-1.5 py-0.2 rounded border', domainColor)}>
-                              {domain}
-                            </span>
-                          </div>
-                          {subj.diff >= 0 ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/60">
-                              <TrendingUp className="w-3 h-3 text-emerald-600" /> Above
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200/60">
-                              <AlertTriangle className="w-3 h-3 text-amber-600" /> Below
-                            </span>
-                          )}
+                            );
+                          })}
                         </div>
-                        <div className="grid grid-cols-3 gap-2 bg-slate-50 p-2.5 rounded-xl text-center border border-slate-200/60">
-                          <div>
-                            <p className="text-[10px] text-muted font-bold uppercase mb-0.5">Score</p>
-                            <p className="font-mono font-bold text-fg text-sm tabular-nums">{subj.score}</p>
-                          </div>
-                          <div>
-                            <p className="text-[10px] text-muted font-bold uppercase mb-0.5">Cohort Avg</p>
-                            <p className="font-mono font-medium text-muted text-sm tabular-nums">{subj.cohortAvg}</p>
-                          </div>
-                          <div>
-                            <p className="text-[10px] text-muted font-bold uppercase mb-0.5">Gap</p>
-                            <p className={cn('font-mono font-bold text-sm tabular-nums', subj.diff >= 0 ? 'text-emerald-700' : 'text-rose-700')}>
-                              {subj.diff >= 0 ? `+${subj.diff}` : subj.diff}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </motion.div>
+                      </section>
+                    ))}
+                  </div>
+                </details>
             </motion.div>
           )}
         </div>

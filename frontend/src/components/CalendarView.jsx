@@ -93,12 +93,15 @@ function AgendaEvent({ event, onOpen }) {
       <span className={cn('mt-1 h-9 w-1 shrink-0 rounded-full', type.dot)} />
       <div className="min-w-0 flex-1">
         <div className="flex items-start justify-between gap-3">
-          <div><p className="font-bold leading-snug text-fg group-hover:text-primary">{event.title}</p><p className="mt-1 flex items-center gap-1.5 text-xs font-medium text-muted"><Clock3 className="h-3.5 w-3.5" /> {formatEventTime(event)}</p></div>
+          <div className="min-w-0">
+            <p className="font-bold leading-snug text-fg [overflow-wrap:anywhere] group-hover:text-primary">{event.title}</p>
+            <p className="mt-1 flex items-center gap-1.5 text-xs font-medium text-muted"><Clock3 className="h-3.5 w-3.5 shrink-0" /> {formatEventTime(event)}</p>
+          </div>
           <span className={cn('shrink-0 rounded-lg border px-2 py-1 text-[11px] font-bold', type.chip)}>{type.label}</span>
         </div>
         <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
             <span className="inline-flex items-center gap-1"><Users className="h-3.5 w-3.5" />{audience}</span>
-            {event.location && <span className="inline-flex min-w-0 items-center gap-1"><MapPin className="h-3.5 w-3.5 shrink-0" /><span className="truncate">{event.location}</span></span>}
+            {event.location && <span className="inline-flex min-w-0 max-w-full items-center gap-1"><MapPin className="h-3.5 w-3.5 shrink-0" /><span className="truncate">{event.location}</span></span>}
             {event.recurrence && <span className="inline-flex items-center gap-1 capitalize"><Repeat2 className="h-3.5 w-3.5" />{event.recurrence.frequency}</span>}
             {isEventOverdue(event) && <span className="font-bold text-rose-600">Overdue</span>}
             {event.completedAt && <span className="inline-flex items-center gap-1 font-bold text-emerald-700"><Check className="h-3.5 w-3.5" />Completed</span>}
@@ -303,7 +306,7 @@ function AgendaView({ events, onOpen, filtered, onReset }) {
 
   if (!dates.length) return <EmptySchedule filtered={filtered} onReset={onReset} />;
 
-  return <div className="space-y-7 pb-4">{dates.map(date => <section key={date} className="grid gap-3 sm:grid-cols-[150px_minmax(0,1fr)]" aria-labelledby={`agenda-${date}`}><div><p className="text-xs font-bold uppercase tracking-wider text-primary">{isSameDay(parseISO(date), new Date()) ? 'Today' : format(parseISO(date), 'EEEE')}</p><h3 id={`agenda-${date}`} className="mt-0.5 font-bold text-fg">{format(parseISO(date), 'MMMM d, yyyy')}</h3></div><div className="space-y-2">{groups[date].map(event => <AgendaEvent key={event.occurrenceId} event={event} onOpen={onOpen} />)}</div></section>)}</div>;
+  return <div className="space-y-7 pb-4">{dates.map(date => <section key={date} className="grid grid-cols-1 gap-3 sm:grid-cols-[150px_minmax(0,1fr)]" aria-labelledby={`agenda-${date}`}><div><p className="text-xs font-bold uppercase tracking-wider text-primary">{isSameDay(parseISO(date), new Date()) ? 'Today' : format(parseISO(date), 'EEEE')}</p><h3 id={`agenda-${date}`} className="mt-0.5 font-bold text-fg">{format(parseISO(date), 'MMMM d, yyyy')}</h3></div><div className="space-y-2">{groups[date].map(event => <AgendaEvent key={event.occurrenceId} event={event} onOpen={onOpen} />)}</div></section>)}</div>;
 }
 
 function UpcomingRail({ events, onOpen }) {

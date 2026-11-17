@@ -4,7 +4,8 @@ import { toast } from 'sonner';
 import { requestFirebaseNotificationPermission } from './firebase';
 import { downloadBlob } from './utils';
 import { loadStoredUser, saveUser, clearUser } from './utils/userStorage';
-import { computeStats, computeStreak, playSound, ALL_SUBJ } from './utils/analytics';
+import { computeStats, computeStreak, playSound } from './utils/analytics';
+import { createPretestTemplate, parsePretestWorkbook, PRETEST_BLUEPRINT_ID } from './utils/assessmentBlueprint';
 
 // Views
 import LoginPage from './components/LoginPage';
@@ -43,6 +44,7 @@ const DashboardView = React.lazy(() => import('./components/dashboard/DashboardV
 
 import PWAInstallBanner from './components/PWAInstallBanner';
 import OfflineIndicator from './components/OfflineIndicator';
+import TrackerImportDialog from './components/TrackerImportDialog';
 
 import { ACADEMIC_TOOL_IDS, ADMIN_TOOL_IDS } from './utils/navConfig';
 
@@ -67,7 +69,18 @@ export const preloadView = (view) => {
 
 export default function App() {
   // ── Data state ──────────────────────────────────────────────
-  const [file, setFile] = useState(null);
+  const [trackerFilename, setTrackerFilename] = useState('');
+  const [trackerRevision, setTrackerRevision] = useState('');
+  const [trackerLoadState, setTrackerLoadState] = useState('idle');
+  const trackerWriteVersion = useRef(0);
+  const [legacyTrackerAvailable, setLegacyTrackerAvailable] = useState(false);
+  const [trackerImportOpen, setTrackerImportOpen] = useState(false);
+  const [trackerImportDraft, setTrackerImportDraft] = useState(null);
+  const [trackerImportBusy, setTrackerImportBusy] = useState(false);
+  const [trackerHistory, setTrackerHistory] = useState([]);
+  const [trackerHistoryLoading, setTrackerHistoryLoading] = useState(false);
+  const [trackerHistoryError, setTrackerHistoryError] = useState('');
+  const [trackerRestoreBusy, setTrackerRestoreBusy] = useState(false);
   const [students, setStudents] = useState([]);
   const [parsedData, setParsedData] = useState({ pre: {}, post: {} });
   const [globalAttendance, setGlobalAttendance] = useState([]);
@@ -98,6 +111,28 @@ export default function App() {
   const [expandedCard, setExpandedCard] = useState(null);
 
   const fileInputRef = useRef(null);
+  const authSessionVersionRef = useRef(0);
+
+  const clearAccountScopedData = useCallback((nextSelectedStudent = '', nextLoadState = 'idle') => {
+    setTrackerFilename('');
+    setTrackerRevision('');
+    setTrackerLoadState(nextLoadState);
+    setLegacyTrackerAvailable(false);
+    setTrackerImportOpen(false);
+    setTrackerImportDraft(null);
+    setTrackerHistory([]);
+    setTrackerHistoryError('');
+    setStudents([]);
+    setParsedData({ pre: {}, post: {} });
+    setGlobalAttendance([]);
+    setGlobalUsers([]);
+    setSelectedStudent(nextSelectedStudent);
+    setReportType('both');
+    setDataLoadState(nextLoadState);
+    setDataLoadError('');
+    setStatus(null);
+    setExpandedCard(null);
+  }, []);
 
   const setCurrentView = (view) => {
     if (!view || view === currentView) return;
@@ -115,6 +150,8 @@ export default function App() {
 
   // ── Auth handlers ────────────────────────────────────────────
   const handleLogin = (user, token) => {
+    authSessionVersionRef.current += 1;
+    clearAccountScopedData(user.role === 'student' ? (user.name || '') : '', 'loading');
     setIsAuthenticated(true);
     setUserEmail(user.email);
     setUserRole(user.role);
@@ -130,14 +167,17 @@ export default function App() {
   };
 
   const handleLogout = useCallback(() => {
+    authSessionVersionRef.current += 1;
+    clearAccountScopedData();
     setIsAuthenticated(false);
     setUserRole(null);
     setUserEmail('');
+    setUserName('');
     setProfilePicture(null);
     setEquippedBorder(null);
     setCurrentView('dashboard');
     clearUser();
-  }, []);
+  }, [clearAccountScopedData]);
 
   // Auto-logout and notify on session expiry or token revocation
   useEffect(() => {
@@ -284,9 +324,24 @@ export default function App() {
 
   // Load tracker + attendance + users on auth. Keep failures visible instead of
   // presenting a network problem as an empty dashboard.
+  const applyTrackerData = useCallback((data) => {
+    setParsedData(data);
+    setTrackerLoadState('success');
+    setTrackerRevision(data.revision ?? '');
+    setLegacyTrackerAvailable(Boolean(data.legacyDataAvailable));
+    setTrackerFilename(data.metadata?.filename || '');
+
+    const list = [...new Set([...Object.keys(data.pre), ...Object.keys(data.post)])].sort();
+    setStudents(list);
+    setSelectedStudent(prev => list.includes(prev) ? prev : (list[0] || (userRole === 'student' ? userName : '') || ''));
+  }, [userRole, userName]);
+
   const loadCoreData = useCallback(async () => {
     if (!isAuthenticated) return;
+    const sessionVersion = authSessionVersionRef.current;
+    const writeVersion = trackerWriteVersion.current;
     setDataLoadState('loading');
+    setTrackerLoadState('loading');
     setDataLoadError('');
 
     const fetchJson = async (url) => {
@@ -305,15 +360,13 @@ export default function App() {
       fetchJson(`/api/users?t=${timestamp}`),
     ]);
 
-    if (trackerResult.status === 'fulfilled') {
-      const data = trackerResult.value;
+    if (sessionVersion !== authSessionVersionRef.current) return;
 
-      if (data?.pre && data?.post) {
-        setParsedData(data);
-        const list = Array.from(new Set([...Object.keys(data.pre), ...Object.keys(data.post)])).sort();
-        setStudents(list);
-        setSelectedStudent(prev => prev || list[0] || '');
-      }
+    if (writeVersion === trackerWriteVersion.current) {
+      const data = trackerResult.status === 'fulfilled' ? trackerResult.value : null;
+
+      if (data?.pre && data?.post) applyTrackerData(data);
+      else setTrackerLoadState('error');
     }
 
     if (attendanceResult.status === 'fulfilled') setGlobalAttendance(attendanceResult.value.attendance || []);
@@ -333,7 +386,7 @@ export default function App() {
     }
 
     setDataLoadState('success');
-  }, [isAuthenticated]);
+  }, [isAuthenticated, applyTrackerData]);
 
   useEffect(() => {
     loadCoreData();
@@ -349,8 +402,8 @@ export default function App() {
 
   // ── Derived values ───────────────────────────────────────────
   const stats = useMemo(
-    () => computeStats(selectedStudent, reportType, parsedData),
-    [selectedStudent, reportType, parsedData],
+    () => computeStats(selectedStudent, reportType, parsedData, userRole),
+    [selectedStudent, reportType, parsedData, userRole],
   );
 
   const studentStreak = useMemo(
@@ -359,57 +412,157 @@ export default function App() {
   );
 
   // ── File upload (Excel) ──────────────────────────────────────
-  const handleFileUpload = async (e) => {
-    const uploadedFile = e?.target?.files ? e.target.files[0] : e;
+  const handleFileUpload = async (event) => {
+    const uploadedFile = event?.target?.files?.[0];
 
-    if (!uploadedFile) return null;
-    setFile(uploadedFile);
-    setStatus(null);
-    setSelectedStudent('');
-    setParsedData({ pre: {}, post: {} });
+    if (!uploadedFile) return;
+    const sessionVersion = authSessionVersionRef.current;
+    setTrackerImportOpen(true);
+    setTrackerImportDraft({ fileName: uploadedFile.name, rows: [], errors: [], sheetName: '', loading: true });
 
     try {
       const XLSX = await import('xlsx');
-      const data = await uploadedFile.arrayBuffer();
-      const workbook = XLSX.read(data);
-      const studentNames = new Set();
-      const newParsedData = { pre: {}, post: {} };
-      ['Pre-Test Data', 'Post-Test Data'].forEach(sheetName => {
-        const sheetKey = sheetName.includes('Pre') ? 'pre' : 'post';
+      const workbook = XLSX.read(await uploadedFile.arrayBuffer(), { cellDates: false });
+      const parsed = parsePretestWorkbook(workbook, XLSX);
 
-        if (!workbook.Sheets[sheetName]) return;
-        const json = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1 });
-
-        for (let i = 1; i < json.length; i++) {
-          const row = json[i];
-
-          if (row?.[3]) {
-            const name = row[3];
-            studentNames.add(name);
-            const studentData = { total: parseFloat(row[4]) || 0, subjects: {} };
-            ALL_SUBJ.forEach((subj, idx) => { studentData.subjects[subj] = parseFloat(row[5 + idx]) || 0; });
-            newParsedData[sheetKey][name] = studentData;
-          }
-        }
+      if (sessionVersion !== authSessionVersionRef.current) return;
+      setTrackerImportDraft({ ...parsed, fileName: uploadedFile.name, loading: false });
+      setStatus(null);
+    } catch (error) {
+      if (sessionVersion !== authSessionVersionRef.current) return;
+      console.error('Failed to read pre-test workbook', error);
+      setTrackerImportDraft({
+        fileName: uploadedFile.name,
+        rows: [],
+        loading: false,
+        errors: [{ row: 0, message: 'This file could not be read. Save it as an .xlsx workbook and try again.' }],
       });
-      const sortedStudents = Array.from(studentNames).sort();
-      setStudents(sortedStudents);
-      setParsedData(newParsedData);
-      await Promise.all([
-        fetch('/api/allowed_students', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ students: sortedStudents }) }).catch(console.error),
-        fetch('/api/tracker_data', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newParsedData) }).catch(console.error),
-      ]);
-      const msg = sortedStudents.length > 0 ? `Loaded tracker with ${sortedStudents.length} students.` : 'No student names found in tracker file.';
-      setStatus({ type: 'success', msg });
-      toast.success(msg);
+    } finally {
+      if (event?.target) event.target.value = '';
+    }
+  };
 
-      return { success: true, count: sortedStudents.length, students: sortedStudents };
-    } catch (err) {
-      console.error(err);
-      setStatus({ type: 'error', msg: 'Failed to parse Excel tracker file.' });
-      toast.error('Failed to parse Excel tracker file.');
+  const downloadTrackerTemplate = async () => {
+    const XLSX = await import('xlsx');
+    const workbook = createPretestTemplate(XLSX);
+    XLSX.writeFile(workbook, 'SHORE_PreTest_160_Scores.xlsx');
+  };
 
-      return { success: false, error: err };
+  const loadTrackerHistory = async () => {
+    const sessionVersion = authSessionVersionRef.current;
+    setTrackerHistoryLoading(true);
+    setTrackerHistoryError('');
+
+    try {
+      const response = await fetch('/api/tracker_data/history');
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok) throw new Error(result.error || 'Could not load tracker history.');
+
+      if (sessionVersion !== authSessionVersionRef.current) return;
+
+      setTrackerHistory(result.history || []);
+      setTrackerRevision(result.revision || trackerRevision);
+    } catch (error) {
+      if (sessionVersion !== authSessionVersionRef.current) return;
+      setTrackerHistoryError(error.message || 'Could not load tracker history.');
+    } finally {
+      setTrackerHistoryLoading(false);
+    }
+  };
+
+  const restoreTrackerVersion = async (backupId) => {
+    const sessionVersion = authSessionVersionRef.current;
+    setTrackerRestoreBusy(true);
+
+    try {
+      const response = await fetch('/api/tracker_data/restore', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ backupId, revision: trackerRevision }),
+      });
+
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok) throw new Error(result.error || 'Could not restore this tracker version.');
+
+      if (sessionVersion !== authSessionVersionRef.current) return false;
+
+      if (!result.success || !result.tracker?.pre || !result.tracker?.post) {
+        throw new Error('The server did not confirm which version was restored. Refresh saved versions before retrying.');
+      }
+
+      trackerWriteVersion.current += 1;
+      applyTrackerData(result.tracker);
+      setTrackerHistory([]);
+
+      const message = result.legacyFormat
+        ? 'Older tracker restored. Its scores use a different test structure and are kept outside the current diagnostic reports.'
+        : `Restored ${result.diagnosticCount} pre-test results to Dashboard and Reports.`;
+
+      setStatus({ type: 'success', msg: message });
+      toast.success(message);
+
+      return true;
+    } catch (error) {
+      if (sessionVersion !== authSessionVersionRef.current) return false;
+      setStatus({ type: 'error', msg: error.message || 'Could not restore tracker history.' });
+      toast.error(error.message || 'Could not restore tracker history.');
+
+      return false;
+    } finally {
+      setTrackerRestoreBusy(false);
+    }
+  };
+
+  const commitTrackerImport = async ({ mode, confirmReplace }) => {
+    if (!trackerImportDraft?.rows?.length || trackerImportDraft.errors?.length) return;
+    const sessionVersion = authSessionVersionRef.current;
+    setTrackerImportBusy(true);
+
+    try {
+      const response = await fetch('/api/tracker_data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          assessmentId: PRETEST_BLUEPRINT_ID,
+          revision: trackerRevision,
+          filename: trackerImportDraft.fileName,
+          mode,
+          confirmReplace,
+          rows: trackerImportDraft.rows,
+        }),
+      });
+
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok) throw new Error(result.error || `Import failed (${response.status}).`);
+
+      if (sessionVersion !== authSessionVersionRef.current) return;
+
+      const tracker = result.tracker;
+
+      if (!result.success || !tracker?.pre || !tracker?.post || tracker.revision !== result.revision) {
+        throw new Error('The server did not confirm which results were saved. Refresh the page before retrying.');
+      }
+
+      trackerWriteVersion.current += 1;
+      applyTrackerData(tracker);
+      setTrackerImportOpen(false);
+      setTrackerImportDraft(null);
+
+      setCurrentView('reports');
+
+      const successMessage = `Published ${result.importedCount} pre-test results to Dashboard and Reports.`;
+      setStatus({ type: 'success', msg: successMessage });
+      toast.success(successMessage);
+    } catch (error) {
+      if (sessionVersion !== authSessionVersionRef.current) return;
+      console.error('Tracker import did not complete', error);
+      setStatus({ type: 'error', msg: error.message || 'Tracker import failed. Your reviewed file is still available to retry.' });
+      toast.error(error.message || 'Tracker import failed. Your reviewed file is still available to retry.');
+    } finally {
+      setTrackerImportBusy(false);
     }
   };
 
@@ -420,20 +573,14 @@ export default function App() {
     setStatus({ type: 'info', msg: 'Generating PDF...' });
 
     try {
-      let response;
-
-      if (file) {
-        const formData = new FormData();
-        formData.append('excel_file', file);
-        formData.append('student_name', selectedStudent);
-        formData.append('report_type', reportType);
-        response = await fetch('/api/generate-pdf', { method: 'POST', body: formData });
-      } else {
-        response = await fetch('/api/generate-pdf', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ student_name: selectedStudent, report_type: reportType }) });
-      }
+      const response = await fetch('/api/generate-pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ student_name: selectedStudent, report_type: 'pre' }),
+      });
 
       if (!response.ok) throw new Error(`Server error ${response.status}`);
-      let filename = `SHORE_${reportType}_${selectedStudent.replace(/\s+/g, '_')}.pdf`;
+      let filename = `SHORE_Pre-Test_${selectedStudent.replace(/\s+/g, '_')}.pdf`;
       const disposition = response.headers.get('Content-Disposition');
 
       if (disposition?.includes('attachment')) {
@@ -465,14 +612,17 @@ export default function App() {
             students={students} stats={stats}
             selectedStudent={selectedStudent} setSelectedStudent={setSelectedStudent}
             reportType={reportType} setReportType={setReportType}
+            hasPretest={Boolean(parsedData.pre?.[selectedStudent])}
             isGenerating={isGenerating} handleGenerate={handleGenerate}
             studentStreak={studentStreak}
             expandedCard={expandedCard} handleSetExpandedCard={handleSetExpandedCard}
             handleLogout={handleLogout}
             dataLoadState={dataLoadState} dataLoadError={dataLoadError}
             onRetryData={loadCoreData}
-            onUploadTracker={() => fileInputRef.current?.click()}
-            trackerFile={file}
+            onUploadTracker={() => setTrackerImportOpen(true)}
+            trackerFile={trackerFilename}
+            legacyTrackerAvailable={legacyTrackerAvailable}
+            onViewReports={userRole === 'admin' ? () => setCurrentView('reports') : undefined}
           />
         );
       case 'calendar':
@@ -484,7 +634,7 @@ export default function App() {
       case 'accounts':
         return userRole === 'admin' ? <AccountsView /> : null;
       case 'manageclass':
-        return userRole === 'admin' ? <ManageClassView onUploadTracker={handleFileUpload} trackerFile={file} /> : null;
+        return userRole === 'admin' ? <ManageClassView onUploadTracker={() => setTrackerImportOpen(true)} trackerFile={trackerFilename} /> : null;
       case 'manageteam':
         return userRole === 'admin' ? <ManageTeamView /> : null;
       case 'attendance':
@@ -498,8 +648,17 @@ export default function App() {
         return <RecitationsAdminView />;
       case 'tickets':
         return <TicketsView userEmail={userEmail} userName={userName} userRole={userRole} />;
+      case 'reports':
+        return userRole === 'admin' ? (
+          <ReportsView
+            parsedData={parsedData}
+            trackerLoadState={trackerLoadState}
+            onRetry={loadCoreData}
+            onUploadTracker={() => setTrackerImportOpen(true)}
+          />
+        ) : null;
       default:
-        return <ReportsView parsedData={parsedData} students={students} />;
+        return null;
     }
   };
 
@@ -527,7 +686,7 @@ export default function App() {
               classToolsOpen={classToolsOpen} setClassToolsOpen={setClassToolsOpen}
               adminToolsOpen={adminToolsOpen} setAdminToolsOpen={setAdminToolsOpen}
               isProfileMenuOpen={isProfileMenuOpen} setIsProfileMenuOpen={setIsProfileMenuOpen}
-              file={file} fileInputRef={fileInputRef} handleFileUpload={handleFileUpload}
+              file={trackerFilename} fileInputRef={fileInputRef}
               status={status} handleLogout={handleLogout}
             />
 
@@ -564,6 +723,32 @@ export default function App() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".xlsx,.xls"
+        onChange={handleFileUpload}
+        className="hidden"
+        aria-label="Choose pre-test score workbook"
+      />
+
+      <TrackerImportDialog
+        open={isAuthenticated && userRole === 'admin' && trackerImportOpen}
+        draft={trackerImportDraft}
+        currentNames={Object.keys(parsedData.pre || {})}
+        busy={trackerImportBusy}
+        history={trackerHistory}
+        historyLoading={trackerHistoryLoading}
+        historyError={trackerHistoryError}
+        restoreBusy={trackerRestoreBusy}
+        onClose={() => { if (!trackerImportBusy && !trackerRestoreBusy) setTrackerImportOpen(false); }}
+        onChooseFile={() => fileInputRef.current?.click()}
+        onDownloadTemplate={downloadTrackerTemplate}
+        onImport={commitTrackerImport}
+        onLoadHistory={loadTrackerHistory}
+        onRestore={restoreTrackerVersion}
+      />
 
       {isAuthenticated && (
         <MobileBottomNav

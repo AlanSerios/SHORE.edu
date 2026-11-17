@@ -1,0 +1,64 @@
+name: Daily scholarship and admissions sync
+
+on:
+  schedule:
+    # 1:33 AM Philippines time, outside the top of the hour.
+    - cron: '33 17 * * *'
+
+permissions:
+  id-token: write
+
+concurrency:
+  group: scholarship-auto-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Request a short-lived GitHub identity token
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import sys
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+
+          audience = 'shore-scholarship-sync'
+          oidc_url = os.environ['ACTIONS_ID_TOKEN_REQUEST_URL']
+          separator = '&' if '?' in oidc_url else '?'
+          token_url = oidc_url + separator + urllib.parse.urlencode({'audience': audience})
+          token_request = urllib.request.Request(
+              token_url,
+              headers={'Authorization': 'Bearer ' + os.environ['ACTIONS_ID_TOKEN_REQUEST_TOKEN']},
+          )
+          with urllib.request.urlopen(token_request, timeout=15) as response:
+              identity_token = json.loads(response.read())['value']
+
+          sync_request = urllib.request.Request(
+              'https://shore-backend.onrender.com/api/scholarships/auto-sync',
+              data=b'{}',
+              headers={
+                  'Authorization': 'Bearer ' + identity_token,
+                  'Content-Type': 'application/json',
+              },
+              method='POST',
+          )
+          try:
+              with urllib.request.urlopen(sync_request, timeout=90) as response:
+                  result = json.loads(response.read())
+          except urllib.error.HTTPError as error:
+              detail = error.read().decode('utf-8', errors='replace')
+              print('The backend rejected the scheduled update:', detail)
+              sys.exit(1)
+
+          print(
+              'Daily update completed: '
+              + str(result.get('found', 0)) + ' notices, '
+              + str(result.get('added', 0)) + ' added, '
+              + str(result.get('updated', 0)) + ' updated.'
+          )
+          PY

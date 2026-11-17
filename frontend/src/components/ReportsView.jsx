@@ -1,30 +1,28 @@
 import React, { useMemo, useState } from 'react';
-import { motion } from 'framer-motion';
-import { Trophy, TrendingUp, AlertTriangle, Target, Medal, Star, BookOpen, Brain, FlaskConical } from 'lucide-react';
+import { motion, useReducedMotion } from 'framer-motion';
+import { FileSpreadsheet, Loader2, Trophy, TrendingUp, AlertTriangle, Target, Medal, Star, BookOpen, Brain, FlaskConical } from 'lucide-react';
 import { cn } from '../utils';
-import { ALL_SUBJ, MATH_SUBJ, SCI_SUBJ } from '../utils/analytics';
+import { ALL_SUBJ, MATH_SUBJ, SCI_SUBJ, ENGLISH_SUBJ, REASONING_SUBJ } from '../utils/analytics';
+import { PRETEST_SUBJECT_MAX, PRETEST_TOTAL_ITEMS } from '../utils/assessmentBlueprint';
 import { PageHeader, PageShell } from './ui/page';
 
-const MAX_PER_SUBJ = 100;
+const MAX_TOTAL = PRETEST_TOTAL_ITEMS;
 
-const MAX_TOTAL = ALL_SUBJ.length * MAX_PER_SUBJ;
+const MAX_MATH = PRETEST_SUBJECT_MAX.Mathematics;
 
-const MAX_MATH = MATH_SUBJ.length * MAX_PER_SUBJ;
+const MAX_SCI = PRETEST_SUBJECT_MAX.Science;
 
-const MAX_SCI = SCI_SUBJ.length * MAX_PER_SUBJ;
+const MAX_ENG = PRETEST_SUBJECT_MAX['English Proficiency'];
 
-const MAX_ENG = 100;
+const MAX_LOGIC = PRETEST_SUBJECT_MAX['Abstract Reasoning'];
 
-const MAX_LOGIC = 100;
-
-export default function ReportsView({ parsedData, students }) {
+export default function ReportsView({ parsedData, trackerLoadState, onRetry, onUploadTracker }) {
   const [activeSubjectTab, setActiveSubjectTab] = useState('math');
+  const reduceMotion = useReducedMotion();
 
   const analytics = useMemo(() => {
-    if (!students || students.length === 0) return null;
-
-    const pre = parsedData.pre || {};
-    const post = parsedData.post || {};
+    const pre = parsedData?.pre || {};
+    const post = parsedData?.post || {};
     
     // We prefer post-test data for final awards and rankings, fallback to pre
     const activeData = Object.keys(post).length > 0 ? post : pre;
@@ -35,17 +33,27 @@ export default function ReportsView({ parsedData, students }) {
     const studentList = Object.keys(activeData).map(name => ({
       name,
       total: activeData[name].total,
-      subjects: activeData[name].subjects
+      max: activeData[name].totalMax || MAX_TOTAL,
+      subjects: activeData[name].subjects || {}
     }));
 
-    const topOverall = [...studentList].sort((a, b) => b.total - a.total).slice(0, 10);
+    const sorted = [...studentList].sort((a, b) => b.total / b.max - a.total / a.max || a.name.localeCompare(b.name));
+    let rank = 0;
+
+    const topOverall = sorted.map((student, index) => {
+      const previous = sorted[index - 1];
+
+      if (!previous || previous.total / previous.max !== student.total / student.max) rank = index + 1;
+
+      return { ...student, rank };
+    }).slice(0, 10);
 
     // 2. Growth Leaderboard (only if both pre and post exist)
     let mostImproved = [];
 
     if (Object.keys(pre).length > 0 && Object.keys(post).length > 0) {
       const growthList = Object.keys(post)
-        .filter(name => pre[name])
+        .filter(name => pre[name] && (pre[name].totalMax || MAX_TOTAL) === (post[name].totalMax || MAX_TOTAL))
         .map(name => ({
           name,
           growth: post[name].total - pre[name].total
@@ -58,31 +66,22 @@ export default function ReportsView({ parsedData, students }) {
     }
 
     // 3. Class-Wide Weaknesses
-    const subjectAverages = ALL_SUBJ.map(subj => {
-      let sum = 0;
-      let count = 0;
-      Object.values(activeData).forEach(s => {
-        if (s.subjects[subj] !== undefined) {
-          sum += s.subjects[subj];
-          count++;
-        }
-      });
+    const subjectAverages = ALL_SUBJ.flatMap(subject => {
+      const scores = studentList.flatMap(student => student.subjects[subject] == null ? [] : [student.subjects[subject]]);
 
-      return {
-        name: subj,
-        average: count > 0 ? (sum / count) : 0
-      };
+      return scores.length ? [{ name: subject, average: scores.reduce((sum, score) => sum + score, 0) / scores.length }] : [];
     }).sort((a, b) => a.average - b.average);
 
-    const weaknesses = subjectAverages.slice(0, 3); // Bottom 3 subjects
+    const weaknesses = subjectAverages.slice(0, 3);
 
     // 4. Awardees
-    const valedictorian = topOverall.length > 0 ? topOverall[0] : null;
-    const salutatorian = topOverall.length > 1 ? topOverall[1] : null;
+    const valedictorian = topOverall.find(student => student.rank === 1);
+    const salutatorian = topOverall.find(student => student.rank === 2);
+    const tiedFirst = topOverall[1]?.rank === 1;
 
     // Helper to find top N of specific subjects
     const findTopIn = (subjectGroup, topN = 10) => {
-      return [...studentList].map(s => {
+      return studentList.filter(student => subjectGroup.some(subject => student.subjects[subject] != null)).map(s => {
         const sum = subjectGroup.reduce((acc, curr) => acc + (s.subjects[curr] || 0), 0);
 
         return { name: s.name, score: sum };
@@ -91,8 +90,8 @@ export default function ReportsView({ parsedData, students }) {
 
     const topMath = findTopIn(MATH_SUBJ);
     const topScience = findTopIn(SCI_SUBJ);
-    const topEnglish = findTopIn(["English"]);
-    const topLogic = findTopIn(["Logic"]);
+    const topEnglish = findTopIn(ENGLISH_SUBJ);
+    const topLogic = findTopIn(REASONING_SUBJ);
 
     const bestMath = topMath.length > 0 ? topMath[0] : null;
     const bestScience = topScience.length > 0 ? topScience[0] : null;
@@ -105,6 +104,8 @@ export default function ReportsView({ parsedData, students }) {
       weaknesses,
       valedictorian,
       salutatorian,
+      tiedFirst,
+      assessmentLabel: activeData === post ? "Post-test" : "Pre-test",
       bestMath,
       bestScience,
       bestEnglish,
@@ -116,24 +117,44 @@ export default function ReportsView({ parsedData, students }) {
       totalStudents: studentList.length
     };
 
-  }, [parsedData, students]);
+  }, [parsedData]);
+
+  if (!analytics && trackerLoadState !== 'success') {
+    const failed = trackerLoadState === 'error';
+
+    return (
+      <PageShell width="wide" contentClassName="space-y-5">
+        <PageHeader title="Cohort Analytics" />
+        <section className="rounded-2xl border border-border bg-card p-6 text-center" role={failed ? 'alert' : 'status'}>
+          {failed ? (
+            <>
+              <p className="text-sm font-semibold text-slate-900">Couldn’t load the pre-test results.</p>
+              <button type="button" onClick={onRetry} className="mt-3 min-h-11 rounded-lg border border-border px-4 text-sm font-semibold text-blue-800 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">Try again</button>
+            </>
+          ) : (
+            <p className="inline-flex items-center gap-2 text-sm text-slate-700">
+              <Loader2 aria-hidden="true" className="h-4 w-4 motion-safe:animate-spin" />Loading pre-test results…
+            </p>
+          )}
+        </section>
+      </PageShell>
+    );
+  }
 
   if (!analytics) {
     return (
-      <PageShell width="wide" contentClassName="flex min-h-full flex-col gap-6">
-        <PageHeader
-          title="Cohort Analytics"
-          description="Review performance, rankings, and learning trends across the cohort."
-        />
-        <div className="flex flex-1 flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-white px-6 py-16 text-center">
-          <div className="w-14 h-14 bg-accentBlue rounded-2xl flex items-center justify-center mb-4">
-            <Trophy className="w-7 h-7 text-primary" />
-          </div>
-          <h2 className="text-lg font-bold text-fg mb-2">No cohort data yet</h2>
-          <p className="text-muted text-sm leading-relaxed max-w-md">
-            Upload an Excel tracker to view cohort analytics, rankings, and awardees.
-          </p>
-        </div>
+      <PageShell width="wide" contentClassName="space-y-5">
+        <PageHeader title="Cohort Analytics" description="Class results from the current 160-item diagnostic." />
+        <section className="rounded-2xl border border-dashed border-slate-300 bg-white px-5 py-8 text-center sm:py-10" aria-labelledby="empty-report-title">
+          <FileSpreadsheet className="mx-auto h-8 w-8 text-blue-700" aria-hidden="true" />
+          <h2 id="empty-report-title" className="mt-3 text-lg font-bold text-slate-950">No cohort data yet</h2>
+          <p className="mx-auto mt-1.5 max-w-md text-sm leading-6 text-slate-600">Upload the scored S5 monitoring sheet, or open Saved versions to restore a previous S5 upload.</p>
+          {onUploadTracker && (
+            <button type="button" onClick={onUploadTracker} className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-lg border border-blue-200 px-4 text-sm font-semibold text-blue-800 transition-colors hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2">
+              Import score sheet
+            </button>
+          )}
+        </section>
       </PageShell>
     );
   }
@@ -150,12 +171,12 @@ export default function ReportsView({ parsedData, students }) {
 
   return (
     <PageShell width="wide">
-      <motion.div variants={containerVariants} initial="hidden" animate="show" className="space-y-6 min-h-full">
+      <motion.div variants={containerVariants} initial={reduceMotion ? false : "hidden"} animate="show" className="space-y-6 min-h-full">
         
         {/* HEADER */}
         <PageHeader
           title="Cohort Analytics"
-          description={`Performance summary and cohort rankings for ${analytics.totalStudents} students.`}
+          description={`Performance summary and cohort rankings for ${analytics.totalStudents} students · ${analytics.assessmentLabel} standings`}
         />
 
         {/* TOP AWARDS ROW */}
@@ -168,8 +189,8 @@ export default function ReportsView({ parsedData, students }) {
               </div>
               <div className="min-w-0">
                 <p className="text-white/80 font-semibold text-sm uppercase tracking-wider mb-1">Valedictorian</p>
-                <h3 className="text-3xl font-bold truncate">{analytics.valedictorian?.name || 'N/A'}</h3>
-                <p className="text-white/90 text-sm mt-1 font-medium">{analytics.valedictorian?.total || 0} / {MAX_TOTAL} pts</p>
+                <h3 className="text-2xl sm:text-3xl font-bold [overflow-wrap:anywhere]">{analytics.valedictorian?.name || 'N/A'}</h3>
+                <p className="text-white/90 text-sm mt-1 font-medium">{analytics.valedictorian?.total ?? '—'} / {analytics.valedictorian?.max || MAX_TOTAL} pts{analytics.tiedFirst && ' · Tied for first'}</p>
               </div>
             </div>
             <div className="absolute -right-10 -bottom-10 w-40 h-40 bg-white/10 rounded-full blur-2xl"></div>
@@ -183,8 +204,8 @@ export default function ReportsView({ parsedData, students }) {
               </div>
               <div className="min-w-0">
                 <p className="text-muted font-semibold text-sm uppercase tracking-wider mb-1">Salutatorian</p>
-                <h3 className="text-3xl font-bold text-fg truncate">{analytics.salutatorian?.name || 'N/A'}</h3>
-                <p className="text-fg font-medium text-sm mt-1">{analytics.salutatorian?.total || 0} / {MAX_TOTAL} pts</p>
+                <h3 className="text-2xl sm:text-3xl font-bold text-fg [overflow-wrap:anywhere]">{analytics.salutatorian?.name || (analytics.tiedFirst ? 'First place is tied' : 'Pending')}</h3>
+                {analytics.salutatorian && <p className="text-fg font-medium text-sm mt-1">{analytics.salutatorian.total} / {analytics.salutatorian.max} pts</p>}
               </div>
             </div>
           </motion.div>
@@ -227,7 +248,7 @@ export default function ReportsView({ parsedData, students }) {
               <Brain className="w-5 h-5 text-muted" />
             </div>
             <div className="min-w-0">
-              <p className="text-xs font-bold text-muted uppercase tracking-wider mb-0.5">Best in Logic</p>
+              <p className="text-xs font-bold text-muted uppercase tracking-wider mb-0.5">Best in Abstract Reasoning</p>
               <p className="text-sm font-bold text-fg truncate">{analytics.bestLogic?.name || 'N/A'}</p>
             </div>
           </motion.div>
@@ -249,26 +270,26 @@ export default function ReportsView({ parsedData, students }) {
               {analytics.weaknesses.map((w, idx) => (
                 <div key={idx} className="bg-accentRed/50 border border-accentRed rounded-lg p-3 flex justify-between items-center">
                   <span className="font-semibold text-fg text-sm">{w.name}</span>
-                  <span className="text-accentRedFg font-bold text-sm">{Math.round(w.average)} pts avg</span>
+                  <span className="text-accentRedFg font-bold text-sm">{Math.round(w.average)} / {PRETEST_SUBJECT_MAX[w.name]} avg</span>
                 </div>
               ))}
             </div>
           </motion.div>
 
           {/* Top 10 Leaderboard */}
-          <motion.div variants={itemVariants} className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden lg:col-span-1">
+          <motion.div variants={itemVariants} className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden min-w-0 lg:col-span-1">
             <div className="px-5 py-4 border-b border-border flex items-center gap-3">
               <Star className="w-5 h-5 text-primary" />
               <h3 className="font-bold text-fg">Top 10 Overall</h3>
             </div>
             <div className="divide-y divide-border">
-              {analytics.topOverall.map((s, idx) => (
-                <div key={idx} className="px-5 py-3 flex items-center justify-between hover:bg-canvas/50 transition-colors">
+              {analytics.topOverall.map(s => (
+                <div key={s.name} className="px-5 py-3 flex items-center justify-between hover:bg-canvas/50 transition-colors">
                   <div className="flex items-center gap-3">
-                    <span className="text-xs font-bold text-muted w-4 text-center">{idx + 1}</span>
+                    <span className="text-xs font-bold text-muted w-4 text-center">{s.rank}</span>
                     <span className="font-semibold text-sm text-fg truncate max-w-[150px]">{s.name}</span>
                   </div>
-                  <span className="font-bold text-sm text-primary">{s.total} <span className="text-muted font-medium text-xs">/ {MAX_TOTAL} pts</span></span>
+                  <span className="font-bold text-sm text-primary">{s.total} <span className="text-muted font-medium text-xs">/ {s.max} pts</span></span>
                 </div>
               ))}
               {analytics.topOverall.length === 0 && (
@@ -278,7 +299,7 @@ export default function ReportsView({ parsedData, students }) {
           </motion.div>
 
           {/* Most Improved Leaderboard */}
-          <motion.div variants={itemVariants} className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden lg:col-span-1">
+          <motion.div variants={itemVariants} className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden min-w-0 lg:col-span-1">
             <div className="px-5 py-4 border-b border-border flex items-center gap-3">
               <TrendingUp className="w-5 h-5 text-accentGreenFg" />
               <h3 className="font-bold text-fg">Most Improved</h3>
@@ -297,7 +318,7 @@ export default function ReportsView({ parsedData, students }) {
               </div>
             ) : (
               <div className="p-10 flex flex-col items-center justify-center text-center h-full">
-                <p className="text-sm text-muted">Require both Pre-Test and Post-Test data to calculate growth.</p>
+                <p className="text-sm text-muted">Growth appears after both tests are published.</p>
               </div>
             )}
           </motion.div>
@@ -306,17 +327,19 @@ export default function ReportsView({ parsedData, students }) {
 
         {/* SUBJECT LEADERBOARDS */}
         <div>
-          <div className="flex items-center justify-between mb-4 mt-8">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4 mt-8">
             <h3 className="text-xl font-bold text-fg tracking-tight">Subject Leaderboards</h3>
-            <div className="flex bg-canvas border border-border rounded-lg p-1 overflow-x-auto">
+            <div className="flex bg-canvas border border-border rounded-lg p-1 max-w-full overflow-x-auto">
               {[
                 { id: 'math', label: 'Math', icon: Target, colorClass: 'text-primary' },
                 { id: 'science', label: 'Science', icon: FlaskConical, colorClass: 'text-accentGreenFg' },
                 { id: 'english', label: 'English', icon: BookOpen, colorClass: 'text-accentRedFg' },
-                { id: 'logic', label: 'Logic', icon: Brain, colorClass: 'text-muted' },
+                { id: 'logic', label: 'Reasoning', icon: Brain, colorClass: 'text-muted' },
               ].map(tab => (
                 <button
                   key={tab.id}
+                  type="button"
+                  aria-pressed={activeSubjectTab === tab.id}
                   onClick={() => setActiveSubjectTab(tab.id)}
                   className={cn(
                     "px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 whitespace-nowrap",
@@ -341,11 +364,11 @@ export default function ReportsView({ parsedData, students }) {
 
                 return activeList.map((s, idx) => (
                   <div key={idx} className="px-6 py-4 flex items-center justify-between hover:bg-canvas/50 transition-colors">
-                    <div className="flex items-center gap-6">
+                    <div className="flex items-center gap-3 min-w-0">
                       <span className="text-sm font-bold text-muted w-6 text-center">{idx + 1}</span>
-                      <span className="font-semibold text-base text-fg">{s.name}</span>
+                      <span className="font-semibold text-base text-fg [overflow-wrap:anywhere]">{s.name}</span>
                     </div>
-                    <span className="font-bold text-base text-fg">
+                    <span className="shrink-0 font-bold text-base text-fg">
                       {s.score} <span className="text-muted font-medium text-sm">/ {
                         activeSubjectTab === 'math' ? MAX_MATH :
                         activeSubjectTab === 'science' ? MAX_SCI :

@@ -27,10 +27,9 @@ export function AnimatedNumber({ value }) {
 /** Shared tooltip used by all Recharts charts. */
 export function CustomTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
-  const val1 = payload[0]?.value;
-  const val2 = payload[1]?.value;
-  const hasDelta = Number.isFinite(val1) && Number.isFinite(val2);
-  const diff = hasDelta ? val1 - val2 : null;
+  const baseline = payload.find(entry => entry.dataKey === 'cohort' || entry.dataKey === 'pre')?.value;
+  const score = payload.find(entry => ['student', 'score', 'post'].includes(entry.dataKey))?.value;
+  const diff = Number.isFinite(baseline) && Number.isFinite(score) ? score - baseline : null;
 
   const domain = label
     ? (MATH_SUBJ.includes(label) ? 'Math' : SCI_SUBJ.includes(label) ? 'Science' : 'Humanities')
@@ -59,20 +58,20 @@ export function CustomTooltip({ active, payload, label }) {
               <span className="w-2.5 h-2.5 rounded-sm shadow-xs" style={{ backgroundColor: entry.color }} />
               <span>{entry.name}</span>
             </span>
-            <span className="font-mono font-bold text-fg tabular-nums">{entry.value} pts</span>
+            <span className="font-mono font-bold text-fg tabular-nums">{entry.value}%</span>
           </div>
         ))}
       </div>
       {diff !== null && (
         <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
-          <span className="text-muted font-medium">Net Delta</span>
+          <span className="text-muted font-medium">Difference</span>
           <span className={cn(
             'inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[11px] font-bold font-mono tabular-nums border',
             diff >= 0
               ? 'bg-emerald-50 text-emerald-700 border-emerald-200/70'
               : 'bg-rose-50 text-rose-700 border-rose-200/70'
           )}>
-            {diff >= 0 ? `+${diff}` : diff} pts
+            {diff >= 0 ? `+${diff}` : diff} pp
           </span>
         </div>
       )}

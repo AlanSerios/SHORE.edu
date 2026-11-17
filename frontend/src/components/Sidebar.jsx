@@ -15,7 +15,7 @@ export default function Sidebar({
   classToolsOpen, setClassToolsOpen,
   adminToolsOpen = false, setAdminToolsOpen = () => {},
   isProfileMenuOpen, setIsProfileMenuOpen,
-  file, fileInputRef, handleFileUpload,
+  file, fileInputRef,
   _status, handleLogout,
 }) {
   const [collapsedAcademicFlyoutOpen, setCollapsedAcademicFlyoutOpen] = useState(false);
@@ -474,15 +474,6 @@ export default function Sidebar({
         'border-t border-border/70 shrink-0 mt-auto relative bg-sidebar select-none transition-all',
         sidebarOpen ? 'p-3' : 'py-2 px-2 flex flex-col items-center justify-center'
       )}>
-        {/* Hidden File Input for Global Admin Tracker Upload */}
-        <input
-          type="file"
-          ref={fileInputRef}
-          onChange={handleFileUpload}
-          accept=".xlsx,.xls"
-          className="hidden"
-        />
-
         {/* Profile menu backdrop */}
         {isProfileMenuOpen && (
           <button
