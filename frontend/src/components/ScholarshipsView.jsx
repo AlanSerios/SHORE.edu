@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Edit2, Trash2, ExternalLink, GraduationCap, MapPin, CheckCircle2, Sparkles, RefreshCw, Clock, ShieldCheck, BookmarkPlus, Check, Calendar, FileText, AlertCircle, Search, X } from 'lucide-react';
+import { Plus, Edit2, Trash2, ExternalLink, GraduationCap, MapPin, CheckCircle2, Sparkles, Clock, ShieldCheck, BookmarkPlus, Check, Calendar, FileText, AlertCircle, Search, X } from 'lucide-react';
 import { cn } from '../utils';
 import { toast } from 'sonner';
 import { getAllVaultDocuments, findVaultDocForReq } from '../utils/vaultStorage';
@@ -51,10 +51,6 @@ export default function ScholarshipsView({ userEmail, userRole }) {
   const [isParsingBot, setIsParsingBot] = useState(false);
   const [parseError, setParseError] = useState('');
   const [autoFillSummary, setAutoFillSummary] = useState(null);
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [discovery, setDiscovery] = useState({ drafts: null, error: '' });
-  const [discoverySchool, setDiscoverySchool] = useState('');
-  const discoveryDialog = useRef(null);
   const [listingKind, setListingKind] = useState('scholarship');
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState('all'); // 'all' | 'verified' | 'closing'
@@ -109,6 +105,7 @@ export default function ScholarshipsView({ userEmail, userRole }) {
     const refreshWhenVisible = () => {
       if (document.visibilityState === 'visible') fetchScholarships({ quiet: true });
     };
+
     const isFirstCheckPending = !syncState.lastSuccessAt && ['not_run', 'running'].includes(syncState.status);
     const interval = window.setInterval(refreshWhenVisible, isFirstCheckPending ? 45 * 1000 : 15 * 60 * 1000);
 
@@ -138,29 +135,6 @@ export default function ScholarshipsView({ userEmail, userRole }) {
       }
     } catch (e) {
       console.error("Failed to load user tracked scholarships or vault docs", e);
-    }
-  };
-
-  const handleSyncOfficialPortals = async () => {
-    setIsSyncing(true);
-    setDiscovery({ drafts: null, error: '' });
-
-    try {
-      const res = await fetch('/api/scholarships/discover', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ school: discoverySchool.trim() }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) throw new Error(data.error || 'Could not check university notices.');
-
-      setDiscovery({ drafts: data.drafts || [], error: '' });
-    } catch (error) {
-      setDiscovery({ drafts: null, error: error instanceof SyntaxError ? 'University search is unavailable. Try again.' : error.message });
-    } finally {
-      setIsSyncing(false);
     }
   };
 
@@ -501,15 +475,6 @@ export default function ScholarshipsView({ userEmail, userRole }) {
           <>
             <button
               type="button"
-              onClick={() => discoveryDialog.current?.showModal()}
-              aria-haspopup="dialog"
-              className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 text-[13px] font-semibold text-fg hover:bg-canvas sm:gap-2 sm:px-3 sm:text-sm"
-            >
-              <RefreshCw aria-hidden="true" className="h-4 w-4" />
-              Find updates
-            </button>
-            <button
-              type="button"
               onClick={() => openModal()}
               className="inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-primary px-2.5 text-[13px] font-semibold text-white hover:bg-primaryHover sm:gap-2 sm:px-3 sm:text-sm"
             >
@@ -562,10 +527,12 @@ export default function ScholarshipsView({ userEmail, userRole }) {
           <Search aria-hidden="true" className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted" />
           <input
             type="search"
+            name="opportunity-search"
+            autoComplete="off"
             value={searchQuery}
             onChange={event => setSearchQuery(event.target.value)}
             placeholder={isAdmissions ? 'Find a school' : 'Find a scholarship'}
-            className="min-h-11 w-full rounded-lg border border-border bg-card pl-10 pr-3 text-sm text-fg focus-visible:outline-2 focus-visible:outline-primary"
+            className="min-h-11 w-full rounded-lg border border-border bg-card pl-10 pr-3 text-base text-fg focus-visible:outline-2 focus-visible:outline-primary sm:text-sm"
           />
         </label>
         {categoryListings.length > 0 && (
@@ -599,7 +566,7 @@ export default function ScholarshipsView({ userEmail, userRole }) {
         <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-center">
           <AlertCircle className="mx-auto h-6 w-6 text-red-600" />
           <h2 className="mt-3 font-bold text-fg">Unable to load {isAdmissions ? 'admissions' : 'scholarships'}</h2>
-          <p className="mt-1 text-sm text-muted">{scholarshipLoadError}</p>
+          <p role="alert" className="mt-1 text-sm text-red-800">{scholarshipLoadError}</p>
           <button onClick={fetchScholarships} className="mt-4 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-white hover:bg-primaryHover">Try again</button>
         </div>
       )}
@@ -638,7 +605,7 @@ export default function ScholarshipsView({ userEmail, userRole }) {
                   )}
                   </div>
 
-                {userRole === 'admin' && (
+                {userRole === 'admin' && !scholarship.builtIn && (
                   <div className="flex shrink-0 items-center gap-1">
                     <button 
                       onClick={() => openModal(scholarship)} 
@@ -659,9 +626,9 @@ export default function ScholarshipsView({ userEmail, userRole }) {
               </div>
 
                 <p className="mt-3 line-clamp-2 [overflow-wrap:anywhere] text-sm font-semibold leading-5 text-primary">{scholarship.provider}</p>
-              <h3 className="mt-2 break-words text-lg font-bold leading-snug text-fg">
+              <h2 className="mt-2 break-words text-lg font-bold leading-snug text-fg">
                 <button type="button" className="max-w-full [overflow-wrap:anywhere] text-left underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary" onClick={() => setSelectedScholarshipDetail(scholarship)}>{scholarship.title}</button>
-              </h3>
+              </h2>
               
               {scholarship.description && (
                   <p className="mt-2 line-clamp-3 [overflow-wrap:anywhere] text-sm leading-6 text-muted">
@@ -772,51 +739,6 @@ export default function ScholarshipsView({ userEmail, userRole }) {
             CHED school directory <ExternalLink aria-hidden="true" className="size-3.5" />
           </a>
         </section>
-      )}
-
-      {userRole === 'admin' && (
-        <dialog ref={discoveryDialog} aria-labelledby="university-updates-title" className="m-auto max-h-[85dvh] w-[calc(100%-2rem)] max-w-xl overflow-y-auto rounded-xl border border-border bg-card p-5 text-fg backdrop:bg-slate-950/50 sm:p-6">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <h2 id="university-updates-title" className="text-xl font-bold">Find University Updates</h2>
-              <p className="mt-1 text-sm text-muted">Search for admissions and scholarships. Review each result before publishing.</p>
-            </div>
-            <button type="button" aria-label="Close university updates" onClick={() => discoveryDialog.current?.close()} className="-mr-2 -mt-2 grid size-11 shrink-0 place-items-center rounded-lg text-muted hover:bg-canvas">
-              <X aria-hidden="true" className="size-5" />
-            </button>
-          </div>
-          <form className="mt-5 flex flex-col gap-2 sm:flex-row sm:items-end" onSubmit={event => { event.preventDefault(); handleSyncOfficialPortals(); }}>
-            <label className="min-w-0 flex-1 text-sm font-medium">
-              School name (optional)
-              <input value={discoverySchool} maxLength={100} onChange={event => setDiscoverySchool(event.target.value)} placeholder="All schools" className="mt-1 block min-h-11 w-full rounded-lg border border-border bg-canvas px-3" />
-            </label>
-            <button type="submit" disabled={isSyncing} className="min-h-11 rounded-lg bg-primary px-4 text-sm font-semibold text-white hover:bg-primaryHover disabled:opacity-60">
-              {isSyncing ? 'Searching…' : 'Search updates'}
-            </button>
-          </form>
-          <p className={cn('mt-3 text-sm empty:mt-0', discovery.error ? 'text-red-700' : 'text-muted')} role={discovery.error ? 'alert' : 'status'}>
-            {isSyncing ? 'Checking school websites and public Facebook posts.' : discovery.error || (discovery.drafts?.length === 0 ? 'No current notices found. Try another school or check its official page.' : '')}
-          </p>
-          {discovery.drafts?.map(draft => {
-            const listed = scholarships.some(item => item.title?.trim().toLowerCase() === draft.title.toLowerCase()
-              && (item.sourceUrl === draft.sourceUrl || item.provider?.toLowerCase() === draft.provider.toLowerCase()));
-
-            return (
-              <div key={`${draft.sourceUrl}-${draft.title}`} className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
-                <div className="min-w-0 [overflow-wrap:anywhere]">
-                  <h3 className="text-sm font-bold text-fg">{draft.title}</h3>
-                  <p className="text-sm text-muted">{draft.kind === 'admission' ? 'Admission' : 'Scholarship'} · {draft.deadline ? formatDeadline(draft.deadline) : 'Deadline needs checking'}</p>
-                </div>
-                <div className="flex flex-wrap items-center gap-3 text-sm font-semibold">
-                  <a href={draft.sourceUrl} target="_blank" rel="noreferrer" className="text-primary underline underline-offset-4">Open source</a>
-                  {listed ? <span className="text-muted">Already listed</span> : (
-                    <button type="button" onClick={() => { discoveryDialog.current?.close(); openModal(null, draft); }} className="min-h-11 rounded-lg border border-border px-3 text-fg hover:bg-canvas">Review draft</button>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </dialog>
       )}
 
       {/* Universal Standard Document Kit Modal */}
@@ -950,7 +872,7 @@ export default function ScholarshipsView({ userEmail, userRole }) {
 
                 if (event.key !== 'Tab') return;
 
-                const controls = [...event.currentTarget.querySelectorAll('button:not([disabled]), a[href]')];
+                const controls = [...event.currentTarget.querySelectorAll('button:not([disabled]), a[href], [tabindex="0"]')];
                 const first = controls[0];
                 const last = controls.at(-1);
 
@@ -978,7 +900,7 @@ export default function ScholarshipsView({ userEmail, userRole }) {
                 </button>
               </div>
 
-              <div className="flex-1 space-y-4 overflow-y-auto [overflow-wrap:anywhere]">
+              <div tabIndex={0} role="region" aria-label="Application timeline and requirements" className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain rounded-md [overflow-wrap:anywhere] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset">
                 <section aria-label="Application timeline" className="rounded-xl border border-border bg-canvas p-3 sm:p-4">
                   <h3 className="flex items-center gap-2 text-sm font-bold text-fg"><Calendar className="h-4 w-4 text-primary" aria-hidden="true" /> Application Timeline</h3>
                   <ol className="mt-2 divide-y divide-border">

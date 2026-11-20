@@ -188,9 +188,9 @@ export default function ReportsView({ parsedData, trackerLoadState, onRetry, onU
                 <Trophy className="w-7 h-7 text-white" />
               </div>
               <div className="min-w-0">
-                <p className="text-white/80 font-semibold text-sm uppercase tracking-wider mb-1">Valedictorian</p>
-                <h3 className="text-2xl sm:text-3xl font-bold [overflow-wrap:anywhere]">{analytics.valedictorian?.name || 'N/A'}</h3>
-                <p className="text-white/90 text-sm mt-1 font-medium">{analytics.valedictorian?.total ?? '—'} / {analytics.valedictorian?.max || MAX_TOTAL} pts{analytics.tiedFirst && ' · Tied for first'}</p>
+                <p className="text-white font-semibold text-sm uppercase tracking-wider mb-1">Valedictorian</p>
+                <p className="text-2xl sm:text-3xl font-bold [overflow-wrap:anywhere]">{analytics.valedictorian?.name || 'N/A'}</p>
+                <p className="text-white text-sm mt-1 font-medium">{analytics.valedictorian?.total ?? '—'} / {analytics.valedictorian?.max || MAX_TOTAL} pts{analytics.tiedFirst && ' · Tied for first'}</p>
               </div>
             </div>
             <div className="absolute -right-10 -bottom-10 w-40 h-40 bg-white/10 rounded-full blur-2xl"></div>
@@ -204,7 +204,7 @@ export default function ReportsView({ parsedData, trackerLoadState, onRetry, onU
               </div>
               <div className="min-w-0">
                 <p className="text-muted font-semibold text-sm uppercase tracking-wider mb-1">Salutatorian</p>
-                <h3 className="text-2xl sm:text-3xl font-bold text-fg [overflow-wrap:anywhere]">{analytics.salutatorian?.name || (analytics.tiedFirst ? 'First place is tied' : 'Pending')}</h3>
+                <p className="text-2xl sm:text-3xl font-bold text-fg [overflow-wrap:anywhere]">{analytics.salutatorian?.name || (analytics.tiedFirst ? 'First place is tied' : 'Pending')}</p>
                 {analytics.salutatorian && <p className="text-fg font-medium text-sm mt-1">{analytics.salutatorian.total} / {analytics.salutatorian.max} pts</p>}
               </div>
             </div>
@@ -261,7 +261,7 @@ export default function ReportsView({ parsedData, trackerLoadState, onRetry, onU
           <motion.div variants={itemVariants} className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden flex flex-col">
             <div className="px-5 py-4 border-b border-border flex items-center gap-3">
               <AlertTriangle className="w-5 h-5 text-accentRedFg" />
-              <h3 className="font-bold text-fg">Cohort Vulnerabilities</h3>
+              <h2 className="font-bold text-fg">Cohort Vulnerabilities</h2>
             </div>
             <div className="p-5 flex-1 space-y-4">
               <p className="text-sm text-muted mb-4">
@@ -280,7 +280,7 @@ export default function ReportsView({ parsedData, trackerLoadState, onRetry, onU
           <motion.div variants={itemVariants} className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden min-w-0 lg:col-span-1">
             <div className="px-5 py-4 border-b border-border flex items-center gap-3">
               <Star className="w-5 h-5 text-primary" />
-              <h3 className="font-bold text-fg">Top 10 Overall</h3>
+              <h2 className="font-bold text-fg">Top 10 Overall</h2>
             </div>
             <div className="divide-y divide-border">
               {analytics.topOverall.map(s => (
@@ -302,7 +302,7 @@ export default function ReportsView({ parsedData, trackerLoadState, onRetry, onU
           <motion.div variants={itemVariants} className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden min-w-0 lg:col-span-1">
             <div className="px-5 py-4 border-b border-border flex items-center gap-3">
               <TrendingUp className="w-5 h-5 text-accentGreenFg" />
-              <h3 className="font-bold text-fg">Most Improved</h3>
+              <h2 className="font-bold text-fg">Most Improved</h2>
             </div>
             {analytics.mostImproved.length > 0 ? (
               <div className="divide-y divide-border">
@@ -328,7 +328,7 @@ export default function ReportsView({ parsedData, trackerLoadState, onRetry, onU
         {/* SUBJECT LEADERBOARDS */}
         <div>
           <div className="flex flex-wrap items-center justify-between gap-3 mb-4 mt-8">
-            <h3 className="text-xl font-bold text-fg tracking-tight">Subject Leaderboards</h3>
+            <h2 className="text-xl font-bold text-fg tracking-tight">Subject Leaderboards</h2>
             <div className="flex bg-canvas border border-border rounded-lg p-1 max-w-full overflow-x-auto">
               {[
                 { id: 'math', label: 'Math', icon: Target, colorClass: 'text-primary' },

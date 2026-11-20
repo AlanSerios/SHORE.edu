@@ -1,3 +1,4 @@
+import { PageHeader } from './ui/page';
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -408,17 +409,14 @@ const AttendanceAdminView = () => {
 
   return (
     <div className="h-full overflow-y-auto bg-canvas overscroll-contain">
-      <div className="max-w-7xl mx-auto pt-[max(1.25rem,calc(0.75rem+env(safe-area-inset-top,0px)))] pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] md:pb-12 px-4 sm:px-6 lg:px-8 space-y-5">
+      <div className="shore-page-content max-w-7xl mx-auto space-y-4 sm:space-y-6">
 
         {/* HEADER */}
-        <header className="sm:pt-4 pb-1">
-          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-fg">Event Attendance</h1>
-          <p className="mt-1 text-sm text-muted">Scan attendees, review sessions, and track participation.</p>
-        </header>
+        <PageHeader title="Event Attendance" description="Scan attendees, review sessions, and track participation." />
 
         {loadError && (
           <div role="alert" className="flex flex-col gap-3 rounded-xl border border-accentRedFg/20 bg-accentRed px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-start gap-3 text-accentRedFg">
+            <div className="flex items-start gap-3 text-red-800">
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
               <span className="font-semibold">{loadError}</span>
             </div>
@@ -489,9 +487,9 @@ const AttendanceAdminView = () => {
             <motion.div id="attendance-panel-scanner" role="tabpanel" key="scanner" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.18 }}>
               <div className="bg-white rounded-2xl border border-border shadow-sm mx-auto max-w-3xl overflow-hidden">
                   <div className="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-border">
-                    <h3 className="text-base font-bold text-fg flex items-center gap-2">
+                    <h2 className="text-base font-bold text-fg flex items-center gap-2">
                       <ScanLine className="w-5 h-5 text-primary" /> Viewfinder
-                    </h3>
+                    </h2>
                     {isScannerActive && (
                       <span className="flex items-center gap-1.5 text-[10px] font-bold text-green-600 bg-green-500/10 px-3 py-1.5 rounded-full uppercase tracking-wider">
                         <span className="relative flex h-2 w-2">
@@ -584,9 +582,9 @@ const AttendanceAdminView = () => {
               <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
                 <div className="px-6 py-5 border-b border-border flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between bg-white">
                   <div>
-                    <h3 className="font-bold text-lg text-fg mb-1">
+                    <h2 className="font-bold text-lg text-fg mb-1">
                       {selectedEvent} Attendance
-                    </h3>
+                    </h2>
                     <p className="text-sm text-muted">Total Records: {filteredTrackerData.length}</p>
                   </div>
 
@@ -748,9 +746,9 @@ const AttendanceAdminView = () => {
               <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
                 <div className="px-6 py-5 border-b border-border bg-white flex items-center justify-between">
                   <div>
-                    <h3 className="font-bold text-lg text-fg mb-1">
+                    <h2 className="font-bold text-lg text-fg mb-1">
                       General Attendance Report
-                    </h3>
+                    </h2>
                     <p className="text-sm text-muted">Summary across all events.</p>
                   </div>
                 </div>
@@ -880,9 +878,9 @@ const AttendanceAdminView = () => {
               <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
                 <div className="px-6 py-5 border-b border-border bg-white flex flex-col gap-8">
                   <div>
-                    <h3 className="font-bold text-lg text-fg mb-1">
+                    <h2 className="font-bold text-lg text-fg mb-1">
                       Event Breakdown
-                    </h3>
+                    </h2>
                     <p className="text-sm text-muted">Attendance trends by session.</p>
                   </div>
 
@@ -973,7 +971,7 @@ const AttendanceAdminView = () => {
                         <Lightbulb className="w-5 h-5 text-primary" />
                       </div>
                       <div>
-                        <h4 className="font-bold text-fg mb-1 text-sm">Key Insights & Trends</h4>
+                        <h3 className="font-bold text-fg mb-1 text-sm">Key Insights & Trends</h3>
                         <p className="text-sm text-fg/80 leading-relaxed">
                           {generateInsights(statsData)}
                         </p>

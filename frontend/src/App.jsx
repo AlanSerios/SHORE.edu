@@ -1,14 +1,13 @@
 import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
-import { requestFirebaseNotificationPermission } from './firebase';
 import { downloadBlob } from './utils';
 import { loadStoredUser, saveUser, clearUser } from './utils/userStorage';
 import { computeStats, computeStreak, playSound } from './utils/analytics';
 import { createPretestTemplate, parsePretestWorkbook, PRETEST_BLUEPRINT_ID } from './utils/assessmentBlueprint';
 
 // Views
-import LoginPage from './components/LoginPage';
+const LoginPage = React.lazy(() => import('./components/LoginPage'));
 
 const CalendarView = React.lazy(() => import('./components/CalendarView'));
 
@@ -37,16 +36,25 @@ const ShopView = React.lazy(() => import('./components/ShopView'));
 const TicketsView = React.lazy(() => import('./components/TicketsView'));
 
 // Layout
-import Sidebar from './components/Sidebar';
-import { MobileBottomNav, MobileMenuSheet } from './components/mobile/MobileNav';
+const Sidebar = React.lazy(() => import('./components/Sidebar'));
+
+const MobileBottomNav = React.lazy(() => import('./components/mobile/MobileNav').then(module => ({ default: module.MobileBottomNav })));
+
+const MobileMenuSheet = React.lazy(() => import('./components/mobile/MobileNav').then(module => ({ default: module.MobileMenuSheet })));
 
 const DashboardView = React.lazy(() => import('./components/dashboard/DashboardView'));
 
 import PWAInstallBanner from './components/PWAInstallBanner';
 import OfflineIndicator from './components/OfflineIndicator';
-import TrackerImportDialog from './components/TrackerImportDialog';
+
+const TrackerImportDialog = React.lazy(() => import('./components/TrackerImportDialog'));
 
 import { ACADEMIC_TOOL_IDS, ADMIN_TOOL_IDS } from './utils/navConfig';
+
+const hasCompletedStudentOnboarding = (preferences = {}) =>
+  Array.isArray(preferences.schoolInterests) && preferences.schoolInterests.length > 0 &&
+  Array.isArray(preferences.scholarshipInterests) && preferences.scholarshipInterests.length > 0 &&
+  Boolean(preferences.applicationStage);
 
 export const preloadView = (view) => {
   switch (view) {
@@ -94,11 +102,13 @@ export default function App() {
 
   // ── Auth state ───────────────────────────────────────────────
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [sessionRestoring, setSessionRestoring] = useState(() => Boolean(loadStoredUser() || new URLSearchParams(window.location.search).get('token')));
   const [userRole, setUserRole] = useState(null);
   const [userEmail, setUserEmail] = useState('');
   const [userName, setUserName] = useState('');
   const [profilePicture, setProfilePicture] = useState(null);
   const [equippedBorder, setEquippedBorder] = useState(null);
+  const [pendingStudentOnboarding, setPendingStudentOnboarding] = useState(null);
 
   // ── UI state ─────────────────────────────────────────────────
   const [currentView, _setCurrentView] = useState('dashboard');
@@ -149,7 +159,31 @@ export default function App() {
   };
 
   // ── Auth handlers ────────────────────────────────────────────
-  const handleLogin = (user, token) => {
+  const handleLogin = useCallback(async (user, token) => {
+    if (user.role === 'student') {
+      if (!token) {
+        throw new Error('Please sign in again to finish your student setup.');
+      }
+
+      const response = await fetch('/api/users/me/onboarding', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Could not verify your student setup. Please try again.');
+      }
+
+      if (!hasCompletedStudentOnboarding(result.preferences)) {
+        clearUser();
+        setPendingStudentOnboarding({ user, token, preferences: result.preferences || {} });
+
+        return false;
+      }
+    }
+
+    setPendingStudentOnboarding(null);
     authSessionVersionRef.current += 1;
     clearAccountScopedData(user.role === 'student' ? (user.name || '') : '', 'loading');
     setIsAuthenticated(true);
@@ -158,13 +192,19 @@ export default function App() {
     setUserName(user.name);
     setProfilePicture(user.profilePicture || null);
     setEquippedBorder(user.equippedBorder || null);
-    setCurrentView('dashboard');
+    _setCurrentView('dashboard');
+
+    if (window.location.hash !== '#dashboard') window.location.hash = 'dashboard';
+
+    setSessionRestoring(false);
 
     if (user.role === 'student' && user.name) setSelectedStudent(user.name);
 
     if (token) localStorage.setItem('shore_token', token);
     saveUser(user);
-  };
+
+    return true;
+  }, [clearAccountScopedData]);
 
   const handleLogout = useCallback(() => {
     authSessionVersionRef.current += 1;
@@ -175,6 +215,7 @@ export default function App() {
     setUserName('');
     setProfilePicture(null);
     setEquippedBorder(null);
+    setPendingStudentOnboarding(null);
     setCurrentView('dashboard');
     clearUser();
   }, [clearAccountScopedData]);
@@ -229,22 +270,7 @@ export default function App() {
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
 
-  // Preload common views during idle browser time
-  useEffect(() => {
-    if (!isAuthenticated) return;
-
-    const idleId = (window.requestIdleCallback || ((cb) => setTimeout(cb, 1000)))(() => {
-      preloadView('calendar');
-      preloadView('announcements');
-      preloadView('shop');
-
-      if (userRole === 'admin') preloadView('manageteam');
-    });
-
-    return () => {
-      if (window.cancelIdleCallback) window.cancelIdleCallback(idleId);
-    };
-  }, [isAuthenticated, userRole]);
+  // Navigation preloads on pointer/focus intent; do not fetch unrelated routes at startup.
 
   // Restore session from localStorage or Google OAuth redirect
   useEffect(() => {
@@ -253,16 +279,25 @@ export default function App() {
     const googleToken = urlParams.get('token');
 
     if (googleToken) {
-      localStorage.setItem('shore_token', googleToken);
-      fetch('/api/users/me')
+      clearUser();
+      fetch('/api/users/me', { headers: { Authorization: `Bearer ${googleToken}` } })
         .then(r => (r.ok ? r.json() : null))
         .then(data => {
           if (data && data.user) {
-            handleLogin(data.user, googleToken);
+            void handleLogin(data.user, googleToken).catch(error => {
+              clearUser();
+              toast.error(error.message || 'Could not verify your account. Please sign in again.');
+            });
+          } else {
+            toast.error('Could not verify your Google account. Please sign in again.');
           }
         })
-        .catch(console.error)
+        .catch(error => {
+          clearUser();
+          toast.error(error.message || 'Could not verify your Google account. Please try again.');
+        })
         .finally(() => {
+          setSessionRestoring(false);
           const cleanUrl = window.location.pathname + (window.location.hash || '#dashboard');
           window.history.replaceState({}, document.title, cleanUrl);
         });
@@ -272,7 +307,30 @@ export default function App() {
 
     const user = loadStoredUser();
 
-    if (!user) return;
+    if (!user) {
+      setSessionRestoring(false);
+
+      return;
+    }
+
+    if (user.role === 'student') {
+      const token = localStorage.getItem('shore_token');
+
+      if (!token) {
+        clearUser();
+        setSessionRestoring(false);
+
+        return;
+      }
+
+      void handleLogin(user, token).catch(error => {
+        clearUser();
+        toast.error(error.message || 'Could not verify your student setup. Please sign in again.');
+      }).finally(() => setSessionRestoring(false));
+
+      return;
+    }
+
     setIsAuthenticated(true);
     setUserEmail(user.email);
     setUserRole(user.role);
@@ -280,17 +338,23 @@ export default function App() {
     setProfilePicture(user.profilePicture || null);
     setEquippedBorder(user.equippedBorder || null);
 
+    setSessionRestoring(false);
+
     if (user.role === 'student' && user.name) setSelectedStudent(user.name);
-  }, []);
+  }, [handleLogin]);
 
   // Push notifications
   useEffect(() => {
-    if (!isAuthenticated || !userEmail) return;
-    requestFirebaseNotificationPermission().then(token => {
-      if (token) {
-        fetch('/api/register-device', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: userEmail, token }) }).catch(console.error);
-      }
-    });
+    // Refresh an existing opt-in only; permission prompts belong to a user action.
+    if (!isAuthenticated || !userEmail || !('Notification' in window) || Notification.permission !== 'granted') return;
+    import('./firebase')
+      .then(({ requestFirebaseNotificationPermission }) => requestFirebaseNotificationPermission())
+      .then(token => {
+        if (token) {
+          fetch('/api/register-device', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: userEmail, token }) }).catch(console.error);
+        }
+      })
+      .catch(console.error);
   }, [isAuthenticated, userEmail]);
 
   // Unread announcements polling
@@ -630,7 +694,7 @@ export default function App() {
       case 'scholarships':
         return <ScholarshipsView userRole={userRole} userEmail={userEmail} />;
       case 'settings':
-        return <SettingsView userEmail={userEmail} userRole={userRole} onUpdateUser={handleUpdateUser} />;
+        return <SettingsView userEmail={userEmail} userName={userName} userRole={userRole} onUpdateUser={handleUpdateUser} onNavigate={setCurrentView} />;
       case 'accounts':
         return userRole === 'admin' ? <AccountsView /> : null;
       case 'manageclass':
@@ -665,11 +729,21 @@ export default function App() {
   return (
     <>
       <AnimatePresence mode="wait">
-        {!isAuthenticated ? (
+        {sessionRestoring ? (
+          <div key="session" className="absolute inset-0 grid place-items-center bg-canvas text-sm text-muted" role="status">Opening SHORE…</div>
+        ) : !isAuthenticated ? (
           <motion.div key="login" exit={{ opacity: 0, transition: { duration: 0.3 } }} className="absolute inset-0 z-50 bg-background">
-            <LoginPage onLogin={handleLogin} />
+            <React.Suspense fallback={<div className="grid h-full place-items-center bg-canvas text-sm text-muted" role="status">Opening Sign In…</div>}>
+              <LoginPage onLogin={handleLogin} pendingStudentOnboarding={pendingStudentOnboarding} />
+            </React.Suspense>
           </motion.div>
         ) : (
+          <React.Suspense fallback={
+            <div className="absolute inset-0 flex items-center justify-center bg-canvas" role="status" aria-live="polite">
+              <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+              <span className="sr-only">Opening SHORE…</span>
+            </div>
+          }>
           <motion.div key="app" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.2, ease: 'easeOut' }} className="absolute inset-0 flex h-[100dvh] bg-canvas font-sans overflow-hidden text-fg">
 
             <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-lg focus:bg-white focus:px-4 focus:py-2 focus:text-sm focus:font-bold focus:text-primary focus:shadow-lg">
@@ -721,6 +795,7 @@ export default function App() {
             />
 
           </motion.div>
+          </React.Suspense>
         )}
       </AnimatePresence>
 
@@ -733,22 +808,26 @@ export default function App() {
         aria-label="Choose pre-test score workbook"
       />
 
-      <TrackerImportDialog
-        open={isAuthenticated && userRole === 'admin' && trackerImportOpen}
-        draft={trackerImportDraft}
-        currentNames={Object.keys(parsedData.pre || {})}
-        busy={trackerImportBusy}
-        history={trackerHistory}
-        historyLoading={trackerHistoryLoading}
-        historyError={trackerHistoryError}
-        restoreBusy={trackerRestoreBusy}
-        onClose={() => { if (!trackerImportBusy && !trackerRestoreBusy) setTrackerImportOpen(false); }}
-        onChooseFile={() => fileInputRef.current?.click()}
-        onDownloadTemplate={downloadTrackerTemplate}
-        onImport={commitTrackerImport}
-        onLoadHistory={loadTrackerHistory}
-        onRestore={restoreTrackerVersion}
-      />
+      {isAuthenticated && userRole === 'admin' && trackerImportOpen && (
+        <React.Suspense fallback={null}>
+          <TrackerImportDialog
+            open={trackerImportOpen}
+            draft={trackerImportDraft}
+            currentNames={Object.keys(parsedData.pre || {})}
+            busy={trackerImportBusy}
+            history={trackerHistory}
+            historyLoading={trackerHistoryLoading}
+            historyError={trackerHistoryError}
+            restoreBusy={trackerRestoreBusy}
+            onClose={() => { if (!trackerImportBusy && !trackerRestoreBusy) setTrackerImportOpen(false); }}
+            onChooseFile={() => fileInputRef.current?.click()}
+            onDownloadTemplate={downloadTrackerTemplate}
+            onImport={commitTrackerImport}
+            onLoadHistory={loadTrackerHistory}
+            onRestore={restoreTrackerVersion}
+          />
+        </React.Suspense>
+      )}
 
       {isAuthenticated && (
         <MobileBottomNav

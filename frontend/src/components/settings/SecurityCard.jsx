@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Lock, ShieldCheck, CheckCircle2, RefreshCw, Eye, EyeOff } from 'lucide-react';
+import { Lock, CheckCircle2, RefreshCw, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function SecurityCard({ userEmail }) {
@@ -71,12 +71,8 @@ export default function SecurityCard({ userEmail }) {
           </div>
           <div>
             <h3 className="text-sm sm:text-base font-bold text-fg">Security & Password</h3>
-            <p className="text-xs text-muted mt-0.5">Update your SHORE account password and manage sign-in credentials</p>
+            <p className="text-xs text-muted mt-0.5">Change the password you use to sign in.</p>
           </div>
-        </div>
-        <div className="flex items-center gap-2 self-start sm:self-auto bg-canvas/60 px-3 py-1.5 rounded-xl border border-border/60 text-xs font-semibold text-muted">
-          <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-          <span className="text-[11px] font-bold text-fg">SHA-256 Auth</span>
         </div>
       </div>
 
@@ -84,20 +80,25 @@ export default function SecurityCard({ userEmail }) {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 sm:gap-4">
           {/* Current Password */}
           <div>
-            <label className="block text-xs font-bold text-fg mb-1.5 uppercase tracking-wider">Current Password</label>
+            <label htmlFor="account-current-password" className="block text-xs font-bold text-fg mb-1.5">Current Password</label>
             <div className="relative">
               <input
+                id="account-current-password"
                 type={showCurrentPw ? 'text' : 'password'}
                 value={currentPasswordInput}
                 onChange={e => setCurrentPasswordInput(e.target.value)}
                 placeholder="••••••••"
+                autoComplete="current-password"
                 required
-                className="w-full bg-canvas border border-border hover:border-borderHover rounded-xl px-3.5 py-2.5 text-xs sm:text-sm font-medium text-fg focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all pr-10 shadow-2xs"
+                className="w-full bg-canvas border border-border hover:border-borderHover rounded-xl px-3.5 py-2.5 text-xs sm:text-sm font-medium text-fg focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-colors pr-12 shadow-2xs"
               />
               <button
                 type="button"
                 onClick={() => setShowCurrentPw(!showCurrentPw)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-fg p-0.5 cursor-pointer"
+                aria-label={showCurrentPw ? 'Hide current password' : 'Show current password'}
+                aria-pressed={showCurrentPw}
+                aria-controls="account-current-password"
+                className="absolute right-1 top-1/2 -translate-y-1/2 grid h-11 w-11 place-items-center rounded-lg text-muted hover:text-fg focus-visible:ring-2 focus-visible:ring-primary"
               >
                 {showCurrentPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
@@ -106,21 +107,26 @@ export default function SecurityCard({ userEmail }) {
 
           {/* New Password */}
           <div>
-            <label className="block text-xs font-bold text-fg mb-1.5 uppercase tracking-wider">New Password</label>
+            <label htmlFor="account-new-password" className="block text-xs font-bold text-fg mb-1.5">New Password</label>
             <div className="relative">
               <input
+                id="account-new-password"
                 type={showNewPw ? 'text' : 'password'}
                 value={newPasswordInput}
                 onChange={e => setNewPasswordInput(e.target.value)}
                 placeholder="Min. 6 characters"
+                autoComplete="new-password"
                 required
                 minLength={6}
-                className="w-full bg-canvas border border-border hover:border-borderHover rounded-xl px-3.5 py-2.5 text-xs sm:text-sm font-medium text-fg focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all pr-10 shadow-2xs"
+                className="w-full bg-canvas border border-border hover:border-borderHover rounded-xl px-3.5 py-2.5 text-xs sm:text-sm font-medium text-fg focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-colors pr-12 shadow-2xs"
               />
               <button
                 type="button"
                 onClick={() => setShowNewPw(!showNewPw)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-fg p-0.5 cursor-pointer"
+                aria-label={showNewPw ? 'Hide new password' : 'Show new password'}
+                aria-pressed={showNewPw}
+                aria-controls="account-new-password"
+                className="absolute right-1 top-1/2 -translate-y-1/2 grid h-11 w-11 place-items-center rounded-lg text-muted hover:text-fg focus-visible:ring-2 focus-visible:ring-primary"
               >
                 {showNewPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
@@ -129,12 +135,14 @@ export default function SecurityCard({ userEmail }) {
 
           {/* Confirm New Password */}
           <div>
-            <label className="block text-xs font-bold text-fg mb-1.5 uppercase tracking-wider">Confirm Password</label>
+            <label htmlFor="account-confirm-password" className="block text-xs font-bold text-fg mb-1.5">Confirm Password</label>
             <input
+              id="account-confirm-password"
               type="password"
               value={confirmPasswordInput}
               onChange={e => setConfirmPasswordInput(e.target.value)}
               placeholder="Repeat new password"
+              autoComplete="new-password"
               required
               className="w-full bg-canvas border border-border hover:border-borderHover rounded-xl px-3.5 py-2.5 text-xs sm:text-sm font-medium text-fg focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all shadow-2xs"
             />
@@ -149,7 +157,7 @@ export default function SecurityCard({ userEmail }) {
           <button
             type="submit"
             disabled={isChangingPassword || !currentPasswordInput || !newPasswordInput}
-            className="w-full sm:w-auto bg-primary hover:bg-primaryHover disabled:opacity-50 text-white px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all shadow-sm flex items-center justify-center gap-2 active:scale-95 shrink-0 cursor-pointer disabled:cursor-not-allowed"
+            className="min-h-11 w-full sm:w-auto bg-primary hover:bg-primaryHover disabled:opacity-50 text-white px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all shadow-sm flex items-center justify-center gap-2 active:scale-95 shrink-0 cursor-pointer disabled:cursor-not-allowed"
           >
             {isChangingPassword && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
             <span>Update Password</span>

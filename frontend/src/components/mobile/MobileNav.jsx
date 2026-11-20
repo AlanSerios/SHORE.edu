@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LayoutDashboard, Megaphone, Calendar, Menu, LogOut, Settings } from 'lucide-react';
+import { LayoutDashboard, Megaphone, Calendar, Menu, LogOut, Settings, X } from 'lucide-react';
 import { cn } from '../../utils';
 import AvatarBorder from '../AvatarBorder';
 import { getAcademicTools, getAdminTools } from '../../utils/navConfig';
@@ -15,7 +15,7 @@ export function MobileBottomNav({ currentView, setCurrentView, preloadView = () 
   ];
 
   return (
-    <nav aria-label="Primary mobile navigation" className={cn('md:hidden fixed bottom-[max(0.75rem,calc(0.5rem+env(safe-area-inset-bottom,0px)))] left-3 right-3 z-50 transition-opacity', isMenuSheetOpen && 'opacity-0 pointer-events-none')}>
+    <nav aria-label="Primary mobile navigation" className={cn('md:hidden fixed bottom-[max(0.75rem,calc(0.5rem+var(--safe-area-bottom)))] left-[max(0.75rem,var(--safe-area-left))] right-[max(0.75rem,var(--safe-area-right))] z-50 transition-opacity', isMenuSheetOpen && 'opacity-0 pointer-events-none')}>
       <div className="h-16 bg-white/90 backdrop-blur-xl border border-slate-200/80 rounded-2xl flex items-center justify-around px-2 shadow-[0_8px_30px_rgba(15,23,42,0.12)] relative z-40">
         {items.map(item => {
           const isActive = item.id === 'menu' ? isMenuSheetOpen : currentView === item.id;
@@ -70,14 +70,38 @@ export function MobileMenuSheet({ isOpen, onClose, setCurrentView, userRole, use
     const previouslyFocused = document.activeElement;
 
     const handleKeyDown = (event) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onClose();
+      }
+
+      if (event.key !== 'Tab') return;
+
+      const controls = [...(sheetRef.current?.querySelectorAll('button:not(:disabled), a[href], input:not(:disabled), [tabindex="0"]') || [])].filter(element => element.getClientRects().length);
+      const first = controls[0];
+      const last = controls[controls.length - 1];
+
+      if (!first) {
+        event.preventDefault();
+
+        return;
+      }
+
+      if (event.shiftKey && (document.activeElement === first || document.activeElement === sheetRef.current)) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (document.activeElement === last || !sheetRef.current?.contains(document.activeElement))) {
+        event.preventDefault();
+        first.focus();
+      }
     };
 
     document.addEventListener('keydown', handleKeyDown);
-    requestAnimationFrame(() => sheetRef.current?.focus());
+    const frame = requestAnimationFrame(() => sheetRef.current?.querySelector('button')?.focus());
 
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
+      cancelAnimationFrame(frame);
       previouslyFocused?.focus?.();
     };
   }, [isOpen, onClose]);
@@ -87,11 +111,11 @@ export function MobileMenuSheet({ isOpen, onClose, setCurrentView, userRole, use
       {isOpen && (
         <>
           <motion.button type="button" aria-label="Close menu" key="menu-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} className="fixed inset-0 bg-black/40 z-[60] md:hidden" />
-          <motion.div ref={sheetRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="mobile-menu-title" key="menu-sheet" initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 26, stiffness: 220 }} className="fixed bottom-0 left-0 right-0 bg-card rounded-t-3xl z-[70] md:hidden flex flex-col max-h-[85vh] shadow-[0_-10px_40px_rgba(0,0,0,0.12)] focus:outline-none">
+          <motion.div ref={sheetRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="mobile-menu-title" key="menu-sheet" initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 26, stiffness: 220 }} className="fixed bottom-0 left-0 right-0 bg-card rounded-t-3xl z-[70] md:hidden flex flex-col max-h-[calc(100dvh-1rem)] shadow-[0_-10px_40px_rgba(0,0,0,0.12)] focus:outline-none">
             {/* Native Sheet Pull Indicator */}
             <div className="w-10 h-1.5 bg-slate-300 rounded-full mx-auto mt-3 mb-1 shrink-0" aria-hidden="true" />
 
-            <div className="flex-1 overflow-y-auto overscroll-contain px-6 pt-3 pb-[max(2rem,calc(1.5rem+env(safe-area-inset-bottom,0px)))]">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pt-3 pb-[max(1rem,calc(0.75rem+env(safe-area-inset-bottom,0px)))] sm:px-6">
               {/* Profile header */}
               <div className="flex items-center gap-4 px-1 pb-5 border-b border-border mb-5">
                 <AvatarBorder borderId={equippedBorder} className="w-14 h-14 shrink-0">
@@ -103,6 +127,7 @@ export function MobileMenuSheet({ isOpen, onClose, setCurrentView, userRole, use
                   <h2 id="mobile-menu-title" className="text-lg font-bold text-fg tracking-tight truncate">{userRole === 'admin' ? 'Admin' : (userName || userEmail.split('@')[0])}</h2>
                   <p className="text-sm text-muted capitalize truncate">{userRole} Account</p>
                 </div>
+                <button type="button" aria-label="Close navigation menu" onClick={onClose} className="grid h-11 w-11 shrink-0 place-items-center rounded-lg text-muted hover:bg-canvas focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary touch-manipulation"><X aria-hidden="true" className="h-5 w-5" /></button>
               </div>
 
               {/* Classroom & Academics Grid */}

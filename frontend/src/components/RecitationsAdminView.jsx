@@ -2,12 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Search, Target, UserCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '../utils';
-import { PageHeader } from './ui/page';
+import { PageHeader, PageShell } from './ui/page';
 
 export default function RecitationsAdminView() {
   const [recitations, setRecitations] = useState([]);
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
 
   // Form State
@@ -21,20 +22,27 @@ export default function RecitationsAdminView() {
   }, []);
 
   const fetchData = async () => {
+    setLoading(true);
+    setLoadError('');
+
     try {
       const [recRes, stuRes] = await Promise.all([
         fetch('/api/recitations'),
         fetch('/api/users')
       ]);
 
+      if (!recRes.ok || !stuRes.ok) throw new Error('Could not load recitations.');
+
       const recData = await recRes.json();
       const stuData = await stuRes.json();
       
+      if (!Array.isArray(recData.recitations) || !Array.isArray(stuData.users)) throw new Error('Invalid recitation response.');
+
       setRecitations((recData.recitations || []).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)));
       setStudents(stuData.users.filter(u => u.role === 'student'));
       setLoading(false);
     } catch {
-      toast.error("Failed to load recitations data.");
+      setLoadError('Could not load recitations. Check your connection and try again.');
       setLoading(false);
     }
   };
@@ -99,8 +107,7 @@ export default function RecitationsAdminView() {
   if (loading) return <div className="p-8">Loading recitations...</div>;
 
   return (
-    <div className="h-full overflow-y-auto overscroll-contain bg-canvas">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-[max(1rem,calc(0.5rem+env(safe-area-inset-top,0px)))] sm:pt-8 pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] md:pb-10 space-y-6">
+    <PageShell width="default" contentClassName="space-y-4 sm:space-y-6">
 
         {/* Header */}
         <PageHeader
@@ -108,6 +115,7 @@ export default function RecitationsAdminView() {
           description="Grade and record student classroom recitation scores."
           actions={<button
             type="button"
+            disabled={Boolean(loadError)}
             onClick={() => setIsAdding(!isAdding)}
             className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-primaryHover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 sm:w-auto"
           >
@@ -115,6 +123,8 @@ export default function RecitationsAdminView() {
             {isAdding ? "Cancel" : "Record Score"}
           </button>}
         />
+
+        {loadError && <div role="alert" className="flex flex-wrap items-center gap-3 text-sm text-red-800"><p>{loadError}</p><button type="button" onClick={fetchData} className="min-h-11 rounded-lg border border-border px-4 font-semibold focus-visible:ring-2 focus-visible:ring-primary">Retry</button></div>}
 
         {/* Add Form */}
         {isAdding && (
@@ -126,8 +136,8 @@ export default function RecitationsAdminView() {
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
               <div>
-                <label className="block text-xs font-bold text-muted uppercase tracking-wider mb-2">Select Student</label>
-                <select
+                <label htmlFor="recitation-student" className="block text-xs font-bold text-muted uppercase tracking-wider mb-2">Select Student</label>
+                <select id="recitation-student"
                   value={selectedStudent}
                   onChange={(e) => setSelectedStudent(e.target.value)}
                   className="w-full h-11 px-4 rounded-xl border border-border bg-canvas/30 text-sm focus:outline-none focus:border-primary/50"
@@ -165,8 +175,8 @@ export default function RecitationsAdminView() {
             </div>
 
             <div className="mb-8">
-              <label className="block text-xs font-bold text-muted uppercase tracking-wider mb-2">Feedback / Notes (Optional)</label>
-              <input
+              <label htmlFor="recitation-notes" className="block text-xs font-bold text-muted uppercase tracking-wider mb-2">Feedback / Notes (Optional)</label>
+              <input id="recitation-notes"
                 type="text"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
@@ -190,7 +200,7 @@ export default function RecitationsAdminView() {
         {/* Records Table */}
         <div className="bg-white rounded-3xl border border-border/60 shadow-sm overflow-hidden">
           <div className="p-6 border-b border-border/40 flex flex-col sm:flex-row justify-between items-center gap-4">
-            <h3 className="font-bold text-lg text-fg">Recent Records</h3>
+            <h2 className="font-bold text-lg text-fg">Recent Records</h2>
             <div className="relative w-full sm:w-64">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
               <input 
@@ -198,7 +208,7 @@ export default function RecitationsAdminView() {
                 placeholder="Search students..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 rounded-full border border-border bg-canvas/30 text-sm focus:outline-none focus:border-primary/50"
+                className="min-h-11 w-full pl-9 pr-4 rounded-full border border-border bg-canvas/30 text-sm focus:outline-none focus:border-primary/50"
               />
             </div>
           </div>
@@ -242,8 +252,9 @@ export default function RecitationsAdminView() {
                         </td>
                         <td className="px-6 py-4 text-right">
                           <button 
+                            aria-label={`Delete recitation for ${getStudentName(rec.studentEmail || rec.studentName)}`}
                             onClick={() => handleDelete(rec.id)}
-                            className="p-2 text-muted hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                            className="min-h-11 min-w-11 p-2 text-muted hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -282,7 +293,8 @@ export default function RecitationsAdminView() {
                         </div>
                       </div>
                       <button 
-                        onClick={() => handleDelete(rec.id)}
+                        aria-label={`Delete recitation for ${getStudentName(rec.studentEmail || rec.studentName)}`}
+                            onClick={() => handleDelete(rec.id)}
                         className="p-2.5 min-w-[44px] min-h-[44px] flex items-center justify-center text-muted hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors shrink-0 active:scale-90 touch-manipulation"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -294,7 +306,6 @@ export default function RecitationsAdminView() {
             </div>
           </div>
         </div>
-      </div>
-    </div>
+    </PageShell>
   );
 }

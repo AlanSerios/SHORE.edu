@@ -2,10 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, CheckCircle2, MessageSquare, Trash2, Send, Clock, User as UserIcon } from 'lucide-react';
 import { toast } from 'sonner';
-import { PageHeader } from './ui/page';
+import { PageHeader, PageShell } from './ui/page';
 
 export default function TicketsView({ userEmail, userName, userRole }) {
   const [tickets, setTickets] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showForm, setShowForm] = useState(false);
   
@@ -22,13 +24,22 @@ export default function TicketsView({ userEmail, userName, userRole }) {
     fetchTickets();
   }, []);
 
-  const fetchTickets = () => {
-    fetch('/api/tickets')
-      .then(res => res.json())
-      .then(data => {
-        setTickets(data.tickets || []);
-      })
-      .catch(err => console.error("Failed to load tickets", err));
+  const fetchTickets = async () => {
+    setLoading(true);
+    setLoadError('');
+
+    try {
+      const response = await fetch('/api/tickets');
+      const data = await response.json();
+
+      if (!response.ok || !Array.isArray(data.tickets)) throw new Error('Could not load tickets. Check your connection and try again.');
+
+      setTickets(data.tickets);
+    } catch {
+      setLoadError('Could not load tickets. Check your connection and try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -114,9 +125,8 @@ export default function TicketsView({ userEmail, userName, userRole }) {
   const resolvedTickets = myTickets.filter(t => t.status === 'resolved');
 
   return (
-    <div className="h-full overflow-y-auto bg-canvas overscroll-contain">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 pt-[max(1.25rem,calc(0.75rem+env(safe-area-inset-top,0px)))] sm:pt-8 pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] md:pb-10 space-y-6">
-        
+    <PageShell width="narrow" contentClassName="space-y-4 sm:space-y-6">
+
         {/* Header */}
         <PageHeader
           title="Support Tickets"
@@ -146,8 +156,8 @@ export default function TicketsView({ userEmail, userName, userRole }) {
                 <h2 className="text-lg font-bold text-fg mb-4">Submit a Ticket</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-muted uppercase">Title</label>
-                    <input 
+                    <label htmlFor="ticket-title" className="text-xs font-bold text-muted uppercase">Title</label>
+                    <input id="ticket-title"
                       type="text" 
                       value={title} 
                       onChange={e => setTitle(e.target.value)} 
@@ -157,8 +167,8 @@ export default function TicketsView({ userEmail, userName, userRole }) {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-muted uppercase">Category</label>
-                    <select 
+                    <label htmlFor="ticket-category" className="text-xs font-bold text-muted uppercase">Category</label>
+                    <select id="ticket-category"
                       value={category} 
                       onChange={e => setCategory(e.target.value)}
                       className="w-full px-4 py-2.5 bg-canvas border border-border rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
@@ -170,8 +180,8 @@ export default function TicketsView({ userEmail, userName, userRole }) {
                   </div>
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-muted uppercase">Details</label>
-                  <textarea 
+                  <label htmlFor="ticket-details" className="text-xs font-bold text-muted uppercase">Details</label>
+                  <textarea id="ticket-details"
                     value={description} 
                     onChange={e => setDescription(e.target.value)}
                     rows={4}
@@ -193,13 +203,16 @@ export default function TicketsView({ userEmail, userName, userRole }) {
           )}
         </AnimatePresence>
 
+        {loading && <p role="status" className="text-sm text-muted">Loading tickets…</p>}
+        {loadError && <div className="flex flex-wrap items-center gap-3 text-sm"><p role="alert" className="text-red-800">{loadError}</p><button type="button" onClick={fetchTickets} className="min-h-11 rounded-lg border border-border px-4 font-semibold text-primary focus-visible:ring-2 focus-visible:ring-primary">Retry</button></div>}
+
         {/* Tickets List */}
-        <div className="space-y-6">
+        <div className="space-y-6" hidden={loading || Boolean(loadError)}>
           {/* Open Tickets */}
           <div>
-            <h3 className="text-sm font-bold text-muted uppercase tracking-wider mb-4 flex items-center gap-2">
+            <h2 className="text-sm font-bold text-muted uppercase tracking-wider mb-4 flex items-center gap-2">
               <Clock className="w-4 h-4" /> Open Tickets ({openTickets.length})
-            </h3>
+            </h2>
             {openTickets.length === 0 ? (
               <div className="bg-canvas border border-dashed border-border/60 rounded-2xl p-8 text-center">
                 <CheckCircle2 className="w-8 h-8 text-primary/40 mx-auto mb-2" />
@@ -227,9 +240,9 @@ export default function TicketsView({ userEmail, userName, userRole }) {
           {/* Resolved Tickets */}
           {resolvedTickets.length > 0 && (
             <div className="pt-8">
-              <h3 className="text-sm font-bold text-muted uppercase tracking-wider mb-4 flex items-center gap-2">
+              <h2 className="text-sm font-bold text-muted uppercase tracking-wider mb-4 flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-green-500" /> Resolved Tickets ({resolvedTickets.length})
-              </h3>
+              </h2>
               <div className="grid gap-4 opacity-75">
                 {resolvedTickets.map(ticket => (
                   <TicketCard 
@@ -243,8 +256,7 @@ export default function TicketsView({ userEmail, userName, userRole }) {
             </div>
           )}
         </div>
-      </div>
-    </div>
+    </PageShell>
   );
 }
 
@@ -265,7 +277,7 @@ function TicketCard({ ticket, userRole, onDelete, replyingTo, setReplyingTo, rep
             </span>
             <span className="text-xs text-muted/60">{new Date(ticket.timestamp).toLocaleString()}</span>
           </div>
-          <h4 className="text-base font-bold text-fg">{ticket.title}</h4>
+          <h3 className="text-base font-bold text-fg">{ticket.title}</h3>
           <p className="text-sm text-muted mt-1">{ticket.description}</p>
         </div>
         
@@ -305,7 +317,7 @@ function TicketCard({ ticket, userRole, onDelete, replyingTo, setReplyingTo, rep
 
       {replyingTo === ticket.id && !isResolved && (
         <div className="mt-4 bg-canvas rounded-xl p-3 border border-border/60 animate-in fade-in slide-in-from-top-2">
-          <textarea 
+          <textarea aria-label="Reply to ticket"
             value={replyText}
             onChange={e => setReplyText(e.target.value)}
             rows={2}

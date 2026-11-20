@@ -5,6 +5,7 @@ import json
 import time
 import datetime
 import unicodedata
+import hashlib
 import socket
 import hmac
 import ipaddress
@@ -376,6 +377,7 @@ INVENTORY_FILE = 'inventory'
 PURCHASES_FILE = 'purchases'
 SCHOLARSHIPS_FILE = 'scholarships'
 SCHOLARSHIP_SYNC_STATE_FILE = 'scholarship_sync_state'
+STUDENT_PREFERENCES_FILE = 'student_preferences'
 
 _CACHE = {}
 _CACHE_LOCK = threading.Lock()
@@ -507,6 +509,117 @@ def find_roster_matches(name):
                     matches.append((role, roster_name.strip()))
     return matches
 
+
+_ONBOARDING_SCHOOLS = {
+    'ustp', 'cmu', 'buksu', 'msu', 'msuiit', 'msun', 'xavier', 'liceo',
+    'phinma_coc', 'city_cdo', 'capitol', 'lourdes', 'undecided', 'other'
+}
+_CITY_SCHOLARSHIP_INTEREST = {
+    'id': 'city-cdo-scholarship',
+    'title': 'CDO City Scholarship Program',
+    'provider': 'Cagayan de Oro City Scholarships Office',
+}
+_CITY_SCHOLARSHIP_LISTING = {
+    **_CITY_SCHOLARSHIP_INTEREST,
+    'kind': 'scholarship',
+    'location': 'Cagayan de Oro City',
+    'deadline': '',
+    'applyLink': 'https://services.cagayandeoro.gov.ph:8087/cityscholar/',
+    'sourceUrl': 'https://ccro.cagayandeoro.gov.ph/index.php/news/the-city-hall/the-departments-and-offices.html?id=13',
+    'verified': True,
+    'officialDomain': 'cagayandeoro.gov.ph',
+    'registrationUrl': '',
+    'registrationVerified': False,
+    'description': 'Tertiary scholarship grants for qualified Cagayan de Oro residents. Application windows vary by cycle; check the official portal for current dates and requirements.',
+    'benefits': 'Tertiary scholarship grant. Confirm coverage and eligibility with the City Scholarships Office.',
+    'requirements': [],
+    'builtIn': True,
+}
+_ONBOARDING_INCOME_RANGES = {
+    'under_10k', '10k_20k', '20k_40k', '40k_60k',
+    '60k_plus', 'prefer_not_to_say', ''
+}
+_ONBOARDING_APPLICATION_STAGES = {
+    'exploring', 'preparing', 'applied', 'waiting'
+}
+def _clean_onboarding_text(value, max_length=120):
+    if not isinstance(value, str):
+        return ''
+    return sanitize_text(value).strip()[:max_length]
+
+
+def _validate_student_onboarding(raw):
+    if not isinstance(raw, dict):
+        raise ValueError('Invalid student preferences.')
+
+    def clean_choices(key, allowed, limit):
+        values = raw.get(key, [])
+        if values is None:
+            values = []
+        if not isinstance(values, list) or len(values) > limit:
+            raise ValueError('One of the preference selections is invalid.')
+        cleaned = []
+        for value in values:
+            if not isinstance(value, str) or value not in allowed:
+                raise ValueError('One of the preference selections is invalid.')
+            if value not in cleaned:
+                cleaned.append(value)
+        return cleaned
+
+    scholarships = load_scholarships()
+    valid_scholarships = {
+        str(item.get('id')) for item in scholarships
+        if isinstance(item, dict) and item.get('id')
+    }
+    valid_scholarships.add('other')
+    valid_scholarships.add('undecided')
+    valid_scholarships.add(_CITY_SCHOLARSHIP_INTEREST['id'])
+
+    application_stage = raw.get('applicationStage', '')
+    if application_stage is None:
+        application_stage = ''
+    if not isinstance(application_stage, str) or application_stage not in _ONBOARDING_APPLICATION_STAGES:
+        raise ValueError('Choose a valid application stage.')
+
+    income_range = raw.get('householdIncomeRange', '')
+    if income_range is None:
+        income_range = ''
+    if not isinstance(income_range, str) or income_range not in _ONBOARDING_INCOME_RANGES:
+        raise ValueError('Choose a valid household income range.')
+
+    cleaned = {
+        'schoolInterests': clean_choices('schoolInterests', _ONBOARDING_SCHOOLS, len(_ONBOARDING_SCHOOLS)),
+        'otherSchool': _clean_onboarding_text(raw.get('otherSchool')),
+        'scholarshipInterests': clean_choices('scholarshipInterests', valid_scholarships, len(valid_scholarships)),
+        'otherScholarship': _clean_onboarding_text(raw.get('otherScholarship')),
+        'intendedProgram': _clean_onboarding_text(raw.get('intendedProgram')),
+        'applicationStage': application_stage,
+        'householdIncomeRange': income_range,
+    }
+
+    if not cleaned['schoolInterests']:
+        raise ValueError('Choose at least one school or select Still Deciding.')
+    if not cleaned['scholarshipInterests']:
+        raise ValueError('Choose at least one scholarship or select Still Deciding.')
+    if 'undecided' in cleaned['schoolInterests'] and len(cleaned['schoolInterests']) > 1:
+        raise ValueError('Still Deciding must be the only school selection.')
+    if 'undecided' in cleaned['scholarshipInterests'] and len(cleaned['scholarshipInterests']) > 1:
+        raise ValueError('Still Deciding must be the only scholarship selection.')
+    if 'other' in cleaned['schoolInterests'] and not cleaned['otherSchool']:
+        raise ValueError('Enter the name of the other school.')
+    if 'other' in cleaned['scholarshipInterests'] and not cleaned['otherScholarship']:
+        raise ValueError('Enter the name of the other scholarship.')
+
+    if 'other' not in cleaned['schoolInterests']:
+        cleaned['otherSchool'] = ''
+    if 'other' not in cleaned['scholarshipInterests']:
+        cleaned['otherScholarship'] = ''
+    return cleaned
+
+
+def _student_preference_key(email):
+    return hashlib.sha256((email or '').strip().lower().encode('utf-8')).hexdigest()
+
 @app.route('/api/users/register', methods=['POST'])
 def register():
     client_ip = request.headers.get('X-Forwarded-For', request.remote_addr or '127.0.0.1').split(',')[0].strip()
@@ -575,7 +688,7 @@ def register():
     }
     users.append(user_record)
     save_json(USERS_FILE, users)
-    
+
     safe_user = sanitize_user_record(user_record)
     token = create_jwt_token(user_record)
     return jsonify({"success": True, "user": safe_user, "token": token}), 201
@@ -871,6 +984,191 @@ def get_current_user_profile():
         return jsonify({"error": "User not found"}), 404
     safe_user = sanitize_user_record(user)
     return jsonify({"user": safe_user, "token_payload": request.current_user}), 200
+
+
+@app.route('/api/users/me/onboarding', methods=['GET', 'POST'])
+@token_required(optional=False)
+def get_my_student_onboarding():
+    email = (request.current_user.get('email') or '').strip().lower()
+    if request.method == 'POST':
+        if (request.current_user or {}).get('role') != 'student':
+            return jsonify({"error": "Only student accounts can save student preferences."}), 403
+        try:
+            preferences = _validate_student_onboarding(request.get_json(silent=True) or {})
+        except ValueError as error:
+            return jsonify({"error": str(error), "code": "invalid_student_preferences"}), 400
+
+        users = load_json(USERS_FILE)
+        user = next((item for item in users if (item.get('email') or '').strip().lower() == email), None)
+        if not user or user.get('role') != 'student':
+            return jsonify({"error": "Student account not found."}), 404
+
+        record = {
+            'email': email,
+            'name': user.get('name', ''),
+            'preferences': preferences,
+            'updatedAt': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        }
+        try:
+            db.reference(STUDENT_PREFERENCES_FILE).child(_student_preference_key(email)).set(record)
+            with _CACHE_LOCK:
+                _CACHE.pop(STUDENT_PREFERENCES_FILE, None)
+        except Exception as error:
+            print('Firebase student preference save error:', error)
+            return jsonify({"error": "Could not save your preferences. Please retry."}), 503
+
+        return jsonify({"success": True, "preferences": preferences, "updatedAt": record['updatedAt']}), 200
+
+    record = load_dict(STUDENT_PREFERENCES_FILE).get(_student_preference_key(email), {})
+    preferences = record.get('preferences', {}) if isinstance(record, dict) else {}
+    if isinstance(preferences, dict):
+        preferences = {key: value for key, value in preferences.items() if key not in {'supportNeeds', 'currentLevel'}}
+    response = jsonify({"preferences": preferences})
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    return response, 200
+
+
+@app.route('/api/student-onboarding', methods=['GET'])
+@token_required(optional=False)
+def get_student_onboarding_for_admin():
+    if (request.current_user or {}).get('role') != 'admin':
+        return jsonify({"error": "Only administrators can view student preferences."}), 403
+    requested_email = (request.args.get('email') or '').strip().lower()
+    if not requested_email or not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+', requested_email):
+        return jsonify({"error": "Provide a valid student email address."}), 400
+    try:
+        records = db.reference(STUDENT_PREFERENCES_FILE).get() or {}
+    except Exception as error:
+        print('Firebase student preference read error:', error)
+        return jsonify({"error": "Could not load student preferences."}), 503
+    if not isinstance(records, dict):
+        records = {}
+    student = next((
+        record for record in records.values()
+        if isinstance(record, dict)
+        and (record.get('email') or '').strip().lower() == requested_email
+        and isinstance(record.get('preferences'), dict)
+    ), None)
+    students = []
+    if student:
+        students.append({
+            'email': requested_email,
+            'name': student.get('name', ''),
+            'updatedAt': student.get('updatedAt'),
+            'preferences': {
+                key: value for key, value in student['preferences'].items()
+                if key not in {'supportNeeds', 'currentLevel'}
+            },
+        })
+    response = jsonify({
+        "students": students
+    })
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    return response, 200
+
+
+@app.route('/api/student-onboarding/export', methods=['GET'])
+@token_required(optional=False)
+def export_student_onboarding():
+    if (request.current_user or {}).get('role') != 'admin':
+        return jsonify({"error": "Only administrators can export student preferences."}), 403
+
+    try:
+        records = db.reference(STUDENT_PREFERENCES_FILE).get() or {}
+        if not isinstance(records, dict):
+            records = {}
+        from openpyxl import Workbook
+        from openpyxl.styles import Alignment, Font, PatternFill
+
+        def excel_text(value):
+            text = _clean_onboarding_text(value, 500)
+            return f"'{text}" if text.startswith(('=', '+', '-', '@')) else text
+
+        school_names = {
+            'ustp': 'USTP', 'cmu': 'CMU', 'buksu': 'BukSU', 'msu': 'MSU',
+            'msuiit': 'MSU-IIT', 'msun': 'MSU at Naawan', 'capitol': 'Capitol University',
+            'xavier': 'Xavier University', 'liceo': 'Liceo de Cagayan',
+            'phinma_coc': 'PHINMA COC', 'city_cdo': 'City College of CDO',
+            'lourdes': 'Lourdes College', 'undecided': 'Still deciding', 'other': 'Other school',
+        }
+        income_names = {
+            'under_10k': 'Below ₱10,000', '10k_20k': '₱10,000–₱19,999',
+            '20k_40k': '₱20,000–₱39,999', '40k_60k': '₱40,000–₱59,999',
+            '60k_plus': '₱60,000 or more', 'prefer_not_to_say': 'Prefer not to say',
+        }
+        application_stage_names = {
+            'exploring': 'Exploring options',
+            'preparing': 'Preparing requirements',
+            'applied': 'Already applied',
+            'waiting': 'Waiting for an exam or results',
+        }
+        scholarship_names = {
+            str(item.get('id')): _clean_onboarding_text(item.get('title') or item.get('provider'), 120)
+            for item in load_scholarships()
+            if isinstance(item, dict) and item.get('id')
+        }
+        scholarship_names[_CITY_SCHOLARSHIP_INTEREST['id']] = _CITY_SCHOLARSHIP_INTEREST['title']
+        scholarship_names['undecided'] = 'Still deciding'
+        headers = [
+            'Student name', 'Username / email', 'Schools of interest', 'Scholarships of interest',
+            'Intended course / strand', 'Application progress', 'Monthly household income range', 'Last updated (UTC)',
+        ]
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.title = 'Student Interests'
+        sheet.append(headers)
+        for cell in sheet[1]:
+            cell.font = Font(bold=True, color='FFFFFF')
+            cell.fill = PatternFill('solid', fgColor='17365D')
+            cell.alignment = Alignment(vertical='center', wrap_text=True)
+
+        for record in sorted(
+            (item for item in records.values() if isinstance(item, dict)),
+            key=lambda item: str(item.get('name', '')).casefold(),
+        ):
+            preferences = record.get('preferences') if isinstance(record.get('preferences'), dict) else {}
+            schools = [school_names.get(value, value) for value in preferences.get('schoolInterests', []) if value != 'other']
+            other_school = _clean_onboarding_text(preferences.get('otherSchool'))
+            if other_school:
+                schools.append(other_school)
+            scholarships = [scholarship_names.get(value, value) for value in preferences.get('scholarshipInterests', []) if value != 'other']
+            other_scholarship = _clean_onboarding_text(preferences.get('otherScholarship'))
+            if other_scholarship:
+                scholarships.append(other_scholarship)
+            sheet.append([
+                excel_text(record.get('name')),
+                excel_text(record.get('email')),
+                excel_text(', '.join(schools)),
+                excel_text(', '.join(scholarships)),
+                excel_text(preferences.get('intendedProgram')),
+                application_stage_names.get(preferences.get('applicationStage', ''), ''),
+                income_names.get(preferences.get('householdIncomeRange', ''), ''),
+                excel_text(record.get('updatedAt')),
+            ])
+
+        sheet.freeze_panes = 'A2'
+        sheet.auto_filter.ref = sheet.dimensions
+        sheet.row_dimensions[1].height = 30
+        for column, width in enumerate((26, 34, 34, 42, 30, 30, 24, 28), start=1):
+            sheet.column_dimensions[chr(64 + column)].width = width
+        for row in sheet.iter_rows(min_row=2):
+            for cell in row:
+                cell.alignment = Alignment(vertical='top', wrap_text=True)
+
+        output = io.BytesIO()
+        workbook.save(output)
+        output.seek(0)
+        response = send_file(
+            output,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name='SHORE_Student_Interests.xlsx',
+        )
+        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        return response
+    except Exception as error:
+        print('Student preference export error:', error)
+        return jsonify({"error": "Could not create the student interests workbook."}), 503
 
 @app.route('/api/users', methods=['GET'])
 @token_required(optional=False)
@@ -1883,12 +2181,45 @@ def load_scholarships():
 def save_scholarships(data):
     save_json(SCHOLARSHIPS_FILE, data)
 
+
+@app.route('/api/onboarding/options', methods=['GET'])
+def get_registration_onboarding_options():
+    schools = [
+        {"id": "ustp", "name": "USTP"},
+        {"id": "cmu", "name": "CMU"},
+        {"id": "buksu", "name": "BukSU"},
+        {"id": "msu", "name": "MSU"},
+        {"id": "msuiit", "name": "MSU-IIT"},
+        {"id": "msun", "name": "MSU at Naawan"},
+        {"id": "xavier", "name": "Xavier University"},
+        {"id": "liceo", "name": "Liceo de Cagayan"},
+        {"id": "phinma_coc", "name": "PHINMA COC"},
+        {"id": "city_cdo", "name": "City College of CDO"},
+        {"id": "capitol", "name": "Capitol University"},
+        {"id": "lourdes", "name": "Lourdes College"},
+        {"id": "undecided", "name": "Still deciding"},
+        {"id": "other", "name": "Other school"},
+    ]
+    scholarships = [
+        {"id": str(item.get('id')), "title": _clean_onboarding_text(item.get('title'), 120), "provider": _clean_onboarding_text(item.get('provider'), 100)}
+        for item in load_scholarships()
+        if isinstance(item, dict) and item.get('id')
+    ]
+    if not any(item['id'] == _CITY_SCHOLARSHIP_INTEREST['id'] for item in scholarships):
+        scholarships.append(_CITY_SCHOLARSHIP_INTEREST.copy())
+    response = jsonify({"schools": schools, "scholarships": scholarships})
+    response.headers['Cache-Control'] = 'public, max-age=300'
+    return response, 200
+
 @app.route('/api/scholarships', methods=['GET'])
 @token_required(optional=False)
 def get_scholarships():
     sync_state = load_dict(SCHOLARSHIP_SYNC_STATE_FILE)
+    scholarships = load_scholarships()
+    if not any(item.get('id') == _CITY_SCHOLARSHIP_LISTING['id'] for item in scholarships if isinstance(item, dict)):
+        scholarships = [*scholarships, _CITY_SCHOLARSHIP_LISTING.copy()]
     return {
-        "scholarships": load_scholarships(),
+        "scholarships": scholarships,
         "sync": {
             "status": sync_state.get('status', 'not_run'),
             "lastSuccessAt": sync_state.get('lastSuccessAt', ''),

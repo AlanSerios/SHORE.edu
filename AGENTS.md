@@ -2,6 +2,8 @@
 
 # SHORE Agent Workflow
 
+- Before building or changing UI, read `DESIGN.md`. Use its spacing relationships, semantic colors, typography, and phone/laptop rules. Record durable user corrections there through `learn-taste`; keep engineering defaults distinct from user preferences.
+
 - Work in `frontend/`; mirror backend edits in both `server.py` and `backend/server.py`. Never modify archives.
 - Preserve existing user changes. Inspect relevant code and current UI before editing; use `rg` first.
 - For UI work, read and apply the smallest useful set: `ui-taste`, `ui-ux-pro-max`, `impeccable`, `no-ai-slop`, and `stop-slop`. Reject decorative pills, buzzword fluff, and fake badges. Use `systematic-debugging` for broken behavior. Use `caveman`/`caveman-review` when requested.

@@ -1,163 +1,179 @@
 {
-  "version": 1,
+  "version": 2,
   "skills": {
     "agent-browser": {
       "source": "vercel-labs/agent-browser",
       "sourceType": "github",
       "skillPath": "skills/agent-browser/SKILL.md",
-      "computedHash": "80161e6836b3b40f4e83730a290deb40ac14d877d38c97ad5f6d71be37ce74c3"
+      "computedHash": ""
     },
     "animation-vocabulary": {
       "source": "emilkowalski/skills",
       "sourceType": "github",
       "skillPath": "skills/animation-vocabulary/SKILL.md",
-      "computedHash": "9aaad861dd54dab7c9bb3fb5bd4c539078d8d06c14530d92d49cdb1509bfa937"
+      "computedHash": "1c50a737b755ff021f5216c7b89af3734ba0f9a908d0b540d3e9979f52fef3e2"
     },
     "anti-detect-browser": {
       "source": "antibrow/anti-detect-browser-skills",
       "sourceType": "github",
       "skillPath": "anti-detect-browser/SKILL.md",
-      "computedHash": "34906eda7cd67f53fed685a3273e743764014d2f36b85b9dab0241637a3c7f4b"
+      "computedHash": "05a4b554bdcaf8714d211f5e1ee2621ffb1737299e7df88e572f501001b91fc1"
     },
     "building-components": {
       "source": "vercel/components.build",
       "sourceType": "github",
       "skillPath": "skills/building-components/SKILL.md",
-      "computedHash": "20889af7cb9b3abca1e38824f7fffaa873eb0cc4d45187967b97bd85462cf934"
+      "computedHash": ""
     },
     "caveman": {
       "source": "juliusbrussee/caveman",
       "sourceType": "github",
       "skillPath": "skills/caveman/SKILL.md",
-      "computedHash": "eb52a145a708818af3c45ecd9658520611d615b67a8bb2064582950f3bd4b6de"
+      "computedHash": "a2286803d073dbaece82d9f096a9efee4b301968bd6ce98c6975c6f82ac9b8c6"
     },
     "caveman-commit": {
       "source": "juliusbrussee/caveman",
       "sourceType": "github",
       "skillPath": "skills/caveman-commit/SKILL.md",
-      "computedHash": "b416cf134b0f33ddadeca7977aebdbb2d3db79a166d0fce2e1aabeec98132766"
+      "computedHash": "2c1472fb59eedd3cfba0b6512dc470a00287343ade421db55c21a6fb52afbe86"
     },
     "caveman-compress": {
       "source": "juliusbrussee/caveman",
       "sourceType": "github",
       "skillPath": "skills/caveman-compress/SKILL.md",
-      "computedHash": "99141d4609fb7cbf7abd19075bb36a02f251cc7e716a2a532238ef66d2ec0324"
+      "computedHash": "bbd1155f825601cf99aad1de562f32f190f6d0fdb0d91803b598c314900a9b99"
     },
     "caveman-help": {
       "source": "juliusbrussee/caveman",
       "sourceType": "github",
       "skillPath": "skills/caveman-help/SKILL.md",
-      "computedHash": "b5757ca455c4c7af2c1a2abf2e55619e9cc7c085622058d0172c60cb658af90b"
+      "computedHash": "1d96f7755e4ac3f087e31725e6584cb5d14c6078d4170de75c5630efee348da6"
     },
     "caveman-review": {
       "source": "juliusbrussee/caveman",
       "sourceType": "github",
       "skillPath": "skills/caveman-review/SKILL.md",
-      "computedHash": "36a4007c5c0c6b90b5accfee1cd769a86e4963b651dece2ce5f17a223a0abb4b"
+      "computedHash": "c55908f8ee0dca0e59690e939dfd4a877bd9361897ae5fced096274a77509154"
+    },
+    "dotnet-backend-patterns": {
+      "source": "wshobson/agents",
+      "commit": "9c61ab243def98f72da12abd41cfcf5bcd91af9d",
+      "sourceType": "github",
+      "skillPath": "plugins/dotnet-contribution/skills/dotnet-backend-patterns/SKILL.md",
+      "computedHash": "afad41d2d4878462a6d49dfc9ef7844e413f58d797ecbe9fd998b84d4e68d342",
+      "installMode": "copy"
     },
     "find-animation-opportunities": {
       "source": "emilkowalski/skills",
       "sourceType": "github",
       "skillPath": "skills/find-animation-opportunities/SKILL.md",
-      "computedHash": "c6673fadf179233cc0a52c978ea9acc9b82a210665c749307a571a86ed4c092e"
+      "computedHash": "6912a27a684feba9dd220349940d8a44e0d7b720cab71042f268a7ed93bf4bab"
     },
     "flutter-build-responsive-layout": {
       "source": "flutter/agent-plugins",
       "sourceType": "github",
       "skillPath": "skills/flutter-build-responsive-layout/SKILL.md",
-      "computedHash": "6d74a9504c4e355c4c62f6fcb6c6dc0df67b56dd6616bea199e4e58f75b7729b"
+      "computedHash": "bdb7ab7ca812ee719237a718376a5f2e15b659201ff66818f1012c5d13751487"
     },
     "hyperframes-animation": {
       "source": "heygen-com/hyperframes",
       "sourceType": "github",
       "skillPath": "skills/hyperframes-animation/SKILL.md",
-      "computedHash": "d9c7a5253c93d955719766db804cdc6053a3892909502f0eca2b5b194d0aaa43"
+      "computedHash": "0c88b44f1fde70d362a49163f08bbc5e7bf6b729156eade709c369c18fe41407"
     },
     "imagegen-frontend-mobile": {
       "source": "leonxlnx/taste-skill",
       "sourceType": "github",
       "skillPath": "skills/imagegen-frontend-mobile/SKILL.md",
-      "computedHash": "7c1d1dc59cd0df4063b8621af543bf5dea1d576b261507e17b0323c69680b048"
+      "computedHash": "bf3296b937c3fd58c9d1531983bb339ec86d612fe6db7eb5bb48935c838b27d3"
     },
     "improve-animations": {
       "source": "emilkowalski/skills",
       "sourceType": "github",
       "skillPath": "skills/improve-animations/SKILL.md",
-      "computedHash": "b913ec7ef2b1aa900060eb6e5dbdccc94b6ea631059ec3474c4b61e2ffefeeb4"
+      "computedHash": "59a9e59e5c4dee0ee2adc9f3fe5663f5f22e0f96fdae5f727812f84c0ae89c54"
     },
     "install-anti-slop": {
       "source": "dmmulroy/anti-slop",
       "sourceType": "github",
       "skillPath": "skills/install-anti-slop/SKILL.md",
-      "computedHash": "d92d8dbdf1bd96e11ee33945dca76306179a7c415e7339769084b2c211c6897c"
+      "computedHash": "5be199ab8489847e412bc02c80034a93fb23633a8d273630c41d1edac892dd7f"
     },
     "ios-design": {
       "source": "uizze.sh",
       "sourceUrl": "https://uizze.sh/",
       "sourceType": "well-known",
-      "computedHash": "6b92ffbe225bdd877e1245e843c5b79f1e37f7ab40d3f802937044f6aee29d20",
+      "computedHash": "81c2b41dcbb07a0fc096385d08fc0886a78f9f4f2d6fd1d0e9a2b9828f5f2de3",
       "wellKnownDigest": "sha256:b117db775a77c436d7e46c2eeb1602de40f5f0256214cf6a9dc2bb056ddffd9d"
     },
     "mobile-native": {
       "source": "emilkowalski/skills",
       "sourceType": "github",
       "skillPath": "skills/mobile-native/SKILL.md",
-      "computedHash": "8d77850a34ec20f745aed3215aa0d587e90438599bb09dc72d9d09ce896a5765"
+      "computedHash": "2141766c0a370128cbee3dc004d3f254a411e54f8352e154e73b040e52070e38"
     },
     "no-ai-slop": {
       "source": "petergyang/no-ai-slop",
       "sourceType": "github",
       "skillPath": "skills/no-ai-slop/SKILL.md",
-      "computedHash": "109e265d222da64314b5f08634e4c4ab91051c81eff92d52beea8f3cd81ddb3d"
+      "computedHash": "325408c3843e4a9d148a439fa665a0722d1248e23da8ef84646c9647ff4b3f88"
+    },
+    "nodejs-backend-patterns": {
+      "source": "wshobson/agents",
+      "commit": "9c61ab243def98f72da12abd41cfcf5bcd91af9d",
+      "sourceType": "github",
+      "skillPath": "plugins/javascript-typescript/skills/nodejs-backend-patterns/SKILL.md",
+      "computedHash": "e478380e9c9d245d0c4caf6574d00934aca71fc62101e571262cdd26f958f4f1",
+      "installMode": "copy"
     },
     "ponytail": {
       "source": "dietrichgebert/ponytail",
       "sourceType": "github",
       "skillPath": "skills/ponytail/SKILL.md",
-      "computedHash": "9e8d05cbbaf6dc38f0cffc924c09b3cbe76d94ba4ba0d09bde803da2f8c6b5a0"
+      "computedHash": "3af42a29c072819c06c2827b1de7b1f0b8537cb6307e4ae2669010fd17c489bb"
     },
     "ponytail-review": {
       "source": "dietrichgebert/ponytail",
       "sourceType": "github",
       "skillPath": "skills/ponytail-review/SKILL.md",
-      "computedHash": "8f94283bb70331807f6b49d2d210729c8c90022d5ee9c99dc714a07535e7bc7d"
+      "computedHash": "5d0cd3373796ed995a2409635b7eebeb825dad98c7e4d31041a106cc9b317482"
     },
     "review-animations": {
       "source": "emilkowalski/skills",
       "sourceType": "github",
       "skillPath": "skills/review-animations/SKILL.md",
-      "computedHash": "8c2befeb28bb484bf2de7b2fc228774857e266d32a65d76895e78651a536d8cf"
+      "computedHash": "f3c25b26369923340e82b181569cdcca7e803a2f19600cfdca85d559f92e6e8f"
     },
     "safe-debug": {
       "source": "lllllllama/rigorpilot-skills",
       "sourceType": "github",
       "skillPath": "skills/safe-debug/SKILL.md",
-      "computedHash": "f09bc8d4d750dd7cab6a61c05af7720d5543ff74bec8e557ae5e3461212c374c"
+      "computedHash": "35e8304178e6188d4bc66c0b10f32bb46620fbb7180a446b842865f755e7baf1"
     },
     "stop-slop": {
       "source": "hardikpandya/stop-slop",
       "sourceType": "github",
       "skillPath": "SKILL.md",
-      "computedHash": "09acd38f01d6c643bce871a739141c01a06a04f43d8b55959ef73550476e771c"
+      "computedHash": "02a5b429945020ed8a5ed4024d57384258c2596f09ab42c3e7498a8a43ec1c36"
     },
     "systematic-debugging": {
       "source": "obra/superpowers",
       "sourceType": "github",
       "skillPath": "skills/systematic-debugging/SKILL.md",
-      "computedHash": "3589907ee34dc8b1b7223a33fac98ab841a9e42f9960ab4433a832f0c6f00be0"
+      "computedHash": "4d30d3c4f62f4af8e416ce676178c3cfa5393ec4720da3c20f87444877c367b4"
     },
     "ui-taste": {
       "source": "uizze.sh",
       "sourceUrl": "https://uizze.sh/",
       "sourceType": "well-known",
-      "computedHash": "9b73951ae54b7d1eb81e69bb2f47d1622b3813bbefbd6c0aaa36dfcf938f1f27",
+      "computedHash": "0f67f2a587b5aa10a66ecf0cc627fb1e0edf88b6ed143908a9a8c637e776feb2",
       "wellKnownDigest": "sha256:3b88468608bc7ceec66b8333fab1729590e7af62487fcdbdf79ef60ff626def7"
     },
     "web-design-guidelines": {
       "source": "vercel-labs/agent-skills",
       "sourceType": "github",
       "skillPath": "skills/web-design-guidelines/SKILL.md",
-      "computedHash": "d8e7d3afe37dcc8a97b99ffb5afdb4d0919ae0092ea8b68f44eb201f035e33ac"
+      "computedHash": "4f68ae07187fb0d1fb78c88b503d089da4cf5a9d9625d1f2e425b1590bf96d92"
     }
   }
 }

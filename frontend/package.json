@@ -27,6 +27,7 @@
     "jsqr": "^1.4.0",
     "jszip": "^3.10.2",
     "lottie-react": "^2.4.1",
+    "lottie-web": "^5.13.0",
     "lucide-react": "^1.23.0",
     "qrcode.react": "^4.2.0",
     "react": "^19.2.7",

@@ -80,7 +80,7 @@ export default function PWAInstallBanner() {
           <div className="flex items-center gap-3.5 min-w-0">
             <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 p-0.5 shrink-0 flex items-center justify-center shadow-md">
               <img
-                src="/SHORE5.png"
+                src="/shore5-96.webp"
                 alt="SHORE"
                 width="48"
                 height="48"

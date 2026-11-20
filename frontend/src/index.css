@@ -1,9 +1,29 @@
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 300 700;
+  font-display: swap;
+  src: url('/fonts/inter-latin-wght-normal.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Geist Mono';
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url('/fonts/geist-mono-latin-wght-normal.woff2') format('woff2');
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
+    --safe-area-left: env(safe-area-inset-left, 0px);
+    --safe-area-right: env(safe-area-inset-right, 0px);
+    --safe-area-top: env(safe-area-inset-top, 0px);
+    --safe-area-bottom: env(safe-area-inset-bottom, 0px);
     --color-canvas: #F8FAFC;
     --color-card: #FFFFFF;
     --color-sidebar: #FFFFFF;
@@ -15,7 +35,7 @@
     --color-primaryHover: #1D4ED8;
     --color-accentBlue: #EFF6FF;
     --color-accentGreen: #F0FDF4;
-    --color-accentGreenFg: #16A34A;
+    --color-accentGreenFg: #15803D;
     --color-accentRed: #FEF2F2;
     --color-accentRedFg: #DC2626;
   }
@@ -110,4 +130,53 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* Press feedback is interruptible; reduced-motion users keep color feedback. */
+@media (prefers-reduced-motion: no-preference) {
+  .shore-button:active:not(:disabled) { scale: 0.97; }
+}
+
+/* Shared page geometry: content gutters also clear landscape notches. */
+.shore-page-content {
+  --page-gutter: 1rem;
+  padding-left: max(var(--page-gutter), var(--safe-area-left));
+  padding-right: max(var(--page-gutter), var(--safe-area-right));
+  padding-top: max(1.25rem, calc(0.75rem + var(--safe-area-top)));
+  padding-bottom: calc(5.5rem + var(--safe-area-bottom));
+}
+@media (min-width: 640px) {
+  .shore-page-content { --page-gutter: 1.5rem; padding-top: 2rem; }
+}
+@media (min-width: 768px) {
+  .shore-page-content { padding-bottom: 2.5rem; }
+}
+@media (min-width: 1024px) {
+  .shore-page-content { --page-gutter: 2rem; }
+}
+/* Utilities cannot shrink phone fields below Safari's no-zoom threshold.
+   Security PIN cells intentionally use their existing larger text sizes. */
+@media (pointer: coarse), (max-width: 767px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([aria-label^="Security PIN digit"]),
+  textarea[class],
+  select[class] { font-size: 16px; }
+}
+
+/* Auth is compact, but still clears a notch and the home indicator. */
+.shore-auth-panel {
+  --auth-inline-space: 0.75rem;
+  --auth-block-space: 0.75rem;
+  padding-left: max(var(--auth-inline-space), var(--safe-area-left));
+  padding-right: max(var(--auth-inline-space), var(--safe-area-right));
+  padding-top: max(var(--auth-block-space), var(--safe-area-top));
+  padding-bottom: max(var(--auth-block-space), var(--safe-area-bottom));
+}
+@media (min-width: 640px) {
+  .shore-auth-panel { --auth-inline-space: 1rem; --auth-block-space: 1rem; }
+}
+@media (min-width: 768px) {
+  .shore-auth-panel { --auth-inline-space: 1.5rem; --auth-block-space: 0.875rem; }
+}
+@media (min-width: 1024px) {
+  .shore-auth-panel { --auth-inline-space: 2rem; --auth-block-space: 1.25rem; }
 }

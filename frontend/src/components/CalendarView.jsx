@@ -76,7 +76,7 @@ function EmptySchedule({ filtered, onReset }) {
     <div className="grid min-h-56 place-items-center px-6 py-10 text-center">
       <div className="max-w-sm">
         <div className="mx-auto mb-4 grid h-12 w-12 place-items-center rounded-2xl border border-border bg-white text-muted"><CalendarDays className="h-5 w-5" /></div>
-        <h3 className="font-bold text-fg">{filtered ? 'No matching events' : 'Nothing scheduled'}</h3>
+        <h2 className="font-bold text-fg">{filtered ? 'No matching events' : 'Nothing scheduled'}</h2>
         <p className="mt-1.5 text-sm leading-relaxed text-muted">{filtered ? 'Adjust the category filters to see more of the calendar.' : 'This date range is clear. New events will appear here.'}</p>
         {filtered && <button type="button" onClick={onReset} className="mt-4 min-h-10 rounded-xl border border-border px-4 text-sm font-bold text-primary hover:bg-canvas">Show all categories</button>}
       </div>
@@ -152,7 +152,7 @@ function MonthMobile({ focusedDate, selectedDate, setSelectedDate, events, onOpe
       </div>
       <section className="mt-5" aria-labelledby="selected-day-title">
         <div className="mb-3 flex items-center justify-between">
-          <div><p className="text-xs font-bold uppercase tracking-wider text-primary">Selected day</p><h3 id="selected-day-title" className="mt-0.5 text-lg font-bold text-fg">{format(selectedDate, 'EEEE, MMMM d')}</h3></div>
+          <div><p className="text-xs font-bold uppercase tracking-wider text-primary">Selected day</p><h2 id="selected-day-title" className="mt-0.5 text-lg font-bold text-fg">{format(selectedDate, 'EEEE, MMMM d')}</h2></div>
           {canEdit && <button type="button" onClick={() => onCreate(selectedDate)} className="grid h-10 w-10 place-items-center rounded-xl bg-primary text-white" aria-label={`Add event on ${format(selectedDate, 'MMMM d')}`}><Plus className="h-5 w-5" /></button>}
         </div>
         <DayEventList day={selectedDate} events={events} onOpen={onOpen} canEdit={canEdit} onCreate={onCreate} />
@@ -295,7 +295,7 @@ function WeekMobile({ focusedDate, selectedDate, setSelectedDate, events, onOpen
 
  return <button key={dateKey(day)} type="button" onClick={() => setSelectedDate(day)} aria-pressed={selected} className={cn('flex min-h-14 flex-col items-center justify-center rounded-xl transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary', selected ? 'bg-primary text-white' : 'hover:bg-canvas')}><span className={cn('text-[10px] font-bold uppercase', selected ? 'text-white/75' : 'text-muted')}>{format(day, 'EEE')}</span><span className="mt-0.5 text-sm font-bold">{format(day, 'd')}</span>{count > 0 && <span className={cn('mt-1 h-1.5 w-1.5 rounded-full', selected ? 'bg-white' : 'bg-primary')} />}</button>; })}
       </div>
-      <section className="mt-5"><h3 className="mb-3 text-lg font-bold text-fg">{format(selectedDate, 'EEEE, MMMM d')}</h3><DayEventList day={selectedDate} events={events} onOpen={onOpen} canEdit={canEdit} onCreate={onCreate} /></section>
+      <section className="mt-5"><h2 className="mb-3 text-lg font-bold text-fg">{format(selectedDate, 'EEEE, MMMM d')}</h2><DayEventList day={selectedDate} events={events} onOpen={onOpen} canEdit={canEdit} onCreate={onCreate} /></section>
     </div>
   );
 }
@@ -306,7 +306,7 @@ function AgendaView({ events, onOpen, filtered, onReset }) {
 
   if (!dates.length) return <EmptySchedule filtered={filtered} onReset={onReset} />;
 
-  return <div className="space-y-7 pb-4">{dates.map(date => <section key={date} className="grid grid-cols-1 gap-3 sm:grid-cols-[150px_minmax(0,1fr)]" aria-labelledby={`agenda-${date}`}><div><p className="text-xs font-bold uppercase tracking-wider text-primary">{isSameDay(parseISO(date), new Date()) ? 'Today' : format(parseISO(date), 'EEEE')}</p><h3 id={`agenda-${date}`} className="mt-0.5 font-bold text-fg">{format(parseISO(date), 'MMMM d, yyyy')}</h3></div><div className="space-y-2">{groups[date].map(event => <AgendaEvent key={event.occurrenceId} event={event} onOpen={onOpen} />)}</div></section>)}</div>;
+  return <div className="space-y-7 pb-4">{dates.map(date => <section key={date} className="grid grid-cols-1 gap-3 sm:grid-cols-[150px_minmax(0,1fr)]" aria-labelledby={`agenda-${date}`}><div><p className="text-xs font-bold uppercase tracking-wider text-primary">{isSameDay(parseISO(date), new Date()) ? 'Today' : format(parseISO(date), 'EEEE')}</p><h2 id={`agenda-${date}`} className="mt-0.5 font-bold text-fg">{format(parseISO(date), 'MMMM d, yyyy')}</h2></div><div className="space-y-2">{groups[date].map(event => <AgendaEvent key={event.occurrenceId} event={event} onOpen={onOpen} />)}</div></section>)}</div>;
 }
 
 function UpcomingRail({ events, onOpen }) {
@@ -385,6 +385,7 @@ export default function CalendarView({ userRole = 'student' }) {
   }, [activeTypes, events]);
 
   const hasFilters = activeTypes.size !== EVENT_TYPES.length;
+  const isEmptyAgenda = view === 'agenda' && visibleOccurrences.length === 0;
 
   const changePeriod = direction => {
     const next = view === 'month' ? (direction > 0 ? addMonths(focusedDate, 1) : subMonths(focusedDate, 1)) : view === 'week' ? (direction > 0 ? addWeeks(focusedDate, 1) : subWeeks(focusedDate, 1)) : addDays(focusedDate, direction * 30);
@@ -484,7 +485,7 @@ export default function CalendarView({ userRole = 'student' }) {
   const periodTitle = view === 'month' ? format(focusedDate, 'MMMM yyyy') : view === 'week' ? `${format(range.start, 'MMM d')} – ${format(range.end, 'MMM d, yyyy')}` : `From ${format(focusedDate, 'MMMM d, yyyy')}`;
 
   return (
-    <div className="flex h-full w-full flex-col overflow-y-auto bg-canvas px-4 pt-[max(1.25rem,calc(0.75rem+env(safe-area-inset-top,0px)))] pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] md:overflow-hidden md:px-6 md:pb-6 md:pt-5 lg:px-8 overscroll-contain">
+    <div className="shore-page-content flex h-full w-full flex-col overflow-y-auto bg-canvas md:overflow-hidden overscroll-contain">
       <header className="mb-4 shrink-0">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0"><div className="flex flex-wrap items-baseline gap-2.5"><h1 className="text-2xl font-bold tracking-tight text-fg sm:text-3xl">{periodTitle}</h1><span className="text-sm font-semibold text-muted">{visibleOccurrences.length} in view</span></div></div>
@@ -508,7 +509,7 @@ export default function CalendarView({ userRole = 'student' }) {
 
       {loading ? <div className="grid flex-1 place-items-center" role="status" aria-live="polite"><div className="text-center"><Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" /><p className="mt-3 text-sm font-semibold text-muted">Loading calendar…</p></div></div>
         : loadError ? <div className="grid flex-1 place-items-center px-6 text-center" role="alert"><div className="max-w-sm"><CalendarDays className="mx-auto h-10 w-10 text-rose-500" /><h2 className="mt-3 text-xl font-bold text-fg">Calendar unavailable</h2><p className="mt-2 text-sm text-muted">{loadError}</p><button type="button" onClick={fetchEvents} className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-xl bg-primary px-4 text-sm font-bold text-white"><RefreshCw className="h-4 w-4" /> Try again</button></div></div>
-          : <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.18, ease: 'easeOut' }} className="flex min-h-0 flex-1 gap-5"><main className="min-w-0 flex-1 md:min-h-0">{view === 'month' && <><MonthMobile focusedDate={focusedDate} selectedDate={selectedDate} setSelectedDate={setSelectedDate} events={visibleOccurrences} onOpen={openDetails} canEdit={canEdit} onCreate={openCreate} /><MonthDesktop focusedDate={focusedDate} events={visibleOccurrences} onOpen={openDetails} canEdit={canEdit} onCreate={openCreate} onMore={day => { setFocusedDate(day); setSelectedDate(day); setView('agenda'); }} /></>}{view === 'week' && <><WeekMobile focusedDate={focusedDate} selectedDate={selectedDate} setSelectedDate={setSelectedDate} events={visibleOccurrences} onOpen={openDetails} canEdit={canEdit} onCreate={openCreate} /><WeekDesktop focusedDate={focusedDate} events={visibleOccurrences} onOpen={openDetails} canEdit={canEdit} onCreate={openCreate} /></>}{view === 'agenda' && <div className="h-full overflow-y-auto rounded-2xl border border-border bg-white p-4 shadow-sm sm:p-6"><AgendaView events={visibleOccurrences} onOpen={openDetails} filtered={hasFilters} onReset={resetFilters} /></div>}</main>{view !== 'agenda' && <UpcomingRail events={upcomingEvents} onOpen={openDetails} />}</motion.div>}
+          : <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.18, ease: 'easeOut' }} className="flex min-h-0 flex-1 gap-5"><div className="min-w-0 flex-1 md:min-h-0">{view === 'month' && <><MonthMobile focusedDate={focusedDate} selectedDate={selectedDate} setSelectedDate={setSelectedDate} events={visibleOccurrences} onOpen={openDetails} canEdit={canEdit} onCreate={openCreate} /><MonthDesktop focusedDate={focusedDate} events={visibleOccurrences} onOpen={openDetails} canEdit={canEdit} onCreate={openCreate} onMore={day => { setFocusedDate(day); setSelectedDate(day); setView('agenda'); }} /></>}{view === 'week' && <><WeekMobile focusedDate={focusedDate} selectedDate={selectedDate} setSelectedDate={setSelectedDate} events={visibleOccurrences} onOpen={openDetails} canEdit={canEdit} onCreate={openCreate} /><WeekDesktop focusedDate={focusedDate} events={visibleOccurrences} onOpen={openDetails} canEdit={canEdit} onCreate={openCreate} /></>}{view === 'agenda' && <div className={cn('overflow-y-auto rounded-2xl border border-border bg-white p-4 shadow-sm sm:p-6', isEmptyAgenda ? 'h-auto md:h-full' : 'h-full')}><AgendaView events={visibleOccurrences} onOpen={openDetails} filtered={hasFilters} onReset={resetFilters} /></div>}</div>{view !== 'agenda' && <UpcomingRail events={upcomingEvents} onOpen={openDetails} />}</motion.div>}
 
       <EventDrawer isOpen={drawerOpen} mode={drawerMode} setMode={setDrawerMode} event={selectedEvent} initialDate={createDate} initialTime={createTime} canEdit={canEdit} isBusy={isBusy} onClose={() => !isBusy && setDrawerOpen(false)} onSave={saveEvent} onDelete={deleteEvent} onComplete={completeEvent} />
     </div>

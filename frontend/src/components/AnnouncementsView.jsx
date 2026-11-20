@@ -123,7 +123,7 @@ const AnnouncementItem = ({ post, userRole, userEmail, profilePicture, userEquip
           )}
         </header>
 
-        <div className="prose mt-5 max-w-none break-words text-[15px] leading-7 text-fg/85 prose-a:underline prose-a:underline-offset-2">
+        <div className="prose mt-5 max-w-[65ch] break-words text-[15px] leading-7 text-fg/85 prose-a:underline prose-a:underline-offset-[0.2em]">
           <div dangerouslySetInnerHTML={{ __html: parseMarkdown(post.content) }} />
         </div>
 
@@ -240,6 +240,7 @@ const AnnouncementItem = ({ post, userRole, userEmail, profilePicture, userEquip
           <input
             id={`announcement-comment-input-${post.id}`}
             type="text"
+            enterKeyHint="send"
             aria-label={`Comment on ${post.title}`}
             placeholder="Write a comment…"
             value={commentText[post.id] || ''}

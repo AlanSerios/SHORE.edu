@@ -1,6 +1,7 @@
 /** @type {import('tailwindcss').Config} */
 export default {
   darkMode: 'class',
+  future: { hoverOnlyWhenSupported: true },
   content: [
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
@@ -30,7 +31,6 @@ export default {
       },
       fontFamily: {
         sans: ['Inter', 'Geist', 'SF Pro Display', 'Helvetica Neue', 'sans-serif'],
-        serif: ['Playfair Display', 'serif'],
         mono: ['Geist Mono', 'JetBrains Mono', 'monospace'],
       },
     },

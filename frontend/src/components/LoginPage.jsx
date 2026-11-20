@@ -1,7 +1,7 @@
 import React from "react";
 import { AuthFormSplitScreen } from "./ui/login";
 
-export default function LoginPage({ onLogin }) {
+export default function LoginPage({ onLogin, pendingStudentOnboarding }) {
   const handleLogin = async (data, isRegister, isForgot = false) => {
 
     const endpoint = isForgot 
@@ -31,24 +31,28 @@ export default function LoginPage({ onLogin }) {
       return result; // return early, don't login automatically
     }
     
-    if (result.token) {
-      localStorage.setItem('shore_token', result.token);
+    if (isRegister) {
+      return result;
     }
 
-    onLogin(result.user, result.token);
+    await onLogin(result.user, result.token);
   };
 
   return (
     <AuthFormSplitScreen
       logo={
         <img 
-          src="/shore_logo.png" 
+          src="/shore_logo-264.webp"
           alt="SHORE.ed" 
+          width="264"
+          height="98"
           className="h-7 sm:h-8 w-auto object-contain mx-auto" 
         />
       }
-      images={["/SHORE5.png"]}
+      images={["/shore5.webp"]}
       onSubmit={handleLogin}
+      onRegistrationComplete={onLogin}
+      pendingStudentOnboarding={pendingStudentOnboarding}
     />
   );
 }

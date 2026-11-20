@@ -90,6 +90,6 @@ createRoot(document.getElementById('root')).render(
     <ErrorBoundary>
       <App />
     </ErrorBoundary>
-    <Toaster position="bottom-right" richColors closeButton theme="light" offset="24px" />
+    <Toaster toastOptions={{ style: { '--error-text': '#991b1b' } }} position="bottom-right" richColors closeButton theme="light" offset="24px" />
   </React.StrictMode>,
 );

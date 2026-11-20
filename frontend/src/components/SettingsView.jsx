@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { loadStoredUser } from '../utils/userStorage';
-import { FolderArchive, Sparkles, ShieldCheck } from 'lucide-react';
+import { ArrowRight, ChevronLeft, FolderArchive, LockKeyhole, QrCode, ShieldCheck, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import getCroppedImg from '../utils/cropImage';
 import {
@@ -14,11 +14,12 @@ import {
 
 // Modular Subcomponents
 import CropModal from './settings/CropModal';
-import QRPassModal from './settings/QRPassModal';
 import ProfileCard from './settings/ProfileCard';
+import AvatarBorder from './AvatarBorder';
+import StudentProfileGoals from './settings/StudentProfileGoals';
 import CosmeticsCard from './settings/CosmeticsCard';
 import SecurityCard from './settings/SecurityCard';
-import { PageHeader } from './ui/page';
+import { PageHeader, PageShell } from './ui/page';
 import ScholarshipTracker from './settings/ScholarshipTracker';
 import DocumentVault, { DEFAULT_MASTER_DOCS } from './settings/DocumentVault';
 
@@ -76,7 +77,7 @@ export const normalizeTrackedScholarships = (list, catalog = []) => {
   });
 };
 
-export default function SettingsView({ userEmail, userRole, onUpdateUser }) {
+export default function SettingsView({ userEmail, userName, userRole, onUpdateUser, onNavigate }) {
   const cachedUser = loadStoredUser() || {};
 
   const [currentUserData, setCurrentUserData] = useState(cachedUser);
@@ -86,8 +87,8 @@ export default function SettingsView({ userEmail, userRole, onUpdateUser }) {
   const [appliedScholarships, setAppliedScholarships] = useState(() => normalizeTrackedScholarships(cachedUser.appliedScholarships || []));
   const [availableScholarships, setAvailableScholarships] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [accountLoadError, setAccountLoadError] = useState('');
   const [borderInventory, setBorderInventory] = useState([]);
-  const [showQRPopout, setShowQRPopout] = useState(false);
 
   // Profile crop state
   const fileInputRef = useRef(null);
@@ -97,8 +98,19 @@ export default function SettingsView({ userEmail, userRole, onUpdateUser }) {
   const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
 
   // Tabs & Document Vault State
+  const [activeAccountSection, setActiveAccountSection] = useState(null);
   const [activeMainTab, setActiveMainTab] = useState('tracker'); // 'tracker' | 'vault'
   const [vaultDocs, setVaultDocs] = useState([]);
+  const sectionHeadingRef = useRef(null);
+  const overviewCardRefs = useRef({});
+
+  useEffect(() => {
+    if (!activeAccountSection) return undefined;
+
+    const frame = window.requestAnimationFrame(() => sectionHeadingRef.current?.focus());
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [activeAccountSection]);
 
   const [customVaultDocs, setCustomVaultDocs] = useState(() => {
     try {
@@ -153,6 +165,8 @@ export default function SettingsView({ userEmail, userRole, onUpdateUser }) {
   };
 
   const fetchUserData = async () => {
+    setAccountLoadError('');
+
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 6000);
 
@@ -160,7 +174,7 @@ export default function SettingsView({ userEmail, userRole, onUpdateUser }) {
       const res = await fetch('/api/users', { signal: controller.signal });
       clearTimeout(timeoutId);
 
-      if (!res.ok) return;
+      if (!res.ok) throw new Error('Account details could not be loaded.');
       const data = await res.json();
       const currentUser = (data.users || []).find(u => u.email === userEmail);
 
@@ -184,6 +198,7 @@ export default function SettingsView({ userEmail, userRole, onUpdateUser }) {
         }
       }
     } catch (error) {
+      setAccountLoadError('Could not refresh account details. Previously available details are still shown.');
       console.warn('Network slow or timed out, keeping cached profile data:', error);
     } finally {
       setIsLoading(false);
@@ -201,6 +216,10 @@ export default function SettingsView({ userEmail, userRole, onUpdateUser }) {
       const data = await res.json();
 
       if (res.ok) {
+        setCurrentUserData((current) => ({ ...current, ...data.user }));
+
+        if (data.user?.profilePicture !== undefined) setProfilePicture(data.user.profilePicture || null);
+
         if (onUpdateUser) onUpdateUser(data.user);
 
         return { success: true };
@@ -267,11 +286,11 @@ export default function SettingsView({ userEmail, userRole, onUpdateUser }) {
   const handleSaveCrop = async () => {
     try {
       const croppedImageBase64 = await getCroppedImg(imageSrc, croppedAreaPixels);
-      setProfilePicture(croppedImageBase64);
-      setImageSrc(null);
       const result = await saveUserData({ profilePicture: croppedImageBase64 });
 
       if (result.success) {
+        setProfilePicture(croppedImageBase64);
+        setImageSrc(null);
         toast.success('Profile picture updated successfully');
       } else {
         toast.error(`Failed to update profile picture: ${result.error}`);
@@ -610,7 +629,7 @@ export default function SettingsView({ userEmail, userRole, onUpdateUser }) {
   const allVaultSlots = [...DEFAULT_MASTER_DOCS, ...customVaultDocs];
 
   return (
-    <div className="h-full w-full max-w-7xl mx-auto flex flex-col overflow-y-auto relative px-4 sm:px-6 lg:px-8 pt-[max(1.25rem,calc(0.75rem+env(safe-area-inset-top,0px)))] sm:pt-8 bg-canvas overscroll-contain">
+    <PageShell width="wide" contentClassName="relative">
       {/* Photo Crop Modal */}
       <CropModal
         imageSrc={imageSrc}
@@ -625,92 +644,164 @@ export default function SettingsView({ userEmail, userRole, onUpdateUser }) {
 
       {/* Header */}
       <PageHeader
-        className="mb-6"
+        className="mb-4 sm:mb-6"
         title="Manage Account"
-        description="Update your profile, avatar cosmetics, and organize your scholarship requirements."
+        description="Profile, attendance, scholarships, and password."
       />
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] md:pb-12">
-        {/* Left Column: Profile, Attendance Pass, Cosmetics */}
-        <div className="lg:col-span-4 xl:col-span-4 flex flex-col gap-4 sm:gap-6">
-          <ProfileCard
-            userEmail={userEmail}
-            userRole={userRole}
-            profilePicture={profilePicture}
-            equippedBorder={equippedBorder}
-            fileInputRef={fileInputRef}
-            handleImageUpload={handleImageUpload}
-            onOpenQR={() => setShowQRPopout(true)}
-          />
+      {accountLoadError && <div className="mb-4 flex flex-wrap items-center gap-3 text-sm"><p role="alert" className="text-red-800">{accountLoadError}</p><button type="button" onClick={fetchUserData} className="min-h-11 rounded-lg border border-border px-4 font-semibold text-primary focus-visible:ring-2 focus-visible:ring-primary">Retry</button></div>}
 
-          <CosmeticsCard
-            ownedBorders={ownedBorders}
-            borderInventory={borderInventory}
-            equippedBorder={equippedBorder}
-            handleEquipBorder={handleEquipBorder}
-          />
-        </div>
+      {!activeAccountSection ? (
+        <section aria-label="Account overview" className="space-y-3">
+          <button
+            ref={(node) => { overviewCardRefs.current.profile = node; }}
+            type="button"
+            onClick={() => setActiveAccountSection('profile')}
+            className="flex min-h-[88px] w-full items-center gap-3 rounded-2xl border border-border bg-card p-4 text-left transition-colors hover:border-primary/40 hover:bg-primary/[0.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 sm:p-4"
+          >
+            <AvatarBorder borderId={equippedBorder} className="h-12 w-12 shrink-0">
+              <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-full border border-primary/20 bg-canvas text-lg font-semibold text-primary">
+                {profilePicture ? <img src={profilePicture} alt="" className="h-full w-full object-cover" /> : (currentUserData.name || userName || userEmail || 'S').trim().charAt(0).toUpperCase()}
+              </div>
+            </AvatarBorder>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-semibold text-fg">{currentUserData.name || userName || 'Your Profile'}</span>
+              <span className="mt-0.5 block truncate text-sm text-muted">{userEmail}</span>
+            </span>
+            <span className="shrink-0 text-sm font-semibold text-primary">Open profile</span>
+            <ArrowRight className="h-4 w-4 shrink-0 text-muted" aria-hidden="true" />
+          </button>
 
-        {/* Right Column: Unified Workspace & Security */}
-        <div className="lg:col-span-8 xl:col-span-8 flex flex-col gap-4 sm:gap-6">
-          <div className="bg-card border border-border/80 rounded-3xl shadow-sm flex flex-col overflow-hidden transition-all">
-            {/* Top Workspace Navigation Header */}
-            <div className="px-4 sm:px-6 py-3.5 border-b border-border/70 bg-canvas/40 flex flex-col xl:flex-row xl:items-center justify-between gap-3">
-              <div role="tablist" aria-label="Account workspace" className="flex w-full min-w-0 rounded-xl border border-border/80 bg-card p-1 shadow-sm xl:w-auto">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            <button
+              type="button"
+              onClick={() => onNavigate?.('attendance')}
+              className="flex min-h-[82px] items-center gap-3 rounded-2xl border border-border bg-card p-4 text-left transition-colors hover:border-primary/40 hover:bg-primary/[0.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+            >
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><QrCode className="h-5 w-5" aria-hidden="true" /></span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-semibold text-fg">{userRole === 'admin' ? 'Attendance' : 'Attendance Pass'}</span>
+                <span className="mt-0.5 block text-sm text-muted">{userRole === 'admin' ? 'Manage check-ins' : 'Open your event pass'}</span>
+              </span>
+              <ArrowRight className="h-4 w-4 shrink-0 text-muted" aria-hidden="true" />
+            </button>
+
+            <button
+              ref={(node) => { overviewCardRefs.current.scholarships = node; }}
+              type="button"
+              onClick={() => setActiveAccountSection('scholarships')}
+              className="flex min-h-[82px] items-center gap-3 rounded-2xl border border-border bg-card p-4 text-left transition-colors hover:border-primary/40 hover:bg-primary/[0.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+            >
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><FolderArchive className="h-5 w-5" aria-hidden="true" /></span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-semibold text-fg">Tracked Scholarships</span>
+                <span className="mt-0.5 block text-sm text-muted">{appliedScholarships.length ? `${appliedScholarships.length} ${appliedScholarships.length === 1 ? 'program' : 'programs'} saved` : 'Requirements and documents'}</span>
+              </span>
+              <ArrowRight className="h-4 w-4 shrink-0 text-muted" aria-hidden="true" />
+            </button>
+
+            <button
+              ref={(node) => { overviewCardRefs.current.security = node; }}
+              type="button"
+              onClick={() => setActiveAccountSection('security')}
+              className="flex min-h-[82px] items-center gap-3 rounded-2xl border border-border bg-card p-4 text-left transition-colors hover:border-primary/40 hover:bg-primary/[0.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 sm:col-span-2 xl:col-span-1"
+            >
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><LockKeyhole className="h-5 w-5" aria-hidden="true" /></span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-semibold text-fg">Security &amp; Password</span>
+                <span className="mt-0.5 block text-sm text-muted">Manage your sign-in password</span>
+              </span>
+              <ArrowRight className="h-4 w-4 shrink-0 text-muted" aria-hidden="true" />
+            </button>
+          </div>
+        </section>
+      ) : (
+        <section id="account-section-panel" aria-labelledby="account-section-heading" className="min-w-0">
+          <div className="mb-4 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                const previousSection = activeAccountSection;
+                setActiveAccountSection(null);
+                window.requestAnimationFrame(() => overviewCardRefs.current[previousSection]?.focus());
+              }}
+              className="inline-flex min-h-10 items-center gap-1.5 rounded-lg px-2 text-sm font-medium text-primary transition-colors hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              <ChevronLeft className="h-4 w-4" aria-hidden="true" />Account overview
+            </button>
+            <h2 ref={sectionHeadingRef} id="account-section-heading" tabIndex="-1" className="text-base font-semibold text-fg focus:outline-none">
+              {activeAccountSection === 'profile' ? 'Profile' : activeAccountSection === 'scholarships' ? 'Tracked Scholarships' : 'Security & Password'}
+            </h2>
+          </div>
+
+        {activeAccountSection === 'profile' && (
+          <div className={`grid grid-cols-1 gap-4 sm:gap-6 ${userRole === 'student' ? 'lg:grid-cols-12' : 'sm:grid-cols-2'}`}>
+            <div className={`flex flex-col gap-4 sm:gap-6 ${userRole === 'student' ? 'lg:col-span-4' : ''}`}>
+              <ProfileCard
+                userEmail={userEmail}
+                userName={currentUserData.name || userName}
+                userRole={userRole}
+                profilePicture={profilePicture}
+                equippedBorder={equippedBorder}
+                fileInputRef={fileInputRef}
+                handleImageUpload={handleImageUpload}
+              />
+              {userRole === 'student' && <CosmeticsCard
+                ownedBorders={ownedBorders}
+                borderInventory={borderInventory}
+                equippedBorder={equippedBorder}
+                handleEquipBorder={handleEquipBorder}
+              />}
+            </div>
+            {userRole === 'student' && (
+              <div className="lg:col-span-8">
+                <StudentProfileGoals
+                  profilePicture={profilePicture}
+                  onAddPhoto={() => fileInputRef.current?.click()}
+                />
+              </div>
+            )}
+            {userRole !== 'student' && <CosmeticsCard
+              ownedBorders={ownedBorders}
+              borderInventory={borderInventory}
+              equippedBorder={equippedBorder}
+              handleEquipBorder={handleEquipBorder}
+            />}
+          </div>
+        )}
+
+        {activeAccountSection === 'scholarships' && (
+          <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+            <div className="flex flex-col gap-3 border-b border-border/70 bg-canvas/40 px-3.5 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+              <div role="group" aria-label="Scholarship records" className="flex min-w-0 rounded-lg border border-border/80 bg-card p-1 sm:w-fit">
                 <button
                   type="button"
-                  role="tab"
-                  aria-selected={activeMainTab === 'vault'}
-                  onClick={() => setActiveMainTab('vault')}
-                  className={`min-w-0 flex-1 py-2 px-2 sm:px-3 text-xs font-bold flex items-center justify-center gap-1.5 rounded-lg transition-colors duration-200 ${
-                    activeMainTab === 'vault'
-                      ? 'bg-primary text-white shadow-sm shadow-primary/25'
-                      : 'text-muted hover:text-fg hover:bg-canvas/60'
-                  }`}
-                >
-                  <FolderArchive className="w-3.5 h-3.5 shrink-0" />
-                  <span className="truncate">Document Vault</span>
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-extrabold shrink-0 transition-colors ${
-                    activeMainTab === 'vault'
-                      ? 'bg-white/20 text-white'
-                      : 'bg-emerald-500/10 text-emerald-700'
-                  }`}>
-                    {vaultDocs.length}/{allVaultSlots.length}
-                  </span>
-                </button>
-
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={activeMainTab === 'tracker'}
+                  aria-pressed={activeMainTab === 'tracker'}
                   onClick={() => setActiveMainTab('tracker')}
-                  className={`min-w-0 flex-1 py-2 px-2 sm:px-3 text-xs font-bold flex items-center justify-center gap-1.5 rounded-lg transition-colors duration-200 ${
-                    activeMainTab === 'tracker'
-                      ? 'bg-primary text-white shadow-sm shadow-primary/25'
-                      : 'text-muted hover:text-fg hover:bg-canvas/60'
-                  }`}
+                  className={`flex min-h-10 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-md px-2.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:flex-none sm:px-3 ${activeMainTab === 'tracker' ? 'bg-primary text-white' : 'text-muted hover:bg-canvas hover:text-fg'}`}
                 >
-                  <Sparkles className="w-3.5 h-3.5 shrink-0" />
-                  <span className="truncate">Requirements Tracker</span>
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-extrabold shrink-0 transition-colors ${
-                    activeMainTab === 'tracker'
-                      ? 'bg-white/20 text-white'
-                      : 'bg-muted/20 text-muted'
-                  }`}>
-                    {appliedScholarships.length}
-                  </span>
+                  <Sparkles className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  <span>Requirements</span>
+                  <span className="tabular-nums">{appliedScholarships.length}</span>
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={activeMainTab === 'vault'}
+                  onClick={() => setActiveMainTab('vault')}
+                  className={`flex min-h-10 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-md px-2.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:flex-none sm:px-3 ${activeMainTab === 'vault' ? 'bg-primary text-white' : 'text-muted hover:bg-canvas hover:text-fg'}`}
+                >
+                  <FolderArchive className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  <span>Document Vault</span>
+                  <span className="tabular-nums">{vaultDocs.length}/{allVaultSlots.length}</span>
                 </button>
               </div>
-
-              {/* Vault Status Indicator */}
-              <div className="hidden xl:flex items-center gap-1.5 text-xs font-medium text-muted shrink-0">
-                <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span className="text-[11px] font-semibold tracking-wide text-muted uppercase">Document Vault</span>
+              <div className="hidden items-center gap-1.5 text-xs text-muted sm:flex">
+                <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-600" aria-hidden="true" />
+                <span>{activeMainTab === 'tracker' ? 'Track requirements and deadlines' : 'Keep application files together'}</span>
               </div>
             </div>
 
-            {/* Tab Body */}
-            <div className="p-3.5 sm:p-6 flex-1 flex flex-col min-h-0">
+            <div className="p-4 sm:p-6">
               {activeMainTab === 'tracker' ? (
                 <ScholarshipTracker
                   appliedScholarships={appliedScholarships}
@@ -744,19 +835,11 @@ export default function SettingsView({ userEmail, userRole, onUpdateUser }) {
               )}
             </div>
           </div>
+        )}
 
-          {/* Security & Password Card */}
-          <SecurityCard userEmail={userEmail} />
-        </div>
-      </div>
-
-      {/* QR Code Popout Modal */}
-      <QRPassModal
-        isOpen={showQRPopout}
-        onClose={() => setShowQRPopout(false)}
-        userEmail={userEmail}
-        userRole={userRole}
-      />
-    </div>
+        {activeAccountSection === 'security' && <SecurityCard userEmail={userEmail} />}
+        </section>
+      )}
+    </PageShell>
   );
 }

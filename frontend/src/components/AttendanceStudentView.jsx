@@ -1,35 +1,39 @@
-import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import React, { useState, useEffect, useCallback } from 'react';
+import { motion, useReducedMotion } from 'framer-motion';
 import { Clock, AlertTriangle, CheckCircle2, QrCode } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { cn } from '../utils';
 import QRPassModal from './settings/QRPassModal';
 import { PageHeader } from './ui/page';
 
-const AttendanceStudentView = ({ userEmail }) => {
+const AttendanceStudentView = ({ userEmail, userName }) => {
   const [attendance, setAttendance] = useState([]);
   const [globalEvents, setGlobalEvents] = useState(new Set());
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [showQRPopout, setShowQRPopout] = useState(false);
+  const reduceMotion = useReducedMotion();
 
-  useEffect(() => {
-    fetch('/api/attendance')
-      .then(res => res.json())
-      .then(data => {
-        const allLogs = data.attendance || [];
-        const occurredEvents = new Set(allLogs.map(log => log.event));
-        setGlobalEvents(occurredEvents);
-        
-        const studentLogs = allLogs.filter(log => log.email === userEmail);
-        studentLogs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-        setAttendance(studentLogs);
-        setLoading(false);
-      })
-      .catch(err => {
-        console.error("Failed to load attendance", err);
-        setLoading(false);
-      });
+  const loadAttendance = useCallback(async () => {
+    setLoading(true);
+    setLoadError('');
+
+    try {
+      const response = await fetch('/api/attendance');
+      const data = await response.json();
+
+      if (!response.ok || !Array.isArray(data.attendance)) throw new Error('Could not load attendance. Check your connection and try again.');
+
+      setGlobalEvents(new Set(data.attendance.map(log => log.event)));
+      setAttendance(data.attendance.filter(log => log.email === userEmail).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)));
+    } catch {
+      setLoadError('Could not load attendance. Check your connection and try again.');
+    } finally {
+      setLoading(false);
+    }
   }, [userEmail]);
+
+  useEffect(() => { loadAttendance(); }, [loadAttendance]);
 
   const mandatoryEvents = [
     "Onboarding", 
@@ -45,21 +49,21 @@ const AttendanceStudentView = ({ userEmail }) => {
   const absences = mandatoryEvents.filter(ev => globalEvents.has(ev) && !attendedEvents.has(ev)).length;
 
   return (
-    <div className="h-full overflow-y-auto bg-canvas overscroll-contain">
-      <div className="max-w-7xl mx-auto pt-[max(1.25rem,calc(0.75rem+env(safe-area-inset-top,0px)))] pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] md:pb-10 px-4 sm:px-6 lg:px-8 sm:pt-8">
+    <div tabIndex="0" role="region" aria-label="Attendance details" className="h-full overflow-y-auto bg-canvas overscroll-contain focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+      <div className="shore-page-content max-w-7xl mx-auto">
       
       <PageHeader
         title="My Attendance"
-        description="Show your digital QR pass at class sessions and review your check-in logs."
+        description="Show your pass at sessions and review your check-ins."
       />
 
       {/* MAIN GRID LAYOUT */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 mt-6">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 mt-6 lg:items-start">
         
         {/* LEFT COLUMN: DIGITAL PASS */}
         <div className="lg:col-span-5 xl:col-span-4 flex flex-col gap-8">
           
-          {absences >= 2 && (
+          {!loadError && !loading && absences >= 2 && (
             <motion.div 
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -69,7 +73,7 @@ const AttendanceStudentView = ({ userEmail }) => {
                 <AlertTriangle className="w-5 h-5 text-red-600" strokeWidth={2.5} />
               </div>
               <div>
-                <h3 className="text-lg font-black text-red-900 mb-1">Attendance Warning</h3>
+                <h2 className="text-lg font-black text-red-900 mb-1">Attendance Warning</h2>
                 <p className="text-sm font-medium text-red-800/80 leading-relaxed">
                   You have <strong className="text-red-900">{absences} absences</strong> for mandatory events. Perfect attendance is required to maintain scholarship eligibility.
                 </p>
@@ -77,77 +81,60 @@ const AttendanceStudentView = ({ userEmail }) => {
             </motion.div>
           )}
 
-          {/* DIGITAL PASS (MAGNETIC DOUBLE BEZEL) */}
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.98 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.5, ease: [0.32, 0.72, 0, 1] }}
-            className="group bg-canvas p-2 rounded-[3rem] border border-border/50 shadow-xl shadow-black/5 w-full hover:scale-[1.02] transition-transform duration-500 ease-[cubic-bezier(0.32,0.72,0,1)]"
+          <motion.section
+            aria-labelledby="attendance-pass-title"
+            initial={reduceMotion ? false : { opacity: 0, transform: 'translateY(6px)' }}
+            animate={{ opacity: 1, transform: 'translateY(0)' }}
+            transition={reduceMotion ? { duration: 0 } : { duration: 0.22, ease: [0.23, 1, 0.32, 1] }}
+            className="overflow-hidden rounded-2xl border border-border bg-white"
           >
-            <div className="bg-white rounded-[2.5rem] shadow-[inset_0_1px_2px_rgba(255,255,255,1)] border border-border/20 overflow-hidden relative">
-              
-              <div className="h-32 bg-primary relative flex items-center justify-center overflow-hidden">
-                <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, white 1px, transparent 0)', backgroundSize: '16px 16px' }}></div>
-                <QrCode className="w-16 h-16 text-white/30 absolute -bottom-4 -right-2 rotate-12 scale-150 mix-blend-overlay" />
-              </div>
-              
-              <div className="px-8 pb-10 pt-2 flex flex-col items-center relative z-10">
-                <div 
-                  className="bg-white p-5 rounded-[2rem] shadow-xl shadow-black/10 border border-black/5 -mt-16 mb-8 group-hover:-translate-y-2 transition-transform duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] cursor-pointer"
-                  onClick={() => setShowQRPopout(true)}
-                  title="Click to enlarge"
-                >
-                  <QRCodeSVG 
-                    value={userEmail} 
-                    size={160} 
-                    bgColor="#ffffff"
-                    fgColor="#000000"
-                    level="H"
-                    includeMargin={false}
-                  />
-                  <p className="text-[10px] text-center font-bold text-muted uppercase mt-3">Click to enlarge</p>
-                </div>
-                
-                <h2 className="text-2xl font-black text-fg text-center mb-1">{userEmail ? userEmail.split('@')[0] : ''}</h2>
-                <div className="flex items-center gap-1.5 justify-center mb-8">
-                  <span className="text-[10px] font-bold text-muted uppercase tracking-[0.15em]">Scholar Account</span>
-                </div>
-                
-                <div className="w-full bg-canvas rounded-2xl p-4 flex items-center justify-between border border-border/50">
-                  <div className="overflow-hidden w-full">
-                    <p className="text-[10px] font-bold text-muted uppercase tracking-wider mb-0.5">Email Identifier</p>
-                    <p className="text-xs font-bold text-fg truncate">{userEmail}</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="absolute top-32 left-0 w-6 h-6 bg-canvas rounded-r-full -translate-x-3 -translate-y-1/2 shadow-[inset_-1px_0_2px_rgba(0,0,0,0.05)] border border-border/50 border-l-0" />
-              <div className="absolute top-32 right-0 w-6 h-6 bg-canvas rounded-l-full translate-x-3 -translate-y-1/2 shadow-[inset_1px_0_2px_rgba(0,0,0,0.05)] border border-border/50 border-r-0" />
+            <div className="flex items-center gap-3 bg-primary px-4 py-3 text-white sm:px-5">
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-white/15">
+                <QrCode aria-hidden="true" className="h-5 w-5" />
+              </span>
+              <h2 id="attendance-pass-title" className="text-base font-semibold">Attendance Pass</h2>
             </div>
-          </motion.div>
+            <div className="flex flex-col items-center gap-4 p-4 sm:p-5">
+              <button type="button" onClick={() => setShowQRPopout(true)} aria-label="Enlarge QR attendance pass" aria-haspopup="dialog" className="group rounded-2xl bg-accentBlue p-2 hover:bg-blue-100 motion-safe:transition-transform motion-safe:duration-150 motion-safe:ease-out motion-safe:active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2">
+                <span className="block rounded-xl bg-white p-2">
+                  <QRCodeSVG title="Your attendance QR pass" value={userEmail} size={160} bgColor="#ffffff" fgColor="#000000" level="H" includeMargin={false} />
+                </span>
+                <span className="mt-2 block text-center text-xs font-semibold text-primary">Enlarge QR</span>
+              </button>
+              <div className="max-w-full text-center">
+                <p className="break-words text-base font-semibold text-fg">{userName || userEmail?.split('@')[0] || 'Account'}</p>
+                <p className="mt-1 break-all text-xs leading-5 text-muted">{userEmail}</p>
+              </div>
+            </div>
+          </motion.section>
         </div>
 
         {/* RIGHT COLUMN: RECENT LOGS TIMELINE */}
         <div className="lg:col-span-7 xl:col-span-8 flex flex-col">
-          <div className="flex items-center justify-between mb-8">
-            <h3 className="text-xl font-bold text-fg">Activity Log</h3>
+          <div className="flex items-center justify-between mb-4 sm:mb-6">
+            <h2 className="text-xl font-bold text-fg">Activity Log</h2>
             <div className="inline-flex items-center gap-2 bg-white px-4 py-1.5 rounded-full text-xs font-bold text-fg border border-border/50 shadow-sm">
-              {attendedEvents.size} <span className="text-muted font-medium">Events Recorded</span>
+              {attendedEvents.size} <span className="text-muted font-medium">{attendedEvents.size === 1 ? 'Event Recorded' : 'Events Recorded'}</span>
             </div>
           </div>
 
-          <div className="bg-canvas p-2.5 rounded-[2.5rem] border border-border/50 shadow-sm flex-1 flex flex-col">
-            <div className="bg-white rounded-[2rem] p-6 sm:p-10 shadow-[inset_0_1px_2px_rgba(255,255,255,1)] border border-border/20 flex-1 flex flex-col">
+          <div className="min-w-0 flex flex-col">
+            <div className="bg-white rounded-2xl border border-border p-4 sm:p-6 flex flex-col">
               {loading ? (
                 <div className="py-12 flex flex-1 items-center justify-center">
                   <div className="w-8 h-8 border-2 border-primary/20 border-t-primary rounded-full animate-spin" />
+                </div>
+              ) : loadError ? (
+                <div className="py-8 text-sm">
+                  <p role="alert" className="text-red-800">{loadError}</p>
+                  <button type="button" onClick={loadAttendance} className="mt-3 min-h-11 rounded-lg border border-border px-4 font-semibold text-primary focus-visible:ring-2 focus-visible:ring-primary">Retry</button>
                 </div>
               ) : attendance.length === 0 ? (
                 <div className="py-16 flex flex-1 flex-col items-center justify-center text-center">
                   <div className="w-20 h-20 bg-canvas rounded-[2rem] border border-border/50 flex items-center justify-center mb-6">
                     <Clock className="w-8 h-8 text-muted" strokeWidth={1.5} />
                   </div>
-                  <h4 className="text-lg font-bold text-fg mb-2">History is Empty</h4>
+                  <h3 className="text-lg font-bold text-fg mb-2">History is Empty</h3>
                   <p className="text-muted text-sm max-w-xs font-medium">
                     You haven't scanned into any events yet. Present your digital pass to begin tracking.
                   </p>
@@ -166,7 +153,7 @@ const AttendanceStudentView = ({ userEmail }) => {
                         <div className="flex items-center gap-3 mb-2">
                           <span className={cn(
                             "px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5",
-                            log.type === 'Time In' ? "bg-green-500/10 text-green-700" : "bg-orange-500/10 text-orange-700"
+                            log.type === 'Time In' ? "bg-green-50 text-green-800" : "bg-orange-50 text-orange-800"
                           )}>
                             {log.type === 'Time In' ? <CheckCircle2 className="w-3 h-3" strokeWidth={2} /> : <Clock className="w-3 h-3" strokeWidth={2} />}
                             {log.type}
@@ -175,7 +162,7 @@ const AttendanceStudentView = ({ userEmail }) => {
                             {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </span>
                         </div>
-                        <h4 className="text-base font-bold text-fg mb-0.5">{log.event}</h4>
+                        <h3 className="text-base font-bold text-fg mb-0.5">{log.event}</h3>
                         <p className="text-xs text-muted font-medium">
                           {new Date(log.timestamp).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
                         </p>

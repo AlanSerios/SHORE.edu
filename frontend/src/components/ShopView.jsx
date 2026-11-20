@@ -330,7 +330,7 @@ export default function ShopView({ userEmail, userRole }) {
   return (
     <PageShell width="default" contentClassName="space-y-7">
       <PageHeader
-        title="Rewards shop"
+        title="Rewards Shop"
         description="Use your SHORE coins for supplies and avatar styles."
         actions={(
           <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
@@ -359,16 +359,16 @@ export default function ShopView({ userEmail, userRole }) {
       <div className="space-y-9 pb-4">
         <section aria-labelledby="physical-rewards-title">
           <div className="mb-4 flex items-baseline justify-between gap-3">
-            <h2 id="physical-rewards-title" className="text-lg font-bold text-fg sm:text-xl">Physical rewards</h2>
-            <span className="text-sm text-muted">{physicalItems.length} items</span>
+            <h2 id="physical-rewards-title" className="text-lg font-bold text-fg sm:text-xl">Physical Rewards</h2>
+            <span className="text-sm text-muted">{physicalItems.length} {physicalItems.length === 1 ? 'item' : 'items'}</span>
           </div>
           {physicalItems.length ? <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{physicalItems.map(renderItem)}</ul> : <p className="rounded-xl border border-dashed border-border px-5 py-8 text-sm text-muted">No physical rewards are available yet.</p>}
         </section>
 
         <section aria-labelledby="avatar-borders-title">
           <div className="mb-4 flex items-baseline justify-between gap-3">
-            <h2 id="avatar-borders-title" className="text-lg font-bold text-fg sm:text-xl">Avatar borders</h2>
-            <span className="text-sm text-muted">{borderItems.length} styles</span>
+            <h2 id="avatar-borders-title" className="text-lg font-bold text-fg sm:text-xl">Avatar Borders</h2>
+            <span className="text-sm text-muted">{borderItems.length} {borderItems.length === 1 ? 'style' : 'styles'}</span>
           </div>
           {borderItems.length ? <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{borderItems.map(renderItem)}</ul> : <p className="rounded-xl border border-dashed border-border px-5 py-8 text-sm text-muted">No avatar borders are available yet.</p>}
         </section>
@@ -390,8 +390,8 @@ export default function ShopView({ userEmail, userRole }) {
                   <div key={item.id} className="grid gap-3 rounded-lg border border-border p-3 sm:grid-cols-[minmax(0,1fr)_6rem_6rem_8rem_auto] sm:items-end">
                     <label className="text-xs font-semibold text-muted">Name<input value={item.name} onChange={(event) => updateEditItem(item.id, 'name', event.target.value)} className="mt-1 block min-h-11 w-full rounded-lg border border-border px-3 text-sm text-fg outline-none focus:border-primary" /></label>
                     <div className="grid grid-cols-2 gap-3 sm:contents">
-                      <label className="text-xs font-semibold text-muted">Price<input type="number" min="0" step="1" value={item.price} onChange={(event) => updateEditItem(item.id, 'price', event.target.value)} className="mt-1 block min-h-11 w-full rounded-lg border border-border px-3 text-sm text-fg outline-none focus:border-primary" /></label>
-                      <label className="text-xs font-semibold text-muted">Stock<input type="number" min="0" step="1" value={item.stock} onChange={(event) => updateEditItem(item.id, 'stock', event.target.value)} className="mt-1 block min-h-11 w-full rounded-lg border border-border px-3 text-sm text-fg outline-none focus:border-primary" /></label>
+                      <label className="text-xs font-semibold text-muted">Price<input type="number" inputMode="numeric" min="0" step="1" value={item.price} onChange={(event) => updateEditItem(item.id, 'price', event.target.value)} className="mt-1 block min-h-11 w-full rounded-lg border border-border px-3 text-sm text-fg outline-none focus:border-primary" /></label>
+                      <label className="text-xs font-semibold text-muted">Stock<input type="number" inputMode="numeric" min="0" step="1" value={item.stock} onChange={(event) => updateEditItem(item.id, 'stock', event.target.value)} className="mt-1 block min-h-11 w-full rounded-lg border border-border px-3 text-sm text-fg outline-none focus:border-primary" /></label>
                     </div>
                     <label className="text-xs font-semibold text-muted">Icon<select value={item.iconType || 'Gift'} onChange={(event) => updateEditItem(item.id, 'iconType', event.target.value)} className="mt-1 block min-h-11 w-full rounded-lg border border-border px-2 text-sm text-fg outline-none focus:border-primary">{Object.keys(ICONS).map((name) => <option key={name} value={name}>{name}</option>)}</select></label>
                     {BUILT_IN_IDS.has(String(item.id)) ? <span className="pb-3 text-center text-xs text-muted">Built-in</span> : <button type="button" aria-label={`Remove ${item.name || 'new reward'}`} onClick={() => setEditInventory((current) => current.filter((entry) => String(entry.id) !== String(item.id)))} className="grid h-11 w-11 place-items-center rounded-lg text-red-600 hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"><Trash2 className="h-4 w-4" /></button>}

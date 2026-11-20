@@ -1,7 +1,8 @@
 import * as React from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import * as z from "zod";
+// The bundled v3 API covers this schema without loading v4 JSON-schema machinery.
+import * as z from "zod/v3";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { Button } from "./button";
 import {
@@ -24,6 +25,109 @@ import {
   KeyRound,
 } from "lucide-react";
 
+const DEFAULT_SCHOOL_OPTIONS = [
+  { id: "ustp", name: "USTP" },
+  { id: "cmu", name: "CMU" },
+  { id: "buksu", name: "BukSU" },
+  { id: "msu", name: "MSU" },
+  { id: "msuiit", name: "MSU-IIT" },
+  { id: "msun", name: "MSU at Naawan" },
+  { id: "xavier", name: "Xavier University" },
+  { id: "liceo", name: "Liceo de Cagayan" },
+  { id: "phinma_coc", name: "PHINMA COC" },
+  { id: "city_cdo", name: "City College of CDO" },
+  { id: "capitol", name: "Capitol University" },
+  { id: "lourdes", name: "Lourdes College" },
+  { id: "undecided", name: "Still Deciding" },
+  { id: "other", name: "Other School" },
+];
+
+const DEFAULT_SCHOLARSHIP_OPTIONS = [
+  { id: "dost-sei-undergrad", title: "DOST-SEI S&T Undergraduate Scholarship" },
+  { id: "ched-merit-program", title: "CHED State & Private Merit Scholarship" },
+  { id: "sm-college-scholarship", title: "SM Foundation College Scholarship" },
+  { id: "aboitiz-future-leaders", title: "Aboitiz Future Leaders College Scholarship" },
+  { id: "owwa-edsp-odsp", title: "OWWA Education for Development Scholarship" },
+  { id: "landbank-gawad-patnubay", title: "Landbank Gawad Patnubay Scholarship" },
+  { id: "city-cdo-scholarship", title: "CDO City Scholarship Program" },
+];
+
+function normalizeOptionList(items, type, fallback) {
+  const seen = new Set();
+
+  const specialTitles = type === "school"
+    ? new Set(["still deciding", "other school"])
+    : new Set(["still deciding", "other scholarship"]);
+
+  const regularItems = (Array.isArray(items) ? items : []).filter((item) => {
+    const id = String(item?.id || "").trim().toLowerCase();
+    const title = String(item?.name || item?.title || "").trim().replace(/\s+/g, " ").toLowerCase();
+
+    if (!id || id === "undecided" || id === "other" || specialTitles.has(title) || seen.has(id)) return false;
+
+    seen.add(id);
+
+    return true;
+  });
+
+  const fallbackItems = fallback.filter((item) => !["undecided", "other"].includes(String(item.id).toLowerCase()));
+
+  const specials = type === "school"
+    ? [{ id: "undecided", name: "Still Deciding" }, { id: "other", name: "Other School" }]
+    : [{ id: "undecided", title: "Still Deciding" }, { id: "other", title: "Other Scholarship" }];
+
+  return [...(regularItems.length ? regularItems : fallbackItems), ...specials];
+}
+
+const SCHOLARSHIP_CHOICE_LABELS = {
+  "dost-sei-undergrad": "DOST-SEI S&T",
+  "ched-merit-program": "CHED Merit Scholarship",
+  "sm-college-scholarship": "SM Foundation",
+  "aboitiz-future-leaders": "Aboitiz Future Leaders",
+  "owwa-edsp-odsp": "OWWA EDSP",
+  "landbank-gawad-patnubay": "Landbank Gawad Patnubay",
+  "city-cdo-scholarship": "CDO City Scholarship",
+};
+
+const SCHOOL_CHOICE_LABELS = {
+  xavier: "Xavier",
+  liceo: "Liceo",
+  phinma_coc: "PHINMA COC",
+  city_cdo: "City College",
+  capitol: "Capitol U.",
+  lourdes: "Lourdes",
+};
+
+const shortenSchoolLabel = (school) => {
+  const normalized = String(school || "").trim().toLowerCase();
+
+  const matchingName = Object.entries({
+    "xavier university": "Xavier",
+    "liceo de cagayan": "Liceo",
+    "city college of cdo": "City College",
+    "capitol university": "Capitol U.",
+    "lourdes college": "Lourdes",
+  }).find(([name]) => normalized === name);
+
+  return matchingName?.[1] || school;
+};
+
+const INCOME_OPTIONS = [
+  ["under_10k", "Below ₱10,000"],
+  ["10k_20k", "₱10,000–₱19,999"],
+  ["20k_40k", "₱20,000–₱39,999"],
+  ["40k_60k", "₱40,000–₱59,999"],
+  ["60k_plus", "₱60,000 or more"],
+  ["prefer_not_to_say", "Prefer not to say"],
+];
+
+const APPLICATION_STAGE_OPTIONS = [
+  ["exploring", "Exploring options"],
+  ["preparing", "Preparing requirements"],
+  ["applied", "Already applied"],
+  ["waiting", "Waiting for an exam or results"],
+];
+
 const formSchema = z.object({
   name: z.string().optional(),
   email: z.string()
@@ -33,6 +137,15 @@ const formSchema = z.object({
   confirmPassword: z.string().optional(),
   rememberMe: z.boolean().default(false).optional(),
   role: z.enum(["student", "volunteer"]).default("student").optional(),
+  onboarding: z.object({
+    schoolInterests: z.array(z.string()).default([]),
+    otherSchool: z.string().max(120).optional(),
+    scholarshipInterests: z.array(z.string()).default([]),
+    otherScholarship: z.string().max(120).optional(),
+    intendedProgram: z.string().max(120).optional(),
+    applicationStage: z.string().optional(),
+    householdIncomeRange: z.string().optional(),
+  }).optional(),
 });
 
 export function evaluatePasswordSecurity(pass) {
@@ -155,6 +268,57 @@ function PasswordStrengthMeter({ security }) {
         ))}
       </div>
     </motion.div>
+  );
+}
+
+function ChoiceGroup({ label, name, options, selectedValues, onToggle, disabled, reduceMotion, layout = "two", required = false, description }) {
+  const gridLayout = layout === "single"
+    ? "grid-cols-1"
+    : layout === "scholarships"
+      ? "grid-cols-1 sm:grid-cols-2"
+      : "grid-cols-2";
+
+  const undecidedOption = options.find((option) => option.id === "undecided");
+  const descriptionId = `${name.replace(/[^a-z0-9_-]/gi, "-")}-description`;
+  const choiceDescription = description || (undecidedOption ? "Select Still Deciding if you are still exploring your options." : "");
+
+  const renderOption = (option) => {
+    const selected = selectedValues.includes(option.id);
+    const checkboxId = `${name.replace(/[^a-z0-9_-]/gi, "-")}-${String(option.id).replace(/[^a-z0-9_-]/gi, "-")}`;
+
+    return (
+      <motion.label
+        key={option.id}
+        htmlFor={checkboxId}
+        whileTap={reduceMotion ? undefined : { scale: 0.99 }}
+        transition={{ duration: 0.12 }}
+        className={`flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border px-2 py-1.5 text-left transition-[border-color,background-color] duration-150 focus-within:ring-2 focus-within:ring-primary/30 focus-within:ring-offset-1 ${selected ? "border-primary/60 bg-primary/5" : "border-border/80 bg-background hover:border-primary/45 hover:bg-primary/[0.035]"} ${disabled ? "cursor-not-allowed opacity-60" : ""}`}
+      >
+        <Checkbox
+          id={checkboxId}
+          name={name}
+          value={option.id}
+          checked={selected}
+          onCheckedChange={() => onToggle(name, option.id)}
+          disabled={disabled}
+          aria-label={option.accessibleName || option.name}
+          className="h-4 w-4 rounded-[4px] focus-visible:ring-0"
+        />
+        <span className={`min-w-0 text-[13px] font-medium leading-4 text-foreground sm:text-sm sm:leading-[18px] ${selected ? "font-semibold" : ""}`}>{option.name}</span>
+      </motion.label>
+    );
+  };
+
+  return (
+    <fieldset className="space-y-1" aria-describedby={choiceDescription ? descriptionId : undefined}>
+      <legend className="text-sm font-medium leading-5 text-foreground">
+        {label}{required && <> <span aria-hidden="true" className="text-destructive">· Required</span><span className="sr-only"> required</span></>}
+      </legend>
+      {choiceDescription && <p id={descriptionId} className="text-xs leading-4 text-muted-foreground">{choiceDescription}</p>}
+      <div className={`grid gap-x-2 gap-y-1 ${gridLayout}`}>
+        {options.map(renderOption)}
+      </div>
+    </fieldset>
   );
 }
 
@@ -356,11 +520,16 @@ export function AuthFormSplitScreen({
   logo,
   images = [],
   onSubmit,
+  onRegistrationComplete,
+  pendingStudentOnboarding,
 }) {
   const [isLoading, setIsLoading] = React.useState(false);
   const [currentImageIndex, setCurrentImageIndex] = React.useState(0);
   const [isRegister, setIsRegister] = React.useState(false);
   const [registrationStep, setRegistrationStep] = React.useState(1);
+  const [registrationCreated, setRegistrationCreated] = React.useState(null);
+  const [preferencesStep, setPreferencesStep] = React.useState(1);
+  const [preferencesError, setPreferencesError] = React.useState("");
   const [stepDirection, setStepDirection] = React.useState(1);
   const [isForgot, setIsForgot] = React.useState(false);
   const [forgotStep, setForgotStep] = React.useState(1);
@@ -368,10 +537,26 @@ export function AuthFormSplitScreen({
   const [showPassword, setShowPassword] = React.useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = React.useState(false);
   const [lockoutSeconds, setLockoutSeconds] = React.useState(0);
+
+  const [registrationOptions, setRegistrationOptions] = React.useState({
+    schools: DEFAULT_SCHOOL_OPTIONS,
+    scholarships: DEFAULT_SCHOLARSHIP_OPTIONS,
+  });
+
+  const [registrationOptionsStatus, setRegistrationOptionsStatus] = React.useState("idle");
   const formElementRef = React.useRef(null);
+  const formPanelRef = React.useRef(null);
   const registrationHeadingRef = React.useRef(null);
   const registrationFocusRef = React.useRef(null);
   const shouldReduceMotion = useReducedMotion();
+
+  React.useLayoutEffect(() => {
+    if (!registrationCreated) return;
+
+    window.scrollTo({ top: 0, behavior: "auto" });
+    formPanelRef.current?.scrollTo({ top: 0, behavior: "auto" });
+    registrationHeadingRef.current?.focus({ preventScroll: true });
+  }, [registrationCreated, preferencesStep]);
 
   // Carousel timer
   React.useEffect(() => {
@@ -414,8 +599,66 @@ export function AuthFormSplitScreen({
       confirmPassword: "",
       rememberMe: false,
       role: "student",
+      onboarding: {
+        schoolInterests: [],
+        otherSchool: "",
+        scholarshipInterests: [],
+        otherScholarship: "",
+        intendedProgram: "",
+        applicationStage: "",
+        householdIncomeRange: "",
+      },
     },
   });
+
+  React.useEffect(() => {
+    if (!pendingStudentOnboarding?.user || !pendingStudentOnboarding?.token) return;
+
+    const savedPreferences = pendingStudentOnboarding.preferences || {};
+    form.setValue("onboarding", {
+      schoolInterests: Array.isArray(savedPreferences.schoolInterests) ? savedPreferences.schoolInterests : [],
+      otherSchool: savedPreferences.otherSchool || "",
+      scholarshipInterests: Array.isArray(savedPreferences.scholarshipInterests) ? savedPreferences.scholarshipInterests : [],
+      otherScholarship: savedPreferences.otherScholarship || "",
+      intendedProgram: savedPreferences.intendedProgram || "",
+      applicationStage: savedPreferences.applicationStage || "",
+      householdIncomeRange: savedPreferences.householdIncomeRange || "",
+    });
+    setIsRegister(false);
+    setIsForgot(false);
+    setRegistrationCreated({
+      user: pendingStudentOnboarding.user,
+      token: pendingStudentOnboarding.token,
+    });
+    setPreferencesStep(1);
+    setPreferencesError("");
+    form.clearErrors();
+  }, [pendingStudentOnboarding, form]);
+
+  const loadRegistrationOptions = React.useCallback(async () => {
+    setRegistrationOptionsStatus("loading");
+
+    try {
+      const response = await fetch("/api/onboarding/options");
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok) throw new Error(result.error || "Could not load current programs.");
+      setRegistrationOptions({
+        schools: normalizeOptionList(result.schools, "school", DEFAULT_SCHOOL_OPTIONS),
+        scholarships: normalizeOptionList(result.scholarships, "scholarship", DEFAULT_SCHOLARSHIP_OPTIONS).filter((item) => !["undecided", "other"].includes(item.id)),
+      });
+      setRegistrationOptionsStatus("ready");
+    } catch {
+      setRegistrationOptions({ schools: DEFAULT_SCHOOL_OPTIONS, scholarships: DEFAULT_SCHOLARSHIP_OPTIONS });
+      setRegistrationOptionsStatus("error");
+    }
+  }, []);
+
+  React.useEffect(() => {
+    if (registrationCreated?.user?.role === "student" && registrationOptionsStatus === "idle") {
+      void loadRegistrationOptions();
+    }
+  }, [registrationCreated, registrationOptionsStatus, loadRegistrationOptions]);
 
   // Remember Me: Load saved credentials on mount
   React.useEffect(() => {
@@ -450,6 +693,28 @@ export function AuthFormSplitScreen({
   }, [passwordSecurity.isSecure, form]);
 
   const watchPin = form.watch("pin") || "";
+  const registrationTotalSteps = 3;
+  const preferencesTotalSteps = 3;
+  const onboardingValues = form.watch("onboarding") || {};
+
+  const togglePreference = (fieldName, value) => {
+    const current = form.getValues(fieldName) || [];
+
+    const isSelected = current.includes(value);
+
+    const next = isSelected
+      ? current.filter((item) => item !== value)
+      : value === "undecided"
+        ? [value]
+        : [...current.filter((item) => item !== "undecided"), value];
+
+    form.setValue(
+      fieldName,
+      next,
+      { shouldDirty: true }
+    );
+    setPreferencesError("");
+  };
 
   React.useEffect(() => {
     if (watchPin.length === 4 && form.formState.errors.pin) {
@@ -464,7 +729,7 @@ export function AuthFormSplitScreen({
       const field = registrationFocusRef.current;
       registrationFocusRef.current = null;
 
-      if (field === "heading") registrationHeadingRef.current?.focus();
+      if (field === "heading") registrationHeadingRef.current?.focus({ preventScroll: true });
       else if (field === "pin") formElementRef.current?.querySelector('[aria-label="Security PIN digit 1"]')?.focus();
       else form.setFocus(field);
     }, 150);
@@ -539,6 +804,42 @@ export function AuthFormSplitScreen({
     setStepDirection(1);
     registrationFocusRef.current = "heading";
     setRegistrationStep(3);
+  };
+
+  const finishRegistration = React.useCallback(async () => {
+    if (!registrationCreated) return;
+    await onRegistrationComplete?.(registrationCreated.user, registrationCreated.token);
+  }, [registrationCreated, onRegistrationComplete]);
+
+  const savePreferences = async () => {
+    if (!registrationCreated?.token) {
+      setPreferencesError("Your account was created. Sign in to save these answers later.");
+
+      return;
+    }
+
+    setIsLoading(true);
+    setPreferencesError("");
+
+    try {
+      const response = await fetch("/api/users/me/onboarding", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${registrationCreated.token}`,
+        },
+        body: JSON.stringify(form.getValues("onboarding") || {}),
+      });
+
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok) throw new Error(result.error || "Could not save your preferences.");
+      await finishRegistration();
+    } catch (error) {
+      setPreferencesError(error.message || "Could not save your preferences. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleForgotStep1Continue = async () => {
@@ -708,12 +1009,25 @@ export function AuthFormSplitScreen({
       }
 
       const authData = {
-        ...data,
+        ...(isRegister
+          ? Object.fromEntries(Object.entries(data).filter(([key]) => key !== "onboarding"))
+          : data),
         email: finalEmail,
         new_password: isForgot ? data.password : undefined,
       };
 
-      await onSubmit(authData, isRegister, isForgot);
+      const result = await onSubmit(authData, isRegister, isForgot);
+
+      if (isRegister) {
+        if (result?.user?.role === "student") {
+          setRegistrationCreated(result);
+          setPreferencesStep(1);
+          setPreferencesError("");
+          form.clearErrors();
+        } else if (result?.user && result?.token) {
+          await onRegistrationComplete?.(result.user, result.token);
+        }
+      }
 
       // Persist or clean up Remember Me
       try {
@@ -855,17 +1169,17 @@ export function AuthFormSplitScreen({
   };
 
   return (
-    <div className="relative flex min-h-[100dvh] w-full flex-col md:flex-row bg-background text-foreground overflow-x-hidden md:h-[100dvh] md:min-h-0 md:overflow-hidden">
+    <main className="relative flex min-h-[100dvh] w-full flex-col md:flex-row bg-background text-foreground overflow-x-hidden md:h-[100dvh] md:min-h-0 md:overflow-hidden">
 
       {/* Form panel */}
-      <div className="flex-1 w-full md:w-1/2 min-h-[100dvh] md:h-full md:min-h-0 flex flex-col justify-center items-center p-3 sm:p-4 md:py-3.5 md:px-6 lg:py-5 lg:px-8 overflow-y-auto overscroll-contain">
-        <div className="my-auto flex w-full flex-col justify-center max-w-[380px] py-1.5 sm:py-2">
+      <div ref={formPanelRef} className="flex-1 w-full md:w-1/2 min-h-[100dvh] md:h-full md:min-h-0 flex flex-col items-center justify-center shore-auth-panel overflow-y-auto overscroll-contain">
+        <div className={`my-auto flex w-full flex-col justify-center ${registrationCreated ? "max-w-[480px] py-0 sm:py-1" : "max-w-[380px] py-0 sm:py-2"}`}>
 
-          <div className="w-full bg-card border border-border/80 rounded-2xl sm:rounded-3xl shadow-sm p-3.5 sm:p-4.5 md:p-5">
+          <div className={`w-full rounded-2xl border border-border/80 bg-card font-sans shadow-sm sm:rounded-3xl ${registrationCreated ? "p-3 sm:p-4 md:p-5" : "p-2.5 sm:p-5 md:p-6"}`}>
 
-            <div className={`${isRegister ? "mb-1.5" : "mb-2 sm:mb-2.5"} flex flex-col items-center text-center`}>
+            <div className={`${isRegister ? "mb-1" : registrationCreated ? "mb-2" : "mb-4"} flex flex-col items-center text-center`}>
               {logo ? (
-                <div className="mb-1 flex items-center justify-center">{logo}</div>
+                <div className={`${isRegister || registrationCreated ? "mb-0" : "mb-1"} flex items-center justify-center`}>{logo}</div>
               ) : (
                 <div className="mb-1 flex items-center justify-center gap-2">
                   <div className="h-7 w-7 sm:h-8 sm:w-8 rounded-xl bg-primary flex items-center justify-center text-primary-foreground font-black shadow-md shadow-primary/25 text-xs sm:text-sm">
@@ -874,37 +1188,42 @@ export function AuthFormSplitScreen({
                   <span className="text-base sm:text-lg font-black tracking-tight">SHORE<span className="text-primary">.ed</span></span>
                 </div>
               )}
-              <p className={`${isRegister ? "text-[11px] font-medium" : "text-[9px] sm:text-[10px] font-semibold uppercase tracking-wider"} text-muted-foreground select-none`}>
-                Student & Volunteer Portal
-              </p>
+              {!isRegister && !registrationCreated && (
+                <p className="text-xs font-medium leading-4 text-muted-foreground select-none">
+                  Student & Volunteer Portal
+                </p>
+              )}
             </div>
 
             <motion.div
               variants={containerVariants}
               initial="hidden"
               animate="visible"
-              className="space-y-3 sm:space-y-3.5"
+                className={registrationCreated ? "space-y-1.5" : !isRegister ? "space-y-4" : "space-y-2.5"}
             >
-              <motion.div variants={itemVariants} className="text-center">
-                <div className="relative min-h-[28px] sm:min-h-[32px] flex items-center justify-center">
+              <motion.div variants={itemVariants} className={registrationCreated ? "text-left" : "text-center"}>
+                <div className="w-full">
+                <div className={`relative min-h-[28px] sm:min-h-[32px] flex items-center ${registrationCreated ? "justify-start" : "justify-center"}`}>
                   <AnimatePresence mode="popLayout" initial={false}>
                     <motion.h1
-                      key={isForgot ? `forgot-${forgotStep}` : isRegister ? `reg-${registrationStep}` : "login"}
+                      key={registrationCreated ? `preferences-${preferencesStep}` : isForgot ? `forgot-${forgotStep}` : isRegister ? `reg-${registrationStep}` : "login"}
                       initial={{ opacity: 0, y: shouldReduceMotion ? 0 : -4, filter: shouldReduceMotion ? "none" : "blur(1px)" }}
                       animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
                       exit={{ opacity: 0, y: shouldReduceMotion ? 0 : 4, filter: shouldReduceMotion ? "none" : "blur(1px)" }}
                       transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
                       ref={registrationHeadingRef}
-                      tabIndex={isRegister || isForgot ? -1 : undefined}
-                      className="text-lg sm:text-xl font-bold tracking-tight text-foreground"
+                      tabIndex={isRegister || isForgot || registrationCreated ? -1 : undefined}
+                      className={`${registrationCreated ? "text-xl sm:text-2xl" : "text-2xl sm:text-[26px]"} leading-tight font-semibold tracking-tight text-foreground focus:outline-none`}
                     >
-                      {isForgot
+                      {registrationCreated
+                        ? (preferencesStep === 1 ? "Let’s Plan Ahead" : preferencesStep === 2 ? "Find Your Funding" : "Your Study Plans")
+                        : isForgot
                         ? (forgotStep === 1 ? "Verify Identity" : "Create New Password")
                         : isRegister
                         ? (registrationStep === 1
-                            ? "Create your account"
+                            ? "Create Your Account"
                             : registrationStep === 2
-                            ? "Create your password"
+                            ? "Create Your Password"
                             : "Emergency Security PIN")
                         : "Welcome Back"}
                     </motion.h1>
@@ -912,14 +1231,14 @@ export function AuthFormSplitScreen({
                 </div>
 
                 <AnimatePresence initial={false}>
-                  {!isRegister && !isForgot && (
+                  {!registrationCreated && !isRegister && !isForgot && (
                     <motion.p
                       key="login-desc"
                       initial={{ opacity: 0, height: 0 }}
                       animate={{ opacity: 1, height: "auto" }}
                       exit={{ opacity: 0, height: 0 }}
                       transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-                      className="overflow-hidden mt-0.5 text-[10px] text-muted-foreground sm:text-[11px]"
+                      className="overflow-hidden mt-1.5 text-sm leading-5 text-muted-foreground"
                     >
                       Sign in to access attendance, scholarships, and progress tracker.
                     </motion.p>
@@ -943,10 +1262,10 @@ export function AuthFormSplitScreen({
                           animate={{ opacity: 1, y: 0 }}
                           exit={{ opacity: 0, y: shouldReduceMotion ? 0 : 3 }}
                           transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
-                          className="text-[11px] font-semibold text-muted-foreground"
+                          className="text-xs font-medium leading-4 text-muted-foreground"
                           aria-live="polite"
                         >
-                          Step {forgotStep} of 2 · {forgotStep === 1 ? "Account & security PIN" : "New password"}
+                          Step {forgotStep} of 2 · {forgotStep === 1 ? "Account & Security PIN" : "New Password"}
                         </motion.p>
                       </AnimatePresence>
                       <div className="w-full flex items-center gap-1.5 px-1" aria-hidden="true">
@@ -964,14 +1283,14 @@ export function AuthFormSplitScreen({
                 </AnimatePresence>
 
                 <AnimatePresence initial={false}>
-                  {isRegister && (
+                  {isRegister && !registrationCreated && (
                     <motion.div
                       key="register-step-progress"
                       initial={{ opacity: 0, height: 0 }}
                       animate={{ opacity: 1, height: "auto" }}
                       exit={{ opacity: 0, height: 0 }}
                       transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-                      className="overflow-hidden mt-1.5 space-y-1.5"
+                      className="overflow-hidden mt-1 space-y-1"
                     >
                       <AnimatePresence mode="popLayout" initial={false}>
                         <motion.p
@@ -980,14 +1299,14 @@ export function AuthFormSplitScreen({
                           animate={{ opacity: 1, y: 0 }}
                           exit={{ opacity: 0, y: shouldReduceMotion ? 0 : 3 }}
                           transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
-                          className="text-[11px] font-semibold text-muted-foreground"
+                          className="text-xs font-medium leading-4 text-muted-foreground"
                           aria-live="polite"
                         >
-                          Step {registrationStep} of 3 · {registrationStep === 1 ? "Your details" : registrationStep === 2 ? "Set password" : "Emergency PIN"}
+                          Step {registrationStep} of {registrationTotalSteps} · {registrationStep === 1 ? "Your Details" : registrationStep === 2 ? "Set Password" : registrationStep === 3 ? "Recovery PIN" : "Study Preferences"}
                         </motion.p>
                       </AnimatePresence>
                       <div className="w-full flex items-center gap-1.5 px-1" aria-hidden="true">
-                        {[1, 2, 3].map((step) => (
+                        {Array.from({ length: registrationTotalSteps }, (_, index) => index + 1).map((step) => (
                           <div
                             key={step}
                             className={`h-1 flex-1 rounded-full transition-colors duration-300 ease-out ${
@@ -999,6 +1318,29 @@ export function AuthFormSplitScreen({
                     </motion.div>
                   )}
                 </AnimatePresence>
+
+                <AnimatePresence initial={false}>
+                  {registrationCreated && (
+                    <motion.div
+                      key="preferences-step-progress"
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      exit={{ opacity: 0, height: 0 }}
+                      transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+                      className="mt-1.5 space-y-1 overflow-hidden"
+                    >
+                        <p className="text-xs font-medium leading-4 text-muted-foreground" aria-live="polite">
+                        Step {preferencesStep} of {preferencesTotalSteps} · {preferencesStep === 1 ? "Schools" : preferencesStep === 2 ? "Scholarships" : "Study Details"}
+                      </p>
+                      <div className="flex items-center gap-1.5 px-1" aria-hidden="true">
+                        {Array.from({ length: preferencesTotalSteps }, (_, index) => index + 1).map((step) => (
+                          <div key={step} className={`h-1 flex-1 rounded-full transition-colors duration-300 ${step <= preferencesStep ? "bg-primary" : "bg-slate-200"}`} />
+                        ))}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+                </div>
               </motion.div>
 
               {/* Security Lockout Banner */}
@@ -1036,7 +1378,59 @@ export function AuthFormSplitScreen({
                   ref={formElementRef}
                   noValidate
                   onSubmit={(event) => {
-                    if (isRegister) {
+                    if (registrationCreated) {
+                      event.preventDefault();
+                      setPreferencesError("");
+
+                      const preferences = form.getValues("onboarding") || {};
+
+                      if (preferencesStep === 1 && !(preferences.schoolInterests || []).length) {
+                        setPreferencesError("Choose at least one school, or choose Still Deciding.");
+                        formElementRef.current?.querySelector('[name="onboarding.schoolInterests"]')?.focus();
+
+                        return;
+                      }
+
+
+                      if (preferencesStep === 1 && (preferences.schoolInterests || []).includes("other") && !preferences.otherSchool?.trim()) {
+                        setPreferencesError("Enter the name of the other school.");
+                        formElementRef.current?.querySelector("#onboarding-other-school")?.focus();
+
+                        return;
+                      }
+
+
+                      if (preferencesStep === 2 && !(preferences.scholarshipInterests || []).length) {
+                        setPreferencesError("Choose at least one scholarship, or choose Still Deciding.");
+                        formElementRef.current?.querySelector('[name="onboarding.scholarshipInterests"]')?.focus();
+
+                        return;
+                      }
+
+
+                      if (preferencesStep === 2 && (preferences.scholarshipInterests || []).includes("other") && !preferences.otherScholarship?.trim()) {
+                        setPreferencesError("Enter the name of the other scholarship.");
+                        formElementRef.current?.querySelector("#onboarding-other-scholarship")?.focus();
+
+                        return;
+                      }
+
+
+                      if (preferencesStep === 3 && !preferences.applicationStage) {
+                        setPreferencesError("Choose the stage that best describes your applications.");
+                        formElementRef.current?.querySelector('[name="onboarding.applicationStage"]')?.focus();
+
+                        return;
+                      }
+
+
+                      if (preferencesStep < preferencesTotalSteps) {
+                        setStepDirection(1);
+                        setPreferencesStep(preferencesStep + 1);
+                      } else {
+                        void savePreferences();
+                      }
+                    } else if (isRegister) {
                       if (registrationStep === 1) {
                         event.preventDefault();
                         void handleRegistrationStep1Continue();
@@ -1057,12 +1451,175 @@ export function AuthFormSplitScreen({
                       void form.handleSubmit(handleFormSubmit)(event);
                     }
                   }}
-                  className="space-y-3 sm:space-y-3.5"
+                  className="space-y-3"
                 >
                   {/* Dynamic Step Content with Auto-Animated Height */}
                   <AnimatedHeightContainer>
                     <AnimatePresence mode="popLayout" custom={stepDirection} initial={false}>
-                      {isRegister ? (
+                      {registrationCreated ? (
+                        <motion.div
+                          key={`preferences-step-${preferencesStep}`}
+                          custom={stepDirection}
+                          variants={stepVariants}
+                          initial="enter"
+                          animate="center"
+                          exit="exit"
+                          className="w-full space-y-2"
+                        >
+                          {preferencesStep === 1 ? (
+                            <>
+                              <ChoiceGroup
+                                label="Schools You Plan to Apply To"
+                                name="onboarding.schoolInterests"
+                                options={registrationOptions.schools.map((item) => ({
+                                  ...item,
+                                  name: SCHOOL_CHOICE_LABELS[item.id] || shortenSchoolLabel(item.name),
+                                  accessibleName: item.name || item.title,
+                                }))}
+                                selectedValues={onboardingValues.schoolInterests || []}
+                                onToggle={togglePreference}
+                                disabled={isLoading}
+                                reduceMotion={shouldReduceMotion}
+                                layout="two"
+                                required
+                                description="Choose at least one, or select Still Deciding."
+                              />
+                              {(onboardingValues.schoolInterests || []).includes("other") && (
+                                <label className="block space-y-2 text-sm font-medium leading-5" htmlFor="onboarding-other-school">
+                                  School Name
+                                  <Input
+                                    id="onboarding-other-school"
+                                    value={onboardingValues.otherSchool || ""}
+                                    onChange={(event) => {
+                                      form.setValue("onboarding.otherSchool", event.target.value, { shouldDirty: true });
+                                      setPreferencesError("");
+                                    }}
+                                    placeholder="Type the school name"
+                                    maxLength={120}
+                                    disabled={isLoading}
+                                    className="h-11 text-base font-normal"
+                                  />
+                                </label>
+                              )}
+                            </>
+                          ) : preferencesStep === 2 ? (
+                            <>
+                              {registrationOptionsStatus === "loading" && (
+                                <p role="status" className="text-xs text-muted-foreground">Loading current scholarships…</p>
+                              )}
+                              {registrationOptionsStatus === "error" && (
+                                <div role="status" className="flex items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] leading-4 text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+                                  <span>Live options unavailable. Using SHORE’s default list.</span>
+                                  <button type="button" onClick={() => void loadRegistrationOptions()} className="shrink-0 font-semibold underline underline-offset-2">Retry</button>
+                                </div>
+                              )}
+                              <ChoiceGroup
+                                label="Scholarships You Plan to Apply For"
+                                name="onboarding.scholarshipInterests"
+                                options={[
+                                  { id: "undecided", name: "Still Deciding" },
+                                  ...registrationOptions.scholarships.map((item) => ({
+                                    id: item.id,
+                                    name: SCHOLARSHIP_CHOICE_LABELS[item.id] || item.title || item.provider || "Scholarship",
+                                    accessibleName: item.title || item.provider || "Scholarship",
+                                  })),
+                                  { id: "other", name: "Other Scholarship" },
+                                ]}
+                                selectedValues={onboardingValues.scholarshipInterests || []}
+                                onToggle={togglePreference}
+                                disabled={isLoading}
+                                reduceMotion={shouldReduceMotion}
+                                layout="two"
+                                required
+                                description="Choose at least one, or select Still Deciding."
+                              />
+                              {(onboardingValues.scholarshipInterests || []).includes("other") && (
+                                <label className="block space-y-2 text-sm font-medium leading-5" htmlFor="onboarding-other-scholarship">
+                                  Scholarship Name
+                                  <Input
+                                    id="onboarding-other-scholarship"
+                                    value={onboardingValues.otherScholarship || ""}
+                                    onChange={(event) => {
+                                      form.setValue("onboarding.otherScholarship", event.target.value, { shouldDirty: true });
+                                      setPreferencesError("");
+                                    }}
+                                    placeholder="Type the scholarship name"
+                                    maxLength={120}
+                                    disabled={isLoading}
+                                    className="h-11 text-base font-normal"
+                                  />
+                                </label>
+                              )}
+                            </>
+                          ) : (
+                            <>
+                              <FormField
+                                control={form.control}
+                                name="onboarding.intendedProgram"
+                                render={({ field }) => (
+                                  <FormItem className="space-y-1.5">
+                                    <FormLabel className="text-sm font-medium leading-5">Planned Course or Strand <span className="font-normal text-muted-foreground">(Optional)</span></FormLabel>
+                                    <FormControl>
+                                      <Input {...field} maxLength={120} placeholder="For example, STEM or Engineering" disabled={isLoading} className="h-11 text-base" />
+                                    </FormControl>
+                                  </FormItem>
+                                )}
+                              />
+
+                              <fieldset className="space-y-1.5" aria-describedby="application-progress-description">
+                                <legend className="text-sm font-medium leading-5 text-foreground">Your Application Progress <span aria-hidden="true" className="text-destructive">· Required</span><span className="sr-only"> required</span></legend>
+                                <p id="application-progress-description" className="text-xs leading-4 text-muted-foreground">Choose the stage that fits best.</p>
+                                <div className="grid grid-cols-2 gap-2">
+                                  {APPLICATION_STAGE_OPTIONS.map(([value, label]) => {
+                                    const selected = onboardingValues.applicationStage === value;
+
+                                    return (
+                                      <label key={value} className={`flex min-h-12 cursor-pointer items-center gap-2 rounded-lg border px-2.5 py-2 text-sm font-medium leading-5 transition-[border-color,background-color] duration-150 focus-within:ring-2 focus-within:ring-primary/30 focus-within:ring-offset-1 ${selected ? "border-primary bg-primary/5" : "border-border bg-background hover:border-primary/45 hover:bg-primary/[0.035]"}`}>
+                                        <input
+                                          type="radio"
+                                          name="onboarding.applicationStage"
+                                          value={value}
+                                          checked={selected}
+                                          onChange={() => {
+                                            form.setValue("onboarding.applicationStage", value, { shouldDirty: true });
+                                            setPreferencesError("");
+                                          }}
+                                          disabled={isLoading}
+                                          className="sr-only"
+                                        />
+                                        <span aria-hidden="true" className={`h-4 w-4 shrink-0 rounded-full border ${selected ? "border-[5px] border-primary" : "border-muted-foreground/50"}`} />
+                                        <span>{label}</span>
+                                      </label>
+                                    );
+                                  })}
+                                </div>
+                              </fieldset>
+
+                              <FormField
+                                control={form.control}
+                                name="onboarding.householdIncomeRange"
+                                render={({ field }) => (
+                                  <FormItem className="space-y-1.5">
+                                    <FormLabel className="text-sm font-medium leading-5">Approximate Monthly Household Income <span className="font-normal text-muted-foreground">(Optional)</span></FormLabel>
+                                    <FormControl>
+                                      <select {...field} disabled={isLoading} onChange={(event) => {
+                                        field.onChange(event);
+                                        setPreferencesError("");
+                                      }} className="h-11 w-full rounded-xl border border-input bg-background px-3 text-base text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+                                        <option value="">Skip this question</option>
+                                        {INCOME_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                                      </select>
+                                    </FormControl>
+                                    <p className="text-xs leading-4 text-muted-foreground">Estimate only. Optional.</p>
+                                  </FormItem>
+                                )}
+                              />
+
+                              <p className="text-xs leading-4 text-muted-foreground">Visible only to you and SHORE admins.</p>
+                            </>
+                          )}
+                        </motion.div>
+                      ) : isRegister ? (
                         <motion.div
                           key={`reg-step-${registrationStep}`}
                           custom={stepDirection}
@@ -1070,7 +1627,7 @@ export function AuthFormSplitScreen({
                           initial="enter"
                           animate="center"
                           exit="exit"
-                          className="w-full space-y-3 sm:space-y-3.5"
+                          className="w-full space-y-3"
                         >
                         {registrationStep === 1 && (
                           <>
@@ -1080,7 +1637,7 @@ export function AuthFormSplitScreen({
                               name="role"
                               render={({ field }) => (
                                 <fieldset className="space-y-1">
-                                  <legend className="text-xs font-semibold text-foreground">Account type <span className="text-rose-600" aria-hidden="true">*</span></legend>
+                                  <legend className="text-sm font-medium leading-5 text-foreground">Account type <span className="text-rose-600" aria-hidden="true">*</span></legend>
                                   <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-describedby="register-role-help">
                                     {[
                                       { value: "student", title: "Student" },
@@ -1097,13 +1654,13 @@ export function AuthFormSplitScreen({
                                           className="sr-only"
                                         />
                                         <span className="min-w-0">
-                                          <span className="block text-xs font-semibold text-foreground">{option.title}</span>
+                                          <span className="block text-sm font-medium leading-5 text-foreground">{option.title}</span>
                                         </span>
                                         <span aria-hidden="true" className={`ml-auto h-3.5 w-3.5 shrink-0 rounded-full border transition-all duration-150 ${field.value === option.value ? "border-4 border-primary" : "border-muted-foreground/50"}`} />
                                       </label>
                                     ))}
                                   </div>
-                                  <p id="register-role-help" className="text-[11px] leading-tight text-muted-foreground">Your name must match the SHORE {field.value === "volunteer" ? "volunteer" : "student"} roster.</p>
+                                  <p id="register-role-help" className="text-xs leading-4 text-muted-foreground">Your name must match the SHORE {field.value === "volunteer" ? "volunteer" : "student"} roster.</p>
                                 </fieldset>
                               )}
                             />
@@ -1113,8 +1670,8 @@ export function AuthFormSplitScreen({
                               control={form.control}
                               name="name"
                               render={({ field }) => (
-                                <FormItem className="space-y-1">
-                                  <FormLabel className="text-xs font-semibold">Full name <span className="text-rose-600" aria-hidden="true">*</span></FormLabel>
+                                <FormItem className="space-y-1.5">
+                                  <FormLabel className="text-sm font-medium leading-5">Full name <span className="text-rose-600" aria-hidden="true">*</span></FormLabel>
                                   <FormControl>
                                     <Input
                                       placeholder="Juan Dela Cruz"
@@ -1123,7 +1680,7 @@ export function AuthFormSplitScreen({
                                       autoCapitalize="words"
                                       required
                                       disabled={isLoading || lockoutSeconds > 0}
-                                      className={`h-9.5 sm:h-10 text-xs sm:text-sm ${
+                                      className={`h-11 text-base ${
                                         form.formState.errors.name ? "border-rose-500 focus-visible:ring-rose-500 bg-rose-500/[0.02]" : ""
                                       }`}
                                     />
@@ -1138,8 +1695,8 @@ export function AuthFormSplitScreen({
                               control={form.control}
                               name="email"
                               render={({ field }) => (
-                                <FormItem className="space-y-1">
-                                  <FormLabel className="text-xs font-semibold">Account username <span className="text-rose-600" aria-hidden="true">*</span></FormLabel>
+                                <FormItem className="space-y-1.5">
+                                  <FormLabel className="text-sm font-medium leading-5">Account username <span className="text-rose-600" aria-hidden="true">*</span></FormLabel>
                                   <FormControl>
                                     <div className="relative flex items-center">
                                       <Input
@@ -1151,7 +1708,7 @@ export function AuthFormSplitScreen({
                                         maxLength={32}
                                         required
                                         disabled={isLoading || lockoutSeconds > 0}
-                                        className={`h-9.5 sm:h-10 text-xs sm:text-sm pr-[135px] ${
+                                        className={`h-11 text-base pr-[135px] ${
                                           form.formState.errors.email ? "border-rose-500 focus-visible:ring-rose-500 bg-rose-500/[0.02]" : ""
                                         }`}
                                       />
@@ -1175,8 +1732,8 @@ export function AuthFormSplitScreen({
                               control={form.control}
                               name="password"
                               render={({ field }) => (
-                                <FormItem className="space-y-1">
-                                  <FormLabel className="text-xs font-semibold">
+                                <FormItem className="space-y-2">
+                                  <FormLabel className="text-sm font-medium leading-5">
                                     Password <span className="text-rose-600" aria-hidden="true">*</span>
                                   </FormLabel>
                                   <FormControl>
@@ -1187,7 +1744,7 @@ export function AuthFormSplitScreen({
                                         {...field}
                                         autoComplete="new-password"
                                         disabled={isLoading || lockoutSeconds > 0}
-                                        className={`h-9.5 sm:h-10 pr-9 text-xs sm:text-sm ${
+                                        className={`h-11 pr-9 text-base ${
                                           form.formState.errors.password ? "border-rose-500 focus-visible:ring-rose-500" : ""
                                         }`}
                                       />
@@ -1214,8 +1771,8 @@ export function AuthFormSplitScreen({
                               control={form.control}
                               name="confirmPassword"
                               render={({ field }) => (
-                                <FormItem className="space-y-1">
-                                  <FormLabel className="text-xs font-semibold">
+                                <FormItem className="space-y-2">
+                                  <FormLabel className="text-sm font-medium leading-5">
                                     Confirm password <span className="text-rose-600" aria-hidden="true">*</span>
                                   </FormLabel>
                                   <FormControl>
@@ -1226,7 +1783,7 @@ export function AuthFormSplitScreen({
                                         {...field}
                                         autoComplete="new-password"
                                         disabled={isLoading || lockoutSeconds > 0}
-                                        className={`h-9.5 sm:h-10 pr-9 text-xs sm:text-sm ${
+                                        className={`h-11 pr-9 text-base ${
                                           watchConfirmPassword && !passwordsMatch ? "border-rose-500 focus-visible:ring-rose-500" : ""
                                         }`}
                                       />
@@ -1266,7 +1823,7 @@ export function AuthFormSplitScreen({
                               </div>
                               <div className="space-y-0.5">
                                 <p className="font-bold text-xs text-foreground">Why an Emergency PIN?</p>
-                                <p className="text-[11px] leading-relaxed text-muted-foreground">
+                                <p className="text-xs leading-4 text-muted-foreground">
                                   Like an ATM backup code. Use this 4-digit PIN to unlock or reset your account if you forget your password.
                                 </p>
                               </div>
@@ -1279,7 +1836,7 @@ export function AuthFormSplitScreen({
                               render={({ field }) => (
                                 <FormItem className="space-y-2 text-center">
                                   <div className="flex flex-col items-center justify-center gap-0.5">
-                                    <FormLabel className="text-xs font-semibold text-foreground">
+                                    <FormLabel className="text-sm font-medium leading-5 text-foreground">
                                       Create your 4-digit PIN <span className="text-rose-600" aria-hidden="true">*</span>
                                     </FormLabel>
                                     <p className="text-xs text-muted-foreground">Pick 4 digits you will easily remember.</p>
@@ -1300,6 +1857,7 @@ export function AuthFormSplitScreen({
                             />
                           </>
                         )}
+
                       </motion.div>
                     ) : isForgot ? (
                       forgotStep === 1 ? (
@@ -1310,14 +1868,14 @@ export function AuthFormSplitScreen({
                           initial="enter"
                           animate="center"
                           exit="exit"
-                          className="w-full space-y-3 sm:space-y-3.5"
+                          className="w-full space-y-3"
                         >
                           <FormField
                             control={form.control}
                             name="email"
                             render={({ field }) => (
-                              <FormItem className="space-y-1">
-                                <FormLabel className="text-xs font-semibold">Account username</FormLabel>
+                              <FormItem className="space-y-2">
+                                <FormLabel className="text-sm font-medium leading-5">Account username</FormLabel>
                                 <FormControl>
                                   <div className="relative flex items-center">
                                     <Input
@@ -1327,7 +1885,7 @@ export function AuthFormSplitScreen({
                                       autoCapitalize="none"
                                       spellCheck={false}
                                       disabled={isLoading || lockoutSeconds > 0}
-                                      className={`h-9.5 sm:h-10 text-xs sm:text-sm pr-[135px] ${
+                                      className={`h-11 text-base pr-[135px] ${
                                         form.formState.errors.email ? "border-rose-500 focus-visible:ring-rose-500 bg-rose-500/[0.02]" : ""
                                       }`}
                                     />
@@ -1347,7 +1905,7 @@ export function AuthFormSplitScreen({
                             render={({ field }) => (
                               <FormItem className="space-y-2 text-center">
                                 <div className="flex flex-col items-center justify-center gap-0.5">
-                                  <FormLabel className="text-xs font-semibold text-foreground">
+                                  <FormLabel className="text-sm font-medium leading-5 text-foreground">
                                     4-digit security PIN
                                   </FormLabel>
                                   <p className="text-xs text-muted-foreground">Enter the PIN you chose when creating your account.</p>
@@ -1374,14 +1932,14 @@ export function AuthFormSplitScreen({
                           initial="enter"
                           animate="center"
                           exit="exit"
-                          className="w-full space-y-3 sm:space-y-3.5"
+                          className="w-full space-y-3"
                         >
                           <FormField
                             control={form.control}
                             name="password"
                             render={({ field }) => (
-                              <FormItem className="space-y-1">
-                                <FormLabel className="text-xs font-semibold">New Password</FormLabel>
+                              <FormItem className="space-y-2">
+                                <FormLabel className="text-sm font-medium leading-5">New Password</FormLabel>
                                 <FormControl>
                                   <div className="relative">
                                     <Input
@@ -1390,7 +1948,7 @@ export function AuthFormSplitScreen({
                                       {...field}
                                       autoComplete="new-password"
                                       disabled={isLoading || lockoutSeconds > 0}
-                                      className={`h-9.5 sm:h-10 pr-9 text-xs sm:text-sm ${
+                                      className={`h-11 pr-9 text-base ${
                                         form.formState.errors.password ? "border-rose-500 focus-visible:ring-rose-500" : ""
                                       }`}
                                     />
@@ -1416,8 +1974,8 @@ export function AuthFormSplitScreen({
                             control={form.control}
                             name="confirmPassword"
                             render={({ field }) => (
-                              <FormItem className="space-y-1">
-                                <FormLabel className="text-xs font-semibold">Confirm password</FormLabel>
+                              <FormItem className="space-y-2">
+                                <FormLabel className="text-sm font-medium leading-5">Confirm password</FormLabel>
                                 <FormControl>
                                   <div className="relative">
                                     <Input
@@ -1426,7 +1984,7 @@ export function AuthFormSplitScreen({
                                       {...field}
                                       autoComplete="new-password"
                                       disabled={isLoading || lockoutSeconds > 0}
-                                      className={`h-9.5 sm:h-10 pr-9 text-xs sm:text-sm ${
+                                      className={`h-11 pr-9 text-base ${
                                         watchConfirmPassword && !passwordsMatch ? "border-rose-500 focus-visible:ring-rose-500" : ""
                                       }`}
                                     />
@@ -1464,15 +2022,15 @@ export function AuthFormSplitScreen({
                         initial="enter"
                         animate="center"
                         exit="exit"
-                        className="w-full space-y-3 sm:space-y-3.5"
+                        className="w-full space-y-4"
                       >
                         {/* Email / Username */}
                         <FormField
                           control={form.control}
                           name="email"
                           render={({ field }) => (
-                            <FormItem className="space-y-1">
-                              <FormLabel className="text-xs font-semibold">Email or username</FormLabel>
+                            <FormItem className="space-y-1.5">
+                              <FormLabel className="text-sm font-medium">Email or username</FormLabel>
                               <FormControl>
                                 <Input
                                   placeholder="email@example.com"
@@ -1481,7 +2039,7 @@ export function AuthFormSplitScreen({
                                   autoCapitalize="none"
                                   spellCheck={false}
                                   disabled={isLoading || lockoutSeconds > 0}
-                                  className={`h-9.5 sm:h-10 text-xs sm:text-sm ${
+                                  className={`h-11 text-base ${
                                     form.formState.errors.email ? "border-rose-500 focus-visible:ring-rose-500 bg-rose-500/[0.02]" : ""
                                   }`}
                                 />
@@ -1515,8 +2073,8 @@ export function AuthFormSplitScreen({
                           control={form.control}
                           name="password"
                           render={({ field }) => (
-                            <FormItem className="space-y-1">
-                              <FormLabel className="text-xs font-semibold">Password</FormLabel>
+                            <FormItem className="space-y-1.5">
+                              <FormLabel className="text-sm font-medium">Password</FormLabel>
                               <FormControl>
                                 <div className="relative">
                                   <Input
@@ -1525,7 +2083,7 @@ export function AuthFormSplitScreen({
                                     {...field}
                                     autoComplete="current-password"
                                     disabled={isLoading || lockoutSeconds > 0}
-                                    className={`h-9.5 sm:h-10 pr-9 text-xs sm:text-sm ${
+                                    className={`h-11 pr-9 text-base ${
                                       form.formState.errors.password ? "border-rose-500 focus-visible:ring-rose-500" : ""
                                     }`}
                                   />
@@ -1545,7 +2103,7 @@ export function AuthFormSplitScreen({
                         />
 
                         {/* Remember Me / Forgot Password */}
-                        <div className="flex items-center justify-between pt-1 pb-0.5 text-xs">
+                        <div className="flex items-center justify-between pt-0.5 text-sm">
                           <FormField
                             control={form.control}
                             name="rememberMe"
@@ -1561,7 +2119,7 @@ export function AuthFormSplitScreen({
                                 </FormControl>
                                 <FormLabel
                                   htmlFor="remember-me"
-                                  className="font-medium text-xs text-muted-foreground hover:text-foreground cursor-pointer m-0 leading-none select-none"
+                                  className="font-medium text-sm text-muted-foreground hover:text-foreground cursor-pointer m-0 leading-5 select-none"
                                 >
                                   Remember me
                                 </FormLabel>
@@ -1576,7 +2134,7 @@ export function AuthFormSplitScreen({
                               setIsRegister(false);
                               form.clearErrors();
                             }}
-                            className="text-xs font-semibold text-primary hover:underline bg-transparent border-none p-0 cursor-pointer"
+                            className="text-sm font-medium text-primary hover:underline bg-transparent border-none p-0 cursor-pointer"
                           >
                             Forgot password?
                           </button>
@@ -1587,7 +2145,7 @@ export function AuthFormSplitScreen({
                 </AnimatedHeightContainer>
 
                   {/* Root Error Alert */}
-                  {form.formState.errors.root && (
+                  {form.formState.errors.root && !registrationCreated && (
                     <motion.div
                       role="alert"
                       initial={{ opacity: 0, y: shouldReduceMotion ? 0 : -4 }}
@@ -1621,10 +2179,21 @@ export function AuthFormSplitScreen({
                     </motion.div>
                   )}
 
+                  {preferencesError && (
+                    <motion.div
+                      role="alert"
+                      initial={{ opacity: 0, y: shouldReduceMotion ? 0 : -4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-xs font-medium leading-relaxed text-rose-800 dark:border-rose-900/60 dark:bg-rose-950/30 dark:text-rose-200"
+                    >
+                      {preferencesError}
+                    </motion.div>
+                  )}
+
                   {/* Navigation & Submit Buttons */}
                   <div className="pt-1 flex gap-2 items-center">
                     <AnimatePresence initial={false}>
-                      {((isRegister && registrationStep > 1) || (isForgot && forgotStep > 1)) && (
+                      {((registrationCreated && preferencesStep > 1) || (isRegister && !registrationCreated && registrationStep > 1) || (isForgot && forgotStep > 1)) && (
                         <motion.div
                           initial={{ width: 0, opacity: 0 }}
                           animate={{ width: "auto", opacity: 1 }}
@@ -1635,11 +2204,14 @@ export function AuthFormSplitScreen({
                           <Button
                             type="button"
                             variant="outline"
-                            className="h-10 whitespace-nowrap rounded-xl px-4 text-xs sm:text-sm font-semibold border-border hover:bg-muted/10 text-foreground active:scale-[0.98] transition-transform duration-100 ease-out"
+                            className="h-11 whitespace-nowrap rounded-xl px-4 text-sm font-semibold border-border hover:bg-muted/10 text-foreground active:scale-[0.98] transition-transform duration-100 ease-out"
                             onClick={() => {
                               setStepDirection(-1);
 
-                              if (isForgot) {
+                              if (registrationCreated) {
+                                setPreferencesError("");
+                                setPreferencesStep(preferencesStep - 1);
+                              } else if (isForgot) {
                                 setForgotStep(forgotStep - 1);
                               } else {
                                 registrationFocusRef.current = "heading";
@@ -1655,7 +2227,7 @@ export function AuthFormSplitScreen({
                     </AnimatePresence>
                     <Button
                       type="submit"
-                      className="flex-1 h-10 sm:h-10.5 text-xs sm:text-sm font-bold shadow-sm rounded-xl active:scale-[0.98] transition-[background-color,transform,opacity] duration-200 ease-out touch-manipulation"
+                      className={`flex-1 ${!isRegister && !registrationCreated ? "h-11 text-sm" : "h-11 text-sm"} font-semibold shadow-sm rounded-xl active:scale-[0.98] transition-[background-color,transform,opacity] duration-200 ease-out touch-manipulation`}
                       disabled={isLoading || lockoutSeconds > 0}
                     >
                       {isLoading && (
@@ -1666,6 +2238,8 @@ export function AuthFormSplitScreen({
                           key={
                             lockoutSeconds > 0
                               ? "locked"
+                              : registrationCreated
+                              ? `preferences-${preferencesStep}`
                               : isForgot
                               ? `forgot-${forgotStep}`
                               : isRegister
@@ -1679,13 +2253,19 @@ export function AuthFormSplitScreen({
                           className="inline-flex items-center justify-center truncate"
                         >
                           {isLoading
-                            ? isForgot
+                            ? registrationCreated
+                              ? "Saving preferences…"
+                              : isForgot
                               ? "Resetting password…"
                               : isRegister
                               ? "Creating account…"
                               : "Signing in…"
                             : lockoutSeconds > 0
                             ? `Locked (${lockoutSeconds}s)`
+                            : registrationCreated
+                            ? preferencesStep < preferencesTotalSteps
+                              ? "Continue"
+                              : "Save and open SHORE"
                             : isForgot
                             ? forgotStep === 1
                               ? "Continue to Password"
@@ -1704,8 +2284,8 @@ export function AuthFormSplitScreen({
                 </form>
               </Form>
 
-              <div className="text-center mt-3 sm:mt-3.5 text-xs text-muted-foreground flex flex-col gap-1">
-                {!isForgot && (
+              <div className={`text-center ${isRegister || registrationCreated ? "mt-1" : "mt-4"} text-sm text-muted-foreground flex flex-col gap-1.5`}>
+                {!isForgot && !registrationCreated && (
                   <div>
                     {isRegister ? "Already have a SHORE account?" : "Don't have an account yet?"}{" "}
                     <button
@@ -1760,18 +2340,22 @@ export function AuthFormSplitScreen({
       {/* Right Panel: Image Carousel (Desktop view) */}
       <div className="relative hidden w-1/2 overflow-hidden bg-black md:block">
         {images.map((src, index) => (
-          <motion.img
-            key={src}
-            src={src}
-            alt="SHORE Skwela"
-            className="absolute inset-0 h-full w-full object-cover"
-            style={{ objectPosition: "38% center" }}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: currentImageIndex === index ? 1 : 0 }}
-            transition={{ duration: 0.6, ease: "easeOut" }}
-          />
+          <picture key={src}>
+            <source media="(max-width: 767px)" srcSet="/shore5-96.webp" />
+            <motion.img
+              src={src}
+              alt="SHORE Skwela"
+              className="absolute inset-0 h-full w-full object-cover"
+              style={{ objectPosition: "38% center" }}
+              initial={false}
+              loading={index === 0 ? "eager" : "lazy"}
+              fetchPriority={index === 0 ? "high" : "low"}
+              animate={{ opacity: currentImageIndex === index ? 1 : 0 }}
+              transition={{ duration: shouldReduceMotion ? 0 : 0.3, ease: "easeOut" }}
+            />
+          </picture>
         ))}
       </div>
-    </div>
+    </main>
   );
 }

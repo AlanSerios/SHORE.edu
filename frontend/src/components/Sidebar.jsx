@@ -39,7 +39,7 @@ export default function Sidebar({
           aria-label={item.badge > 0 ? `${item.label}, ${item.badge} unread` : item.label}
           aria-current={isActive ? 'page' : undefined}
           className={cn(
-            'relative flex items-center rounded-xl overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 transition-[transform,background-color] active:scale-[0.96] duration-150 ease-out',
+            'relative flex min-h-11 items-center rounded-xl overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 transition-[transform,background-color] active:scale-[0.96] duration-150 ease-out',
             sidebarOpen ? (indent ? 'w-full text-left' : 'w-full text-left') : 'w-11 h-11 justify-center'
           )}
         >
@@ -128,7 +128,7 @@ export default function Sidebar({
     <motion.aside
       animate={{ width: sidebarOpen ? 240 : 72 }}
       transition={{ duration: 0.2, ease: 'easeOut' }}
-      className="hidden md:flex bg-sidebar border-r border-border flex-col shrink-0 z-20 overflow-visible h-full select-none"
+      className="hidden md:flex bg-sidebar border-r border-border flex-col shrink-0 z-50 overflow-visible h-full select-none"
     >
       {/* Header */}
       <div className={cn(
@@ -171,7 +171,7 @@ export default function Sidebar({
                 transition={{ duration: 0.2 }}
                 className="overflow-hidden shrink-0 flex items-center"
               >
-                <img src="/shore_logo.png" alt="SHORE.edu" className="h-9 w-auto object-contain" style={{ maxWidth: 135 }} />
+                <img src="/shore_logo-264.webp" alt="SHORE.edu" width="264" height="98" className="h-9 w-auto object-contain" style={{ maxWidth: 135 }} />
               </motion.div>
             )}
           </AnimatePresence>
@@ -221,7 +221,7 @@ export default function Sidebar({
               aria-expanded={sidebarOpen ? classToolsOpen : collapsedAcademicFlyoutOpen}
               aria-controls="class-tools-list"
               className={cn(
-                'transition-colors rounded-xl group relative text-sm flex items-center',
+                'min-h-11 transition-colors rounded-xl group relative text-sm flex items-center',
                 sidebarOpen ? 'w-full justify-between px-3.5 py-2.5' : 'w-11 h-11 justify-center',
                 isAnyAcademicToolActive && (!classToolsOpen || !sidebarOpen)
                   ? 'text-primary bg-primary/10 font-semibold'
@@ -300,7 +300,7 @@ export default function Sidebar({
                             setCollapsedAcademicFlyoutOpen(false);
                           }}
                           className={cn(
-                            'w-full px-3 py-2 text-left text-xs font-semibold rounded-xl flex items-center gap-2.5 transition-[background-color,transform] active:scale-[0.97] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+                            'w-full min-h-11 px-3 py-2 text-left text-xs font-semibold rounded-xl flex items-center gap-2.5 transition-[background-color,transform] active:scale-[0.97] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
                             isSubActive ? 'bg-primary text-white shadow-sm' : 'text-fg hover:bg-canvas'
                           )}
                         >
@@ -357,7 +357,7 @@ export default function Sidebar({
                 aria-expanded={sidebarOpen ? adminToolsOpen : collapsedAdminFlyoutOpen}
                 aria-controls="admin-tools-list"
                 className={cn(
-                  'transition-colors rounded-xl group relative text-sm flex items-center',
+                  'min-h-11 transition-colors rounded-xl group relative text-sm flex items-center',
                   sidebarOpen ? 'w-full justify-between px-3.5 py-2.5' : 'w-11 h-11 justify-center',
                   isAnyAdminToolActive && (!adminToolsOpen || !sidebarOpen)
                     ? 'text-primary bg-primary/10 font-semibold'
@@ -436,7 +436,7 @@ export default function Sidebar({
                               setCollapsedAdminFlyoutOpen(false);
                             }}
                             className={cn(
-                              'w-full px-3 py-2 text-left text-xs font-semibold rounded-xl flex items-center gap-2.5 transition-[background-color,transform] active:scale-[0.97] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+                              'w-full min-h-11 px-3 py-2 text-left text-xs font-semibold rounded-xl flex items-center gap-2.5 transition-[background-color,transform] active:scale-[0.97] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
                               isSubActive ? 'bg-primary text-white shadow-sm' : 'text-fg hover:bg-canvas'
                             )}
                           >
@@ -577,15 +577,14 @@ export default function Sidebar({
           >
             <button
               type="button"
-              aria-label="Open account settings"
               onClick={() => setCurrentView('settings')}
-              className="flex items-center min-w-0 flex-1 rounded-xl text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              className="flex min-h-11 items-center min-w-0 flex-1 rounded-xl text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             >
               <div className="relative shrink-0 flex items-center justify-center">
                 <AvatarBorder borderId={equippedBorder} className="w-10 h-10 shrink-0">
                   <div className="w-full h-full rounded-full overflow-hidden bg-primary/10 border border-primary/20 text-primary flex items-center justify-center font-bold">
                     {profilePicture ? (
-                      <img src={profilePicture} alt="Profile" width="40" height="40" className="w-full h-full object-cover" />
+                      <img src={profilePicture} alt="" width="40" height="40" className="w-full h-full object-cover" />
                     ) : (
                       userRole === 'admin' ? 'A' : (userName || userEmail).charAt(0).toUpperCase()
                     )}
@@ -610,15 +609,14 @@ export default function Sidebar({
             </button>
             <button
               type="button"
-              aria-label="Open profile options"
+              aria-label="Open account menu"
               aria-haspopup="menu"
               aria-expanded={isProfileMenuOpen}
               onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
               className={cn(
-                'p-1.5 rounded-lg transition-colors shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
-                isProfileMenuOpen ? 'bg-canvas text-fg' : 'text-muted hover:text-fg hover:bg-black/5'
+                'min-h-11 min-w-11 rounded-lg transition-colors shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+                isProfileMenuOpen ? 'bg-canvas text-fg' : 'text-muted hover:text-fg hover:bg-canvas'
               )}
-              title="More options"
             >
               <ChevronDown className={cn('w-4 h-4 transition-transform duration-200', isProfileMenuOpen && 'rotate-180')} />
             </button>
@@ -627,7 +625,7 @@ export default function Sidebar({
           <div className="relative group flex justify-center">
             <button
               type="button"
-              aria-label="Open profile options"
+              aria-label="Open account menu"
               aria-haspopup="menu"
               aria-expanded={isProfileMenuOpen}
               onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
