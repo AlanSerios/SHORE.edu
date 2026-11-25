@@ -548,6 +548,7 @@ export function AuthFormSplitScreen({
   const formPanelRef = React.useRef(null);
   const registrationHeadingRef = React.useRef(null);
   const registrationFocusRef = React.useRef(null);
+  const rosterNameFocusRef = React.useRef(false);
   const shouldReduceMotion = useReducedMotion();
 
   React.useLayoutEffect(() => {
@@ -737,10 +738,17 @@ export function AuthFormSplitScreen({
     return () => clearTimeout(timer);
   }, [isRegister, registrationStep, form]);
 
+  React.useEffect(() => {
+    if (isLoading || !rosterNameFocusRef.current) return;
+    rosterNameFocusRef.current = false;
+    form.setFocus("name");
+  }, [isLoading, form]);
+
   const handleRegistrationStep1Continue = async () => {
-    form.clearErrors("root");
+    form.clearErrors(["root", "name", "email"]);
     const rawName = form.getValues("name")?.trim();
     const username = form.getValues("email")?.trim();
+    const role = form.getValues("role") || "student";
 
     if (!rawName) {
       form.setError("name", { type: "manual", message: "Enter your full name." });
@@ -763,6 +771,40 @@ export function AuthFormSplitScreen({
       else form.setFocus("email");
 
       return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const response = await fetch("/api/users/validate-roster-name", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: rawName, role }),
+      });
+
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        rosterNameFocusRef.current = true;
+        form.setError("name", {
+          type: "server",
+          message: result.error || "We couldn't match that name. Check it and try again.",
+        });
+        form.setFocus("name");
+
+        return;
+      }
+    } catch {
+      rosterNameFocusRef.current = true;
+      form.setError("name", {
+        type: "server",
+        message: "We couldn't check the name. Check your connection and try again.",
+      });
+      form.setFocus("name");
+
+      return;
+    } finally {
+      setIsLoading(false);
     }
 
     setStepDirection(1);
@@ -1649,7 +1691,10 @@ export function AuthFormSplitScreen({
                                           name={field.name}
                                           value={option.value}
                                           checked={field.value === option.value}
-                                          onChange={() => field.onChange(option.value)}
+                                          onChange={() => {
+                                            field.onChange(option.value);
+                                            form.clearErrors("name");
+                                          }}
                                           disabled={isLoading || lockoutSeconds > 0}
                                           className="sr-only"
                                         />
@@ -1660,7 +1705,7 @@ export function AuthFormSplitScreen({
                                       </label>
                                     ))}
                                   </div>
-                                  <p id="register-role-help" className="text-xs leading-4 text-muted-foreground">Your name must match the SHORE {field.value === "volunteer" ? "volunteer" : "student"} roster.</p>
+                                  <p id="register-role-help" className="text-xs leading-4 text-muted-foreground">Choose the role SHORE listed for you.</p>
                                 </fieldset>
                               )}
                             />
@@ -1676,6 +1721,10 @@ export function AuthFormSplitScreen({
                                     <Input
                                       placeholder="Juan Dela Cruz"
                                       {...field}
+                                      onChange={(event) => {
+                                        field.onChange(event);
+                                        form.clearErrors("name");
+                                      }}
                                       autoComplete="name"
                                       autoCapitalize="words"
                                       required
@@ -1685,6 +1734,7 @@ export function AuthFormSplitScreen({
                                       }`}
                                     />
                                   </FormControl>
+                                  <FormDescription className="text-xs leading-4">Use 2+ name parts. Case, accents, punctuation, spacing, and order can vary. Middle names or initials are optional when the match is unique.</FormDescription>
                                   <FormMessage className="text-xs pt-0.5" />
                                 </FormItem>
                               )}
@@ -2258,7 +2308,9 @@ export function AuthFormSplitScreen({
                               : isForgot
                               ? "Resetting password…"
                               : isRegister
-                              ? "Creating account…"
+                              ? registrationStep === 1
+                                ? "Checking name…"
+                                : "Creating account…"
                               : "Signing in…"
                             : lockoutSeconds > 0
                             ? `Locked (${lockoutSeconds}s)`

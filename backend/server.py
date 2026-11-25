@@ -489,25 +489,96 @@ def load_events():
 def save_events(events):
     save_json(EVENTS_FILE, events)
 
+def _normalize_roster_name(name):
+    """Normalize name tokens without depending on case, accents, or punctuation."""
+    decomposed = unicodedata.normalize('NFKD', str(name or '').casefold())
+    unaccented = ''.join(char for char in decomposed if not unicodedata.combining(char))
+    return tuple(re.findall(r'[^\W_]+', unaccented, flags=re.UNICODE))
+
+
+def _roster_tokens_are_subset(input_tokens, roster_tokens):
+    remaining = list(roster_tokens)
+    for token in input_tokens:
+        if token not in remaining:
+            return False
+        remaining.remove(token)
+    return True
+
+
+def _roster_name_anchor_tokens(name):
+    """Return the name parts that must remain when middle names are omitted."""
+    tokens = _normalize_roster_name(name)
+    suffixes = {'jr', 'sr', 'ii', 'iii', 'iv', 'v'}
+    suffix_tokens = tuple(token for token in tokens if token in suffixes)
+
+    if ',' in str(name or ''):
+        surname, given_names = str(name).split(',', 1)
+        surname_tokens = _normalize_roster_name(surname)
+        given_tokens = _normalize_roster_name(given_names)
+        first_given = given_tokens[:1]
+        anchors = surname_tokens + first_given + suffix_tokens
+    else:
+        non_suffix_tokens = tuple(token for token in tokens if token not in suffixes)
+        anchors = non_suffix_tokens[:1] + non_suffix_tokens[-1:] + suffix_tokens
+
+    return anchors
+
+
 def find_roster_matches(name):
-    """Return canonical roster matches for a name, grouped by account role."""
-    normalized_name = " ".join(str(name or "").strip().casefold().split())
-    if not normalized_name:
+    """Return canonical roster matches, allowing harmless name-format differences."""
+    input_tokens = _normalize_roster_name(name)
+    if len(input_tokens) < 2:
         return []
 
+    input_unordered = tuple(sorted(input_tokens))
     matches = []
-    seen = set()
     for role, collection in (("student", STUDENTS_FILE), ("volunteer", VOLUNTEERS_FILE)):
         roster = load_json(collection)
         if not isinstance(roster, list):
             continue
+
+        exact, reordered, partial = [], [], []
         for roster_name in roster:
-            if isinstance(roster_name, str) and " ".join(roster_name.strip().casefold().split()) == normalized_name:
-                match_key = (role, roster_name.strip().casefold())
-                if match_key not in seen:
-                    seen.add(match_key)
-                    matches.append((role, roster_name.strip()))
+            if not isinstance(roster_name, str):
+                continue
+            roster_name = roster_name.strip()
+            roster_tokens = _normalize_roster_name(roster_name)
+            if len(roster_tokens) < 2:
+                continue
+
+            if roster_tokens == input_tokens:
+                exact.append((role, roster_name, roster_tokens))
+            elif len(roster_tokens) == len(input_tokens) and tuple(sorted(roster_tokens)) == input_unordered:
+                reordered.append((role, roster_name, roster_tokens))
+            elif (
+                len(roster_tokens) > len(input_tokens)
+                and _roster_tokens_are_subset(input_tokens, roster_tokens)
+                and _roster_tokens_are_subset(_roster_name_anchor_tokens(roster_name), input_tokens)
+            ):
+                partial.append((role, roster_name, roster_tokens))
+
+        # Prefer an exact order, then a complete reordered name, then a unique partial name.
+        chosen = exact or reordered or partial
+        for match_role, roster_name, roster_tokens in chosen:
+            matches.append((match_role, roster_name))
+
     return matches
+
+
+def _resolve_roster_name(name, role):
+    tokens = _normalize_roster_name(name)
+    if len(tokens) < 2:
+        return None, 'Enter at least two parts of your name.', 'invalid_roster_name'
+
+    role_matches = [match for match in find_roster_matches(name) if match[0] == role]
+    if not role_matches:
+        label = 'student' if role == 'student' else 'volunteer'
+        return None, f"No {label} roster entry matched that name. Check the spelling or ask a SHORE volunteer to confirm your roster name.", 'roster_name_mismatch'
+    if len(role_matches) > 1:
+        label = 'student' if role == 'student' else 'volunteer'
+        return None, f"More than one {label} roster entry matches. Add another name part to identify the right person.", 'roster_name_ambiguous'
+
+    return role_matches[0][1], None, None
 
 
 _ONBOARDING_SCHOOLS = {
@@ -620,6 +691,29 @@ def _validate_student_onboarding(raw):
 def _student_preference_key(email):
     return hashlib.sha256((email or '').strip().lower().encode('utf-8')).hexdigest()
 
+@app.route('/api/users/validate-roster-name', methods=['POST'])
+def validate_roster_name():
+    client_ip = request.headers.get('X-Forwarded-For', request.remote_addr or '127.0.0.1').split(',')[0].strip()
+    allowed, retry_after = _RATE_LIMITER.is_allowed(f"roster_check_{client_ip}", max_requests=20, window_seconds=60)
+    if not allowed:
+        return jsonify({"error": f"Too many name checks. Please try again in {retry_after} seconds.", "retry_after": retry_after}), 429
+
+    payload = request.get_json(silent=True) or {}
+    role = payload.get('role')
+    raw_name = payload.get('name')
+    name = raw_name.strip() if isinstance(raw_name, str) else ''
+
+    if role not in ('student', 'volunteer'):
+        return jsonify({"error": "Choose Student or Volunteer.", "code": "invalid_role"}), 400
+
+    _, roster_error, roster_error_code = _resolve_roster_name(name, role)
+    if roster_error:
+        status_code = 409 if roster_error_code == 'roster_name_ambiguous' else 400
+        return jsonify({"error": roster_error, "code": roster_error_code}), status_code
+
+    return jsonify({"success": True})
+
+
 @app.route('/api/users/register', methods=['POST'])
 def register():
     client_ip = request.headers.get('X-Forwarded-For', request.remote_addr or '127.0.0.1').split(',')[0].strip()
@@ -647,14 +741,11 @@ def register():
 
     email = raw_email if '@' in raw_email else f"{raw_email}@shoreskwela.com"
 
-    role_roster_matches = [match for match in find_roster_matches(name) if match[0] == role]
-    if not role_roster_matches:
-        roster_label = "student" if role == "student" else "volunteer"
-        return jsonify({
-            "error": f"No {roster_label} roster entry found with this name.",
-            "code": "roster_name_mismatch"
-        }), 400
-    name = role_roster_matches[0][1]
+    canonical_name, roster_error, roster_error_code = _resolve_roster_name(name, role)
+    if roster_error:
+        status_code = 409 if roster_error_code == 'roster_name_ambiguous' else 400
+        return jsonify({"error": roster_error, "code": roster_error_code}), status_code
+    name = canonical_name
         
     for user in users:
         if (user.get('email') or '').strip().lower() == email:
