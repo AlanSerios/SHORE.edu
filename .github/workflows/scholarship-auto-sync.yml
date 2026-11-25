@@ -15,7 +15,7 @@ concurrency:
 jobs:
   sync:
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 4
     steps:
       - name: Request a short-lived GitHub identity token
         run: |
@@ -48,11 +48,14 @@ jobs:
               method='POST',
           )
           try:
-              with urllib.request.urlopen(sync_request, timeout=90) as response:
+              with urllib.request.urlopen(sync_request, timeout=150) as response:
                   result = json.loads(response.read())
           except urllib.error.HTTPError as error:
               detail = error.read().decode('utf-8', errors='replace')
               print('The backend rejected the scheduled update:', detail)
+              sys.exit(1)
+          except TimeoutError:
+              print('The backend did not answer within 150 seconds. Check Render service health and logs.')
               sys.exit(1)
 
           print(
